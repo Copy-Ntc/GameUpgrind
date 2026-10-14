@@ -1591,4 +1591,10 @@ Sprites.speciesPal = function (id) {
   };
 };
 Sprites.speciesUrl = function (id, scale = 3) { return this.url(this.speciesSprite(id), this.speciesPal(id), scale); };
+// Arma Ancestral como "item" (dourada, com a cor da raridade nos detalhes)
+Sprites.relicItem = function (cls, r) {
+  const list = WEAPON_BASES[cls];
+  return { sprite: list[list.length - 1].sprite, matColor: '#e8b33a', rarity: r };
+};
+Sprites.relicUrl = function (cls, r) { return this.itemUrl(this.relicItem(cls, r)); };
 Sprites.classUrl = function (cls, species, scale = 3) { return this.url(CLASSES[cls].sprite, this.heroPal(cls, species), scale); };

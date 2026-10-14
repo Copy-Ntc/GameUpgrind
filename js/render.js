@@ -485,6 +485,7 @@ const Render = {
   },
 
   drawRecruit(W, R) {
+    if (R.kind === 'relic') { this.drawRelicVault(W, R); return; }
     const ctx = this.ctx, TS = this.TS, u = this.unit, t = this.time;
     const spr = R.kind === 'class'
       ? Sprites.get(CLASSES[R.id].sprite, Sprites.heroPal(R.id, 'human'))
@@ -519,6 +520,38 @@ const Render = {
     ctx.lineWidth = 3 * this.dpr; ctx.strokeStyle = '#1a1206';
     ctx.strokeText('!', cx, top - u * 2 + bob);
     ctx.fillText('!', cx, top - u * 2 + bob);
+  },
+
+  // Cofre Ancestral: a arma da classe flutuando sobre um pedestal
+  drawRelicVault(W, R) {
+    const ctx = this.ctx, TS = this.TS, u = this.unit, t = this.time;
+    const it = Sprites.relicItem(R.id, 0);
+    const spr = Sprites.get(it.sprite, Sprites.itemPal(it));
+    const cx = (R.x + 0.5) * TS, by = (R.y + 1) * TS - u;
+    if (R.freed) {
+      const k = (W.t - R.freedT) / 1.2;
+      if (k >= 1) return;
+      this.drawSprite(spr, cx, by - TS * 0.35 - k * TS, 1.1, false, 1 - k);
+      return;
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.3 + 0.12 * Math.sin(t * 2.5);
+    const gr = ctx.createRadialGradient(cx, by - TS * 0.6, 0, cx, by - TS * 0.6, TS * 1.5);
+    gr.addColorStop(0, '#ffd04a'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gr; ctx.fillRect(cx - TS * 1.5, by - TS * 2.1, TS * 3, TS * 3);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    // Pedestal
+    ctx.fillStyle = '#3a3448'; ctx.fillRect(Math.round(cx - TS * 0.42), Math.round(by - TS * 0.32), Math.round(TS * 0.84), Math.round(TS * 0.32));
+    ctx.fillStyle = '#5a5470'; ctx.fillRect(Math.round(cx - TS * 0.48), Math.round(by - TS * 0.38), Math.round(TS * 0.96), u * 2);
+    ctx.fillStyle = '#ffd04a'; ctx.fillRect(Math.round(cx - TS * 0.3), Math.round(by - TS * 0.2), Math.round(TS * 0.6), u);
+    this.drawSprite(spr, cx, by - TS * 0.4 + Math.sin(t * 2) * u * 2, 1.1, false);
+    const bob = Math.sin(t * 4) * u * 1.5;
+    ctx.fillStyle = '#ffd04a';
+    ctx.font = `700 ${Math.round(16 * this.dpr * Math.max(1, this.zoom / 2))}px 'Pixelify Sans', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3 * this.dpr; ctx.strokeStyle = '#1a1206';
+    ctx.strokeText('⚔', cx, by - TS * 1.45 + bob);
+    ctx.fillText('⚔', cx, by - TS * 1.45 + bob);
   },
 
   drawTorch(t) {

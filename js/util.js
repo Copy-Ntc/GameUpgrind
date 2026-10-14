@@ -95,7 +95,11 @@ const U = {
   rgba(c, a) { const [r, g, b] = U.hexRgb(c); return `rgba(${r},${g},${b},${a})`; },
 };
 
-// Escala por zona: itens, ouro e XP crescem com zoneScale;
-// inimigos crescem um pouco mais rápido (enemyScale) — é isso que cria a "parede" do grind
-function zoneScale(z) { return Math.pow(1.17, z - 1); }
-function enemyScale(z) { return Math.pow(1.25, z - 1); }
+// Escala por zona: itens e ouro crescem com zoneScale; a Vida (enemyScale) e o Dano (enemyAtkScale)
+// dos inimigos crescem um pouco mais rápido. Essa diferença é a "parede" do grind — calibrada com
+// dev/career.js para a zona 200 ser a meta de longo prazo e as escolhas de build valerem dezenas de zonas.
+const SCALE = { item: 1.175, ehp: 1.25, eatk: 1.24, soul: 1.05 };  // soul: crescimento das Almas por zona recorde
+function zoneScale(z) { return Math.pow(SCALE.item, z - 1); }
+function enemyScale(z) { return Math.pow(SCALE.ehp, z - 1); }
+function enemyAtkScale(z) { return Math.pow(SCALE.eatk, z - 1); }
+function enemyPowScale(z) { return Math.sqrt(enemyScale(z) * enemyAtkScale(z)); }

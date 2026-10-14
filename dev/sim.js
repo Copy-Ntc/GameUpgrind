@@ -20,15 +20,16 @@ global.Render = { cam: {}, mapCanvas: null };
 
 let code = '';
 for (const f of ['util', 'data', 'heroes', 'sprites', 'audio', 'music', 'items', 'stats', 'mapgen', 'world', 'game']) code += fs.readFileSync(ROOT + f + '.js', 'utf8').replace(/^'use strict';/, '') + '\n';
-code += '\nglobal.U=U;global.Game=Game;global.World=World;global.Stats=Stats;global.Items=Items;global.TRAINING=TRAINING;global.CLASSES=CLASSES;global.zoneScale=zoneScale;global.enemyScale=enemyScale;global.SKILLS=SKILLS;global.SPECIES=SPECIES;global.CLASS_ORDER=CLASS_ORDER;';
+code += '\nglobal.U=U;global.Game=Game;global.World=World;global.Stats=Stats;global.Items=Items;global.TRAINING=TRAINING;global.CLASSES=CLASSES;global.zoneScale=zoneScale;global.enemyScale=enemyScale;global.enemyAtkScale=enemyAtkScale;global.SKILLS=SKILLS;global.SPECIES=SPECIES;global.CLASS_ORDER=CLASS_ORDER;global.SCALE=SCALE;';
 (0, eval)(code);
+if (process.env.SCALE) { const [a, b, c, d] = process.env.SCALE.split(',').map(Number); Object.assign(SCALE, { item: a, ehp: b, eatk: c }, d ? { soul: d } : {}); }
 
 const cls = process.argv[2] || 'knight';
 const minutes = +(process.argv[3] || 30);
 const buy = (process.argv[4] || '1') === '1';
 const species = process.argv[5] || 'human';
 
-Game.newGame(cls, species, 'Sim');
+Game.newGame(cls, species, 'Sim', false); // sem corações: mede até onde uma jornada chega
 Game.enterZone(1, true);
 const st = Game.state;
 const DT = 1 / 30;
@@ -42,7 +43,7 @@ while (t < minutes * 60) {
   t += DT;
   if (Game.transition) { const tr = Game.transition; Game.transition = null; tr.fn(); }
   if (st.zone !== lastZone) {
-    rows.push({ z: lastZone, t: Math.round(t - zoneStart), lvl: st.level, gold: U.fmt(st.gold), pow: U.fmt(Game.power), deaths: st.stats.deaths - lastDeaths, hp: U.fmt(Game.stats.maxHp), atk: U.fmt(Game.stats.atk), eatk: U.fmt(16*enemyScale(lastZone)), ehp: U.fmt(40*enemyScale(lastZone)) });
+    rows.push({ z: lastZone, t: Math.round(t - zoneStart), lvl: st.level, gold: U.fmt(st.gold), pow: U.fmt(Game.power), deaths: st.stats.deaths - lastDeaths, hp: U.fmt(Game.stats.maxHp), atk: U.fmt(Game.stats.atk), eatk: U.fmt(16*enemyAtkScale(lastZone)), ehp: U.fmt(40*enemyScale(lastZone)) });
     lastDeaths = st.stats.deaths;
     lastZone = st.zone; zoneStart = t;
   }

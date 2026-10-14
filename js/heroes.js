@@ -7,10 +7,10 @@
 // Raridade de classes/espécies (mesmas cores dos itens)
 const HERO_RARITY = [
   { name: 'Comum', color: '#c9c3b8', mult: 1.0, spMult: 1.0 },
-  { name: 'Incomum', color: '#5fd068', mult: 1.08, spMult: 1.03 },
-  { name: 'Rara', color: '#4fa3ff', mult: 1.17, spMult: 1.07 },
-  { name: 'Épica', color: '#b874ff', mult: 1.32, spMult: 1.11 },
-  { name: 'Lendária', color: '#ff9a2e', mult: 1.42, spMult: 1.16 },
+  { name: 'Incomum', color: '#5fd068', mult: 1.12, spMult: 1.04 },
+  { name: 'Rara', color: '#4fa3ff', mult: 1.27, spMult: 1.09 },
+  { name: 'Épica', color: '#b874ff', mult: 1.45, spMult: 1.15 },
+  { name: 'Lendária', color: '#ff9a2e', mult: 1.7, spMult: 1.22 },
 ];
 
 STAT_INFO.dr = { name: 'Redução de Dano', pct: true };
@@ -162,7 +162,7 @@ const STAT_GOALS = {
   lordsKilled: g => `Derrote ${g} Senhores de bioma`,
   ascensions: g => g === 1 ? 'Ascenda 1 vez' : `Ascenda ${g} vezes`,
   maxForge: g => `Aprimore um item até +${g}`,
-  lord_lich: () => 'Derrote o Lich Supremo (Cripta Sombria)',
+  lord_lich: g => g > 1 ? `Derrote o Lich Supremo ${g} vezes (Cripta Sombria)` : 'Derrote o Lich Supremo (Cripta Sombria)',
   shrines: g => `Ative ${g} santuários`,
   deaths: g => `Seja derrotado ${g} vezes`,
   itemsFound: g => `Encontre ${U.fmtInt(g)} itens`,
@@ -185,10 +185,54 @@ function unlockText(u) {
   if (u.asc) t += ` · requer ${u.asc} ${u.asc > 1 ? 'ascensões' : 'ascensão'}`;
   return t;
 }
-// Zona recorde que torna a classe "dominada" (necessária para multiclasse)
-const MASTERY_ZONE = 25;
-// Bônus de multiclasse e requisito
-const MULTI_ASC = 2;
+// Zona recorde (começando a jornada com ela) que torna a classe/espécie "dominada"
+const MASTERY_ZONE = 50;
+// Ascensões necessárias para multiclasse e para mestiçagem (duas espécies)
+const MULTI_ASC = 10;
+const MULTI_SP_ASC = 14;
+
+// ------------------------------------------------------------
+// Maestria: talentos infinitos para os pontos que sobram (nível 60+)
+// ------------------------------------------------------------
+const MAESTRIA_LVL = 60;
+const MAESTRIA = [
+  { id: 'ms_dmg', name: 'Fúria Ancestral', stat: 'dmgPct', per: 3, icon: 'sk_sword', color: '#ff7a4a', w: 3 },
+  { id: 'ms_hp', name: 'Vitalidade Ancestral', stat: 'hpPct', per: 3, icon: 'sk_heart', color: '#ff5a62', w: 3 },
+  { id: 'ms_def', name: 'Muralha Ancestral', stat: 'defPct', per: 3, icon: 'sk_shield', color: '#9aa3ad', w: 1 },
+  { id: 'ms_crit', name: 'Golpe Fatal', stat: 'critDmg', per: 2, icon: 'sk_star', color: '#ff5aa0', w: 1 },
+  { id: 'ms_spd', name: 'Celeridade', stat: 'atkSpd', per: 0.5, max: 100, icon: 'sk_wind', color: '#7ad070', w: 1 },
+  { id: 'ms_luck', name: 'Fortuna', stat: 'goldPct', per: 3, also: 'xpPct', icon: 'sk_coin', color: '#ffd04a', w: 0 },
+];
+const MAESTRIA_IDX = Object.fromEntries(MAESTRIA.map(m => [m.id, m]));
+
+// ------------------------------------------------------------
+// Armas Ancestrais: uma por classe, obtida uma única vez no Cofre Ancestral
+// e despertada de raridade em raridade com Fragmentos Ancestrais.
+// ------------------------------------------------------------
+const RELIC_ZONE = 30;                              // o Cofre pode aparecer a partir desta zona
+const RELIC_REQ = [0, 45, 65, 90, 120, 160];        // recorde com a classe para despertar cada raridade
+const RELIC_COST = [0, 15, 40, 90, 200, 450];       // Fragmentos Ancestrais por despertar
+const RELIC_DMG = [15, 30, 50, 75, 110, 160];       // % de Dano por raridade
+const RELIC_ATK = 0.7;                              // dano base: 70% de uma arma da mesma raridade e nível
+const RELIC_RNAME = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária', 'Mítica']; // "arma" é feminino
+const RELICS = {
+  fighter: { name: 'Lâmina do Campeão Eterno', per: { critDmg: 6, hpPct: 3 }, powers: ['berserk', 'slayer'] },
+  mage: { name: 'Cajado do Primeiro Arcano', per: { cdr: 1.5, critDmg: 5 }, powers: ['echo', 'thunder'] },
+  rogue: { name: 'Adaga dos Deuses', per: { crit: 2, critDmg: 8 }, powers: ['executioner', 'echo'] },
+  ranger: { name: 'Arco da Caçada Selvagem', per: { atkSpd: 3, crit: 1.5 }, powers: ['thunder', 'swift'] },
+  knight: { name: 'Espada do Juramento Real', per: { block: 2, defPct: 6 }, powers: ['thorns', 'slayer'] },
+  cleric: { name: 'Martelo da Aurora', per: { regenPct: 0.15, hpPct: 5 }, powers: ['vampire', 'phoenix'] },
+  barbarian: { name: 'Machado do Trovão Primordial', per: { hpPct: 4, lifesteal: 0.6 }, powers: ['berserk', 'vampire'] },
+  bard: { name: 'Rapieira da Canção Eterna', per: { goldPct: 8, xpPct: 6 }, powers: ['midas', 'echo'] },
+  monk: { name: 'Bastão dos Mil Punhos', per: { dodge: 1.5, atkSpd: 3 }, powers: ['swift', 'frost'] },
+  druid: { name: 'Cajado da Árvore-Mãe', per: { minion: 8, regenPct: 0.1 }, powers: ['vampire', 'thorns'] },
+  paladin: { name: 'Martelo do Juramento Sagrado', per: { hpPct: 4, defPct: 4 }, powers: ['phoenix', 'slayer'] },
+  sorcerer: { name: 'Varinha do Sangue Dracônico', per: { critDmg: 8, crit: 1 }, powers: ['thunder', 'echo'] },
+  warlock: { name: 'Grimório do Pacto Eterno', per: { lifesteal: 0.5, hpPct: 3 }, powers: ['vampire', 'executioner'] },
+  artificer: { name: 'Canhão Arcano Prototípico', per: { minion: 8, defPct: 4 }, powers: ['thunder', 'greed'] },
+  necro: { name: 'Cetro do Rei Lich', per: { minion: 10, lifesteal: 0.4 }, powers: ['vampire', 'frost'] },
+  bloodhunter: { name: 'Lâmina Hemocrática', per: { lifesteal: 0.6, critDmg: 6 }, powers: ['berserk', 'executioner'] },
+};
 
 // ------------------------------------------------------------
 // Classes
@@ -231,7 +275,7 @@ const CLASSES = {
     skills: ['r_pierce', 'r_multi', 'r_focus', 'r_rain'], passives: ['r_eagle', 'r_agile', 'r_evade', 'r_lethal'],
   },
   knight: {
-    name: 'Cavaleiro', title: 'Bastião de Aço', color: '#d5dde6', rarity: 1, unlock: { t: 'class', cls: 'fighter', stat: 'best', goal: 15 }, armor: 'plate',
+    name: 'Cavaleiro', title: 'Bastião de Aço', color: '#d5dde6', rarity: 1, unlock: { t: 'class', cls: 'fighter', stat: 'best', goal: 30, asc: 1 }, armor: 'plate',
     desc: 'Guerreiro de escudo e espada que avança contra hordas. Muita Vida, Armadura e Bloqueio.',
     sprite: 'h_knight',
     base: { hp: 160, atk: 10.5, def: 6, atkSpd: 1.05, crit: 5, critDmg: 150, dodge: 0, block: 10, lifesteal: 1, range: 1.5 },
@@ -240,7 +284,7 @@ const CLASSES = {
     skills: ['k_bash', 'k_warcry', 'k_whirl', 'k_judg'], passives: ['k_vigor', 'k_plate', 'k_block', 'k_fury'],
   },
   cleric: {
-    name: 'Clérigo', title: 'Voz dos Deuses', color: '#fff2a0', rarity: 1, unlock: { t: 'stat', stat: 'shrines', goal: 30 }, armor: 'plate',
+    name: 'Clérigo', title: 'Voz dos Deuses', color: '#fff2a0', rarity: 1, unlock: { t: 'stat', stat: 'shrines', goal: 60, asc: 1 }, armor: 'plate',
     desc: 'Sacerdote que canaliza poder divino: chama sagrada, curas poderosas e guardiões espirituais.',
     sprite: 'h_cleric', proj: 'holy',
     base: { hp: 135, atk: 10.5, def: 5, atkSpd: 0.85, crit: 5, critDmg: 150, dodge: 2, block: 5, lifesteal: 0, range: 4 },
@@ -249,7 +293,7 @@ const CLASSES = {
     skills: ['c_flame', 'c_heal', 'c_guard', 'c_divine'], passives: ['c_life', 'c_faith', 'c_bless', 'c_channel'],
   },
   barbarian: {
-    name: 'Bárbaro', title: 'Fúria Primordial', color: '#ff7a4a', rarity: 1, unlock: { t: 'class', cls: 'fighter', stat: 'kills', goal: 1500 }, armor: 'hide',
+    name: 'Bárbaro', title: 'Fúria Primordial', color: '#ff7a4a', rarity: 1, unlock: { t: 'class', cls: 'fighter', stat: 'kills', goal: 4000, asc: 2 }, armor: 'hide',
     desc: 'Guerreiro movido por fúria primordial. Muita Vida, golpes brutais e roubo de vida em fúria.',
     sprite: 'h_barbarian',
     base: { hp: 180, atk: 11.5, def: 2, atkSpd: 0.95, crit: 7, critDmg: 165, dodge: 3, block: 0, lifesteal: 2, range: 1.5 },
@@ -258,7 +302,7 @@ const CLASSES = {
     skills: ['b_reck', 'b_rage', 'b_slam', 'b_primal'], passives: ['b_unarm', 'b_instinct', 'b_brutal', 'b_relent'],
   },
   bard: {
-    name: 'Bardo', title: 'Menestrel Arcano', color: '#ff7ad0', rarity: 1, unlock: { t: 'encounter', minZone: 8 }, armor: 'leather',
+    name: 'Bardo', title: 'Menestrel Arcano', color: '#ff7ad0', rarity: 1, unlock: { t: 'encounter', minZone: 15, asc: 2 }, armor: 'leather',
     desc: 'Artista que inspira com música e magia. Zomba, atordoa e fortalece com canções.',
     sprite: 'h_bard', proj: 'note',
     base: { hp: 110, atk: 10, def: 3, atkSpd: 1.0, crit: 8, critDmg: 155, dodge: 6, block: 0, lifesteal: 0, range: 4.5 },
@@ -267,7 +311,7 @@ const CLASSES = {
     skills: ['bd_mock', 'bd_inspire', 'bd_thunder', 'bd_word'], passives: ['bd_jack', 'bd_song', 'bd_secrets', 'bd_charm'],
   },
   monk: {
-    name: 'Monge', title: 'Punho do Ki', color: '#ffb84a', rarity: 2, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 25, asc: 1 }, armor: 'monk',
+    name: 'Monge', title: 'Punho do Ki', color: '#ffb84a', rarity: 2, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 45, asc: 4 }, armor: 'monk',
     desc: 'Artista marcial que transforma o foco interior em golpes velozes, esquiva e ataques atordoantes.',
     sprite: 'h_monk',
     base: { hp: 125, atk: 8, def: 3, atkSpd: 1.75, crit: 8, critDmg: 160, dodge: 14, block: 0, lifesteal: 1, range: 1.5 },
@@ -276,7 +320,7 @@ const CLASSES = {
     skills: ['mo_flurry', 'mo_patient', 'mo_stun', 'mo_palm'], passives: ['mo_move', 'mo_ki', 'mo_evasion', 'mo_open'],
   },
   druid: {
-    name: 'Druida', title: 'Guardião da Natureza', color: '#7ad070', rarity: 2, unlock: { t: 'encounter', minZone: 16, biomes: ['forest', 'swamp'], asc: 1 }, armor: 'hide',
+    name: 'Druida', title: 'Guardião da Natureza', color: '#7ad070', rarity: 2, unlock: { t: 'encounter', minZone: 30, biomes: ['forest', 'swamp'], asc: 4 }, armor: 'hide',
     desc: 'Sacerdote da natureza que invoca lobos, assume a forma de urso e convoca tempestades.',
     sprite: 'h_druid', proj: 'thorn',
     base: { hp: 125, atk: 11, def: 3, atkSpd: 0.9, crit: 5, critDmg: 150, dodge: 4, block: 0, lifesteal: 1, range: 4.2 },
@@ -285,7 +329,7 @@ const CLASSES = {
     skills: ['dr_thorn', 'dr_wolf', 'dr_bear', 'dr_storm'], passives: ['dr_land', 'dr_bond', 'dr_regrow', 'dr_wis'],
   },
   paladin: {
-    name: 'Paladino', title: 'Juramento Sagrado', color: '#ffe680', rarity: 2, unlock: { t: 'encounter', minZone: 20, asc: 1 }, armor: 'plate',
+    name: 'Paladino', title: 'Juramento Sagrado', color: '#ffe680', rarity: 2, unlock: { t: 'encounter', minZone: 40, asc: 5 }, armor: 'plate',
     desc: 'Guerreiro santo ligado a um juramento. Golpes divinos que curam, auras protetoras e muita resistência.',
     sprite: 'h_paladin',
     base: { hp: 160, atk: 12.5, def: 6, atkSpd: 1.05, crit: 8, critDmg: 150, dodge: 0, block: 8, lifesteal: 2, range: 1.5 },
@@ -294,7 +338,7 @@ const CLASSES = {
     skills: ['pa_smite', 'pa_lay', 'pa_aura', 'pa_avatar'], passives: ['pa_oath', 'pa_health', 'pa_courage', 'pa_def'],
   },
   sorcerer: {
-    name: 'Feiticeiro', title: 'Magia no Sangue', color: '#ff5aa0', rarity: 2, unlock: { t: 'class', cls: 'mage', stat: 'best', goal: 25, asc: 1 }, armor: 'cloth',
+    name: 'Feiticeiro', title: 'Magia no Sangue', color: '#ff5aa0', rarity: 2, unlock: { t: 'class', cls: 'mage', stat: 'best', goal: 45, asc: 5 }, armor: 'cloth',
     desc: 'Conjurador de magia inata e caótica. Raios cromáticos, relâmpagos e surtos de magia selvagem.',
     sprite: 'h_sorcerer', proj: 'chaos',
     base: { hp: 95, atk: 13.5, def: 2, atkSpd: 0.95, crit: 8, critDmg: 165, dodge: 3, block: 0, lifesteal: 0, range: 4.5 },
@@ -303,7 +347,7 @@ const CLASSES = {
     skills: ['so_chroma', 'so_quick', 'so_bolt', 'so_surge'], passives: ['so_draconic', 'so_points', 'so_innate', 'so_elem'],
   },
   warlock: {
-    name: 'Bruxo', title: 'Pacto Sobrenatural', color: '#a85aff', rarity: 3, unlock: { t: 'stat', stat: 'lordsKilled', goal: 15, asc: 2 }, armor: 'cloth',
+    name: 'Bruxo', title: 'Pacto Sobrenatural', color: '#a85aff', rarity: 3, unlock: { t: 'stat', stat: 'lordsKilled', goal: 60, asc: 8 }, armor: 'cloth',
     desc: 'Ocultista que extrai poder de um pacto profano. Rajadas místicas, maldições e diabretes servos.',
     sprite: 'h_warlock', proj: 'eldritch',
     base: { hp: 105, atk: 12.5, def: 3, atkSpd: 0.95, crit: 6, critDmg: 160, dodge: 3, block: 0, lifesteal: 2, range: 5 },
@@ -312,7 +356,7 @@ const CLASSES = {
     skills: ['wa_blast', 'wa_hex', 'wa_imp', 'wa_hunger'], passives: ['wa_pact', 'wa_invoc', 'wa_dark', 'wa_agony'],
   },
   artificer: {
-    name: 'Artífice', title: 'Inventor Arcano', color: '#5ae8ff', rarity: 3, unlock: { t: 'stat', stat: 'maxForge', goal: 12, asc: 2 }, armor: 'leather',
+    name: 'Artífice', title: 'Inventor Arcano', color: '#5ae8ff', rarity: 3, unlock: { t: 'stat', stat: 'maxForge', goal: 15, asc: 8 }, armor: 'leather',
     desc: 'Inventor que infunde objetos com magia. Canhão arcano, torretas automáticas e bombardeios alquímicos.',
     sprite: 'h_artificer', proj: 'bullet',
     base: { hp: 135, atk: 12.5, def: 5, atkSpd: 0.9, crit: 6, critDmg: 155, dodge: 2, block: 0, lifesteal: 0, range: 4.5 },
@@ -321,7 +365,7 @@ const CLASSES = {
     skills: ['ar_cannon', 'ar_turret', 'ar_infuse', 'ar_bomb'], passives: ['ar_master', 'ar_alch', 'ar_arsenal', 'ar_gadget'],
   },
   necro: {
-    name: 'Necromante', title: 'Senhor dos Mortos', color: '#4dff8a', rarity: 3, unlock: { t: 'stat', stat: 'lord_lich', goal: 1, asc: 2 }, armor: 'cloth',
+    name: 'Necromante', title: 'Senhor dos Mortos', color: '#4dff8a', rarity: 3, unlock: { t: 'stat', stat: 'lord_lich', goal: 3, asc: 9 }, armor: 'cloth',
     desc: 'Mestre das trevas que drena vida e ergue exércitos de esqueletos para lutar ao seu lado.',
     sprite: 'h_necro', proj: 'shadow',
     base: { hp: 105, atk: 10, def: 3, atkSpd: 0.85, crit: 5, critDmg: 150, dodge: 2, block: 0, lifesteal: 3, range: 4.2 },
@@ -330,7 +374,7 @@ const CLASSES = {
     skills: ['n_drain', 'n_skel', 'n_plague', 'n_army'], passives: ['n_dark', 'n_master', 'n_siphon', 'n_bone'],
   },
   bloodhunter: {
-    name: 'Caçador de Sangue', title: 'Hemocrata', color: '#ff3a4a', rarity: 4, unlock: { t: 'stat', stat: 'maxZone', goal: 90, asc: 5 }, armor: 'leather',
+    name: 'Caçador de Sangue', title: 'Hemocrata', color: '#ff3a4a', rarity: 4, unlock: { t: 'stat', stat: 'maxZone', goal: 120, asc: 14 }, armor: 'leather',
     desc: 'Caçador que sacrifica o próprio sangue para amaldiçoar monstros. Ritos carmesins e explosões de sangue.',
     sprite: 'h_bloodhunter',
     base: { hp: 140, atk: 12.5, def: 4, atkSpd: 1.15, crit: 10, critDmg: 170, dodge: 6, block: 0, lifesteal: 4, range: 1.5 },
@@ -738,117 +782,117 @@ const SPECIES = {
     stats: { mf: 20, dodge: 6 }, flags: ['luck'] },
 
   // ---------- Incomuns ----------
-  gnome: { name: 'Gnomo', rarity: 1, unlock: { t: 'stat', stat: 'chests', goal: 150 }, skin: '#f0c8a0', hair: '#e86a4a', cloak: '#4a8ac8', acc: ['ears'], accColor: '#f0c8a0',
+  gnome: { name: 'Gnomo', rarity: 1, unlock: { t: 'stat', stat: 'chests', goal: 400, asc: 1 }, skin: '#f0c8a0', hair: '#e86a4a', cloak: '#4a8ac8', acc: ['ears'], accColor: '#f0c8a0',
     desc: 'Inventores curiosos com uma mente afiadíssima.',
     traits: [['Astúcia Gnômica', '+10% de Redução de Recarga'], ['Linhagem Gnômica', '+10% de Dano e +15% de Sorte']],
     stats: { cdr: 10, dmgPct: 10, mf: 15 } },
-  orc: { name: 'Orc', rarity: 1, unlock: { t: 'stat', stat: 'kills', goal: 2500 }, skin: '#7a9a5a', hair: '#2a2a2a', cloak: '#6a3a2a', acc: ['tusks'], accColor: '#f0f0e0',
+  orc: { name: 'Orc', rarity: 1, unlock: { t: 'stat', stat: 'kills', goal: 8000, asc: 1 }, skin: '#7a9a5a', hair: '#2a2a2a', cloak: '#6a3a2a', acc: ['tusks'], accColor: '#f0f0e0',
     desc: 'Guerreiros ferozes que se recusam a cair.',
     traits: [['Resistência Implacável', 'Uma vez por zona, sobrevive a um golpe fatal com 1 de Vida'], ['Força Bruta', '+15% de Dano e +12% de Vida'], ['Ímpeto de Adrenalina', 'Habilidade ativa']],
     stats: { dmgPct: 15, hpPct: 12 }, flags: ['relentless'], skill: 'sp_adrenaline' },
-  dragonborn: { name: 'Draconato', rarity: 1, unlock: { t: 'encounter', minZone: 10 }, skin: '#c8783a', hair: '#8a4a2a', eyes: '#ffd04a', cloak: '#8a2a2a', acc: ['crest'], accColor: '#8a4a2a',
+  dragonborn: { name: 'Draconato', rarity: 1, unlock: { t: 'encounter', minZone: 15, asc: 1 }, skin: '#c8783a', hair: '#8a4a2a', eyes: '#ffd04a', cloak: '#8a2a2a', acc: ['crest'], accColor: '#8a4a2a',
     desc: 'Descendentes de dragões, com escamas reluzentes e sopro elemental.',
     traits: [['Sopro de Dragão', 'Habilidade ativa de fogo em área'], ['Resistência Dracônica', '6% menos dano recebido'], ['Herança Dracônica', '+12% de Vida e +10% de Dano']],
     stats: { hpPct: 12, dmgPct: 10, dr: 6 }, skill: 'sp_breath' },
-  tiefling: { name: 'Tiferino', rarity: 1, unlock: { t: 'encounter', minZone: 12 }, skin: '#c84a5a', hair: '#2a1a2a', eyes: '#ffd04a', cloak: '#4a2a5a', acc: ['horns', 'tail'], accColor: '#3a2a3a',
+  tiefling: { name: 'Tiferino', rarity: 1, unlock: { t: 'encounter', minZone: 20, asc: 2 }, skin: '#c84a5a', hair: '#2a1a2a', eyes: '#ffd04a', cloak: '#4a2a5a', acc: ['horns', 'tail'], accColor: '#3a2a3a',
     desc: 'Marcados por um legado infernal, temidos e poderosos.',
     traits: [['Legado Infernal', '20% de chance de queimar quem o atingir'], ['Presença Sobrenatural', '+14% de Dano e +4% de Crítico'], ['Repreensão Infernal', 'Habilidade ativa']],
     stats: { dmgPct: 14, crit: 4 }, flags: ['hellish'], skill: 'sp_hellish' },
-  goblin: { name: 'Goblin', rarity: 1, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 15 }, skin: '#7ab04a', hair: '#2a2a1a', eyes: '#ff3a3a', cloak: '#5a4a2a', acc: ['ears'], accColor: '#7ab04a',
+  goblin: { name: 'Goblin', rarity: 1, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 30, asc: 2 }, skin: '#7ab04a', hair: '#2a2a1a', eyes: '#ff3a3a', cloak: '#5a4a2a', acc: ['ears'], accColor: '#7ab04a',
     desc: 'Pequenos, astutos e surpreendentemente mortais contra inimigos maiores.',
     traits: [['Fúria dos Pequenos', '+35% de dano a Chefes e Elites'], ['Saqueador', '+10% de Ouro'], ['Fuga Ágil', '+8% de Esquiva e habilidade ativa']],
     stats: { bossDmg: 35, dodge: 8, goldPct: 10 }, skill: 'sp_nimble' },
-  kobold: { name: 'Kobold', rarity: 1, unlock: { t: 'encounter', minZone: 7, biomes: ['cave'] }, skin: '#b8603a', hair: '#8a3a2a', eyes: '#ffd04a', cloak: '#5a3a2a', acc: ['crest', 'tail'], accColor: '#8a3a2a',
+  kobold: { name: 'Kobold', rarity: 1, unlock: { t: 'encounter', minZone: 12, biomes: ['cave'], asc: 2 }, skin: '#b8603a', hair: '#8a3a2a', eyes: '#ffd04a', cloak: '#5a3a2a', acc: ['crest', 'tail'], accColor: '#8a3a2a',
     desc: 'Pequenos parentes dos dragões que sempre acham o tesouro.',
     traits: [['Legado Kobold', '+25% de Ouro, +10% de Sorte e +5% de Crítico'], ['Grito Dracônico', 'Habilidade ativa que enfraquece inimigos']],
     stats: { goldPct: 25, mf: 10, crit: 5 }, skill: 'sp_cry' },
-  tabaxi: { name: 'Tabaxi', rarity: 1, unlock: { t: 'class', cls: 'ranger', stat: 'best', goal: 20 }, skin: '#e0a050', hair: '#8a5a2a', eyes: '#7aff5a', cloak: '#3a6a5a', acc: ['catears', 'tail'], accColor: '#e0a050',
+  tabaxi: { name: 'Tabaxi', rarity: 1, unlock: { t: 'class', cls: 'ranger', stat: 'best', goal: 35, asc: 3 }, skin: '#e0a050', hair: '#8a5a2a', eyes: '#7aff5a', cloak: '#3a6a5a', acc: ['catears', 'tail'], accColor: '#e0a050',
     desc: 'Felinos curiosos e velozes, com garras afiadas.',
     traits: [['Agilidade Felina', '+20% de Movimento, +12% de Vel. de Ataque e habilidade ativa'], ['Garras de Gato', '+4% de Crítico']],
     stats: { moveSpd: 20, atkSpd: 12, crit: 4 }, skill: 'sp_feline' },
 
   // ---------- Raras (exigem 1 ascensão) ----------
-  aasimar: { name: 'Aasimar', rarity: 2, unlock: { t: 'stat', stat: 'shrines', goal: 40, asc: 1 }, skin: '#f8e0c0', hair: '#fff0b0', eyes: '#5ae8ff', cloak: '#e8e0c8', acc: ['halo'], accColor: '#ffe680',
+  aasimar: { name: 'Aasimar', rarity: 2, unlock: { t: 'stat', stat: 'shrines', goal: 120, asc: 4 }, skin: '#f8e0c0', hair: '#fff0b0', eyes: '#5ae8ff', cloak: '#e8e0c8', acc: ['halo'], accColor: '#ffe680',
     desc: 'Mortais tocados pelos planos celestiais, portadores de luz.',
     traits: [['Mãos Curativas', 'Uma vez por zona, ao cair abaixo de 30% de Vida, cura 35%'], ['Portador da Luz', '+20% de Vida e Dano, regenera 1% da Vida/s'], ['Revelação Celestial', 'Habilidade ativa']],
     stats: { hpPct: 20, dmgPct: 20, regenPct: 1 }, flags: ['healingHands'], skill: 'sp_celestial' },
-  goliath: { name: 'Golias', rarity: 2, unlock: { t: 'stat', stat: 'maxZone', goal: 30, asc: 1 }, skin: '#9a9aa0', hair: '#4a4a4a', cloak: '#5a6a7a',
+  goliath: { name: 'Golias', rarity: 2, unlock: { t: 'stat', stat: 'maxZone', goal: 50, asc: 4 }, skin: '#9a9aa0', hair: '#4a4a4a', cloak: '#5a6a7a',
     desc: 'Gigantes das montanhas com força e resistência descomunais.',
     traits: [['Resistência da Pedra', '12% menos dano recebido'], ['Constituição Poderosa', '+30% de Vida e +10% de Dano'], ['Forma Grande', 'Habilidade ativa']],
     stats: { hpPct: 30, dmgPct: 10, dr: 12 }, skill: 'sp_giant' },
-  lizardfolk: { name: 'Povo-Lagarto', rarity: 2, unlock: { t: 'encounter', minZone: 16, biomes: ['swamp'], asc: 1 }, skin: '#5a8a4a', hair: '#3a6a2a', eyes: '#ffd04a', cloak: '#6a5a3a', acc: ['crest', 'tail'], accColor: '#3a6a2a',
+  lizardfolk: { name: 'Povo-Lagarto', rarity: 2, unlock: { t: 'encounter', minZone: 30, biomes: ['swamp'], asc: 4 }, skin: '#5a8a4a', hair: '#3a6a2a', eyes: '#ffd04a', cloak: '#6a5a3a', acc: ['crest', 'tail'], accColor: '#3a6a2a',
     desc: 'Caçadores frios e pragmáticos dos pântanos.',
     traits: [['Armadura Natural', '+40% de Armadura e +10% de Vida'], ['Mordida', '+4% de Roubo de Vida'], ['Mandíbulas Famintas', 'Habilidade ativa']],
     stats: { defPct: 40, hpPct: 10, lifesteal: 4 }, skill: 'sp_jaws' },
-  tortle: { name: 'Tortle', rarity: 2, unlock: { t: 'stat', stat: 'deaths', goal: 30, asc: 1 }, skin: '#7a8a4a', hair: '#5a6a3a', cloak: '#4a6a7a', acc: ['shell'], accColor: '#6a4a2a',
+  tortle: { name: 'Tortle', rarity: 2, unlock: { t: 'stat', stat: 'deaths', goal: 40, asc: 5 }, skin: '#7a8a4a', hair: '#5a6a3a', cloak: '#4a6a7a', acc: ['shell'], accColor: '#6a4a2a',
     desc: 'Andarilhos sábios que carregam a própria casa nas costas.',
     traits: [['Carapaça', '+60% de Armadura, +15% de Bloqueio e +20% de Vida'], ['Passos Lentos', '-10% de Movimento'], ['Defesa da Carapaça', 'Habilidade ativa']],
     stats: { defPct: 60, block: 15, hpPct: 20, moveSpd: -10 }, skill: 'sp_shell' },
-  harengon: { name: 'Harengon', rarity: 2, unlock: { t: 'stat', stat: 'itemsFound', goal: 1500, asc: 1 }, skin: '#e8d0a0', hair: '#c8a878', cloak: '#7a5a8a', acc: ['bunny'], accColor: '#e8d0a0',
+  harengon: { name: 'Harengon', rarity: 2, unlock: { t: 'stat', stat: 'itemsFound', goal: 6000, asc: 5 }, skin: '#e8d0a0', hair: '#c8a878', cloak: '#7a5a8a', acc: ['bunny'], accColor: '#e8d0a0',
     desc: 'Leporinos sortudos com reflexos de coelho.',
     traits: [['Gatilho de Lebre', '+14% de Esquiva e +8% de Recarga'], ['Pés Sortudos', '+20% de Movimento e +4% de Crítico'], ['Salto de Coelho', 'Habilidade ativa']],
     stats: { dodge: 14, moveSpd: 20, cdr: 8, crit: 4 }, skill: 'sp_hop' },
-  aarakocra: { name: 'Aarakocra', rarity: 2, unlock: { t: 'encounter', minZone: 11, biomes: ['desert', 'ice'], asc: 1 }, skin: '#a87a4a', hair: '#7a5a3a', eyes: '#ffd04a', cloak: '#c8a050', acc: ['wings', 'feathers'], accColor: '#7a5a3a',
+  aarakocra: { name: 'Aarakocra', rarity: 2, unlock: { t: 'encounter', minZone: 30, biomes: ['desert', 'ice'], asc: 5 }, skin: '#a87a4a', hair: '#7a5a3a', eyes: '#ffd04a', cloak: '#c8a050', acc: ['wings', 'feathers'], accColor: '#7a5a3a',
     desc: 'Povo-pássaro que domina os céus e os ventos.',
     traits: [['Voo', '+30% de Movimento e +8% de Esquiva'], ['Garras', '+8% de Crítico e +8% de Dano'], ['Chamado do Vento', 'Habilidade ativa']],
     stats: { moveSpd: 30, crit: 8, dodge: 8, dmgPct: 8 }, skill: 'sp_gust' },
-  minotaur: { name: 'Minotauro', rarity: 2, unlock: { t: 'stat', stat: 'bosses', goal: 75, asc: 1 }, skin: '#7a4a2a', hair: '#4a2a1a', cloak: '#8a2a2a', acc: ['bighorns'], accColor: '#e8e0d0',
+  minotaur: { name: 'Minotauro', rarity: 2, unlock: { t: 'stat', stat: 'bosses', goal: 250, asc: 6 }, skin: '#7a4a2a', hair: '#4a2a1a', cloak: '#8a2a2a', acc: ['bighorns'], accColor: '#e8e0d0',
     desc: 'Guerreiros chifrudos que derrubam qualquer inimigo numa investida.',
     traits: [['Investida', 'O primeiro golpe em cada alvo causa +100% de dano'], ['Chifres', '+18% de Dano, +15% de Vida e +15% contra chefes'], ['Investida Chifruda', 'Habilidade ativa']],
     stats: { dmgPct: 18, hpPct: 15, bossDmg: 15 }, flags: ['charge'], skill: 'sp_gore' },
-  firbolg: { name: 'Firbolg', rarity: 2, unlock: { t: 'encounter', minZone: 2, biomes: ['forest'], asc: 1 }, skin: '#8aa0c8', hair: '#c8a878', cloak: '#4a7a4a', acc: ['ears'], accColor: '#8aa0c8',
+  firbolg: { name: 'Firbolg', rarity: 2, unlock: { t: 'encounter', minZone: 25, biomes: ['forest'], asc: 6 }, skin: '#8aa0c8', hair: '#c8a878', cloak: '#4a7a4a', acc: ['ears'], accColor: '#8aa0c8',
     desc: 'Gigantes gentis das florestas, guardiões da natureza.',
     traits: [['Magia Firbolg', 'Regenera 1% da Vida/s e +40% de cura de poções'], ['Constituição Poderosa', '+18% de Vida e +5% de Esquiva'], ['Passo Oculto', 'Habilidade ativa']],
     stats: { hpPct: 18, regenPct: 1, potionPct: 40, dodge: 5 }, skill: 'sp_hidden' },
 
   // ---------- Épicas (exigem 2–3 ascensões) ----------
-  genasi_fire: { name: 'Genasi do Fogo', rarity: 3, unlock: { t: 'encounter', minZone: 26, biomes: ['volcano'], asc: 2 }, skin: '#ff6a3a', hair: '#ffd04a', eyes: '#fff2a0', cloak: '#8a2a1a',
+  genasi_fire: { name: 'Genasi do Fogo', rarity: 3, unlock: { t: 'encounter', minZone: 45, biomes: ['volcano'], asc: 8 }, skin: '#ff6a3a', hair: '#ffd04a', eyes: '#fff2a0', cloak: '#8a2a1a',
     desc: 'Mortais com a chama elemental correndo nas veias.',
     traits: [['Alcance das Chamas', 'Ataques têm 15% de chance de queimar e habilidade ativa'], ['Fogo Interior', '+25% de Dano, +6% de Crítico e +20% de Dano Crítico']],
     stats: { dmgPct: 25, crit: 6, critDmg: 20 }, flags: ['burnHit'], skill: 'sp_flame' },
-  genasi_water: { name: 'Genasi da Água', rarity: 3, unlock: { t: 'encounter', minZone: 16, biomes: ['swamp', 'ice'], asc: 2 }, skin: '#4aa0c8', hair: '#bff4ff', eyes: '#ffffff', cloak: '#2a5a8a',
+  genasi_water: { name: 'Genasi da Água', rarity: 3, unlock: { t: 'encounter', minZone: 45, biomes: ['swamp', 'ice'], asc: 8 }, skin: '#4aa0c8', hair: '#bff4ff', eyes: '#ffffff', cloak: '#2a5a8a',
     desc: 'Filhos das marés, fluidos e sempre em recuperação.',
     traits: [['Fluxo Vital', 'Regenera 1,6% da Vida/s e +30% de cura de poções'], ['Corpo Fluido', '+25% de Vida e 6% menos dano'], ['Chamado da Onda', 'Habilidade ativa']],
     stats: { hpPct: 25, regenPct: 1.6, potionPct: 30, dr: 6 }, skill: 'sp_wave' },
-  genasi_air: { name: 'Genasi do Ar', rarity: 3, unlock: { t: 'stat', stat: 'maxZone', goal: 40, asc: 2 }, skin: '#bfe0f0', hair: '#ffffff', eyes: '#5ae8ff', cloak: '#6a8ab8',
+  genasi_air: { name: 'Genasi do Ar', rarity: 3, unlock: { t: 'stat', stat: 'maxZone', goal: 75, asc: 9 }, skin: '#bfe0f0', hair: '#ffffff', eyes: '#5ae8ff', cloak: '#6a8ab8',
     desc: 'Leves como a brisa, rápidos como o relâmpago.',
     traits: [['Sopro Infinito', '+22% de Vel. de Ataque e +25% de Movimento'], ['Misturar-se ao Vento', '+12% de Esquiva'], ['Rajada Relampejante', 'Habilidade ativa']],
     stats: { atkSpd: 22, moveSpd: 25, dodge: 12 }, skill: 'sp_storm' },
-  genasi_earth: { name: 'Genasi da Terra', rarity: 3, unlock: { t: 'encounter', minZone: 6, biomes: ['cave'], asc: 2 }, skin: '#8a6a4a', hair: '#5a4a3a', eyes: '#ffd04a', cloak: '#5a4a2a',
+  genasi_earth: { name: 'Genasi da Terra', rarity: 3, unlock: { t: 'encounter', minZone: 45, biomes: ['cave'], asc: 9 }, skin: '#8a6a4a', hair: '#5a4a3a', eyes: '#ffd04a', cloak: '#5a4a2a',
     desc: 'Firmes como a rocha, inabaláveis em combate.',
     traits: [['Andar Terreno', '+50% de Armadura e +12% de Bloqueio'], ['Fundir-se à Pedra', '+20% de Vida e 6% menos dano'], ['Pele de Pedra', 'Habilidade ativa']],
     stats: { defPct: 50, block: 12, hpPct: 20, dr: 6 }, skill: 'sp_stone' },
-  warforged: { name: 'Forjado Bélico', rarity: 3, unlock: { t: 'stat', stat: 'maxForge', goal: 12, asc: 2 }, skin: '#8a8a9a', hair: '#5a5a6a', eyes: '#5ae8ff', cloak: '#6a5a4a',
+  warforged: { name: 'Forjado Bélico', rarity: 3, unlock: { t: 'stat', stat: 'maxForge', goal: 15, asc: 9 }, skin: '#8a8a9a', hair: '#5a5a6a', eyes: '#5ae8ff', cloak: '#6a5a4a',
     desc: 'Constructos criados para a guerra, que descobriram ter alma.',
     traits: [['Proteção Integrada', '+55% de Armadura e 14% menos dano'], ['Resiliência de Constructo', 'Imune a venenos'], ['Máquina de Guerra', '+30% de Vida e +15% de Dano']],
     stats: { defPct: 55, hpPct: 30, dr: 14, dmgPct: 15 }, flags: ['poisonImmune'] },
-  githyanki: { name: 'Githyanki', rarity: 3, unlock: { t: 'encounter', minZone: 30, asc: 3 }, skin: '#c8c87a', hair: '#2a2a1a', eyes: '#ffd04a', cloak: '#8a3a2a', acc: ['ears'], accColor: '#c8c87a',
+  githyanki: { name: 'Githyanki', rarity: 3, unlock: { t: 'encounter', minZone: 60, asc: 10 }, skin: '#c8c87a', hair: '#2a2a1a', eyes: '#ffd04a', cloak: '#8a3a2a', acc: ['ears'], accColor: '#c8c87a',
     desc: 'Guerreiros astrais de mente afiada e lâminas de prata.',
     traits: [['Psiônica Githyanki', '+12% de Crítico e +45% de Dano Crítico'], ['Conhecimento Astral', '+10% de Recarga e +10% de Dano'], ['Lâmina Psiônica', 'Habilidade ativa']],
     stats: { crit: 12, critDmg: 45, cdr: 10, dmgPct: 10 }, skill: 'sp_psionic' },
-  yuanti: { name: 'Yuan-ti', rarity: 3, unlock: { t: 'encounter', minZone: 11, biomes: ['desert'], asc: 3 }, skin: '#6aa05a', hair: '#2a4a2a', eyes: '#ffd04a', cloak: '#5a2a4a',
+  yuanti: { name: 'Yuan-ti', rarity: 3, unlock: { t: 'encounter', minZone: 55, biomes: ['desert'], asc: 10 }, skin: '#6aa05a', hair: '#2a4a2a', eyes: '#ffd04a', cloak: '#5a2a4a',
     desc: 'Serpentinos de sangue frio, imunes a venenos e à magia.',
     traits: [['Resistência à Magia', '15% menos dano recebido'], ['Resiliência ao Veneno', 'Imune a venenos'], ['Conjuração Serpentina', '+15% de Dano e habilidade ativa']],
     stats: { dr: 15, dmgPct: 15 }, flags: ['poisonImmune'], skill: 'sp_serpent' },
-  dhampir: { name: 'Dhampir', rarity: 3, unlock: { t: 'encounter', minZone: 31, biomes: ['crypt'], asc: 3 }, skin: '#e8e0e8', hair: '#1a1a2a', eyes: '#ff2a2a', cloak: '#3a1a2a',
+  dhampir: { name: 'Dhampir', rarity: 3, unlock: { t: 'encounter', minZone: 60, biomes: ['crypt'], asc: 11 }, skin: '#e8e0e8', hair: '#1a1a2a', eyes: '#ff2a2a', cloak: '#3a1a2a',
     desc: 'Meio-vivos com sede de sangue e agilidade sobrenatural.',
     traits: [['Mordida Vampírica', '+8% de Roubo de Vida e habilidade ativa'], ['Escalada de Aranha', '+15% de Movimento, +6% de Crítico e +10% de Dano']],
     stats: { lifesteal: 8, moveSpd: 15, crit: 6, dmgPct: 10 }, skill: 'sp_bite' },
 
   // ---------- Lendárias (exigem 4–5 ascensões) ----------
-  astral_elf: { name: 'Elfo Astral', rarity: 4, unlock: { t: 'stat', stat: 'ascensions', goal: 7, asc: 7 }, skin: '#c8d8f0', hair: '#f0f0ff', eyes: '#c8a8ff', cloak: '#3a3a8a', acc: ['ears'], accColor: '#c8d8f0',
+  astral_elf: { name: 'Elfo Astral', rarity: 4, unlock: { t: 'stat', stat: 'ascensions', goal: 20, asc: 20 }, skin: '#c8d8f0', hair: '#f0f0ff', eyes: '#c8a8ff', cloak: '#3a3a8a', acc: ['ears'], accColor: '#c8d8f0',
     desc: 'Elfos que habitam o Mar Astral, banhados pela luz das estrelas.',
     traits: [['Estrela Cadente', 'A cada 10s um meteoro astral cai sobre o alvo (400% de dano)'], ['Fogo Astral', '+30% de Dano, +10% de Crítico e +30% de Dano Crítico'], ['Transe Astral', '+15% de Recarga'], ['Passo Estelar', 'Habilidade ativa']],
     stats: { dmgPct: 30, crit: 10, critDmg: 30, cdr: 15 }, flags: ['starfall'], skill: 'sp_starlight' },
-  shadarkai: { name: 'Shadar-kai', rarity: 4, unlock: { t: 'stat', stat: 'lordsKilled', goal: 50, asc: 5 }, skin: '#b0b0c0', hair: '#2a2a3a', eyes: '#c8c8ff', cloak: '#2a2a3a', acc: ['ears'], accColor: '#b0b0c0',
+  shadarkai: { name: 'Shadar-kai', rarity: 4, unlock: { t: 'stat', stat: 'lordsKilled', goal: 150, asc: 15 }, skin: '#b0b0c0', hair: '#2a2a3a', eyes: '#c8c8ff', cloak: '#2a2a3a', acc: ['ears'], accColor: '#b0b0c0',
     desc: 'Elfos sombrios a serviço da Rainha Corvo.',
     traits: [['Fôlego da Rainha Corvo', 'Uma vez por zona, renasce com 60% de Vida'], ['Resistência Necrótica', '18% menos dano recebido'], ['Bênção Sombria', '+15% de Esquiva e de Dano, +5% de Roubo de Vida e habilidade ativa']],
     stats: { dr: 18, dodge: 15, dmgPct: 15, lifesteal: 5 }, flags: ['ravenRevive'], skill: 'sp_raven' },
-  fairy: { name: 'Fada', rarity: 4, unlock: { t: 'stat', stat: 'legendaries', goal: 80, asc: 5 }, skin: '#ffd0e0', hair: '#ff9af0', eyes: '#5ae8ff', cloak: '#7ad070', acc: ['fairywings'], accColor: '#c8f0ff',
+  fairy: { name: 'Fada', rarity: 4, unlock: { t: 'stat', stat: 'legendaries', goal: 200, asc: 15 }, skin: '#ffd0e0', hair: '#ff9af0', eyes: '#5ae8ff', cloak: '#7ad070', acc: ['fairywings'], accColor: '#c8f0ff',
     desc: 'Criaturas feéricas minúsculas, rápidas e abençoadas pela sorte.',
     traits: [['Pó de Fada', '20% de chance de cada item encontrado vir em dobro'], ['Voo', '+22% de Esquiva e +25% de Movimento'], ['Magia Feérica', '+80% de Sorte e +30% de Ouro'], ['Frágil', '-10% de Vida'], ['Fogo Feérico', 'Habilidade ativa']],
     stats: { dodge: 22, mf: 80, goldPct: 30, moveSpd: 25, hpPct: -10 }, flags: ['flying', 'fairyDust'], skill: 'sp_fairy' },
-  thrikreen: { name: 'Thri-kreen', rarity: 4, unlock: { t: 'stat', stat: 'maxZone', goal: 80, asc: 5 }, skin: '#8ab04a', hair: '#6a8a3a', eyes: '#ff5a5a', cloak: '#8a7a4a', acc: ['antennae', 'arms'], accColor: '#6a8a3a',
+  thrikreen: { name: 'Thri-kreen', rarity: 4, unlock: { t: 'stat', stat: 'maxZone', goal: 110, asc: 14 }, skin: '#8ab04a', hair: '#6a8a3a', eyes: '#ff5a5a', cloak: '#8a7a4a', acc: ['antennae', 'arms'], accColor: '#6a8a3a',
     desc: 'Insetoides de quatro braços que nunca dormem.',
     traits: [['Braços Secundários', '30% de chance de atacar duas vezes'], ['Frenesi Insetoide', '+35% de Vel. de Ataque e +25% de Dano'], ['Carapaça Camaleônica', '+14% de Esquiva, +25% de Armadura e +15% de Vida']],
     stats: { atkSpd: 35, dmgPct: 25, dodge: 14, defPct: 25, hpPct: 15 }, flags: ['extraArms'] },

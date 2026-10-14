@@ -240,9 +240,9 @@ const TRAINING = [
 // Altar das Almas (Ascensão) — permanente
 // ============================================================
 const SOUL_UPGRADES = [
-  { id: 'power', name: 'Poder Ancestral', stat: 'soulDmg', per: 15, base: 1, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `+${v}% de Dano (multiplicativo)` },
-  { id: 'vigor', name: 'Vigor Eterno', stat: 'soulHp', per: 15, base: 1, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `+${v}% de Vida (multiplicativo)` },
-  { id: 'aegis', name: 'Égide Imortal', stat: 'soulDef', per: 15, base: 1, growth: 1.25, icon: 'sk_shield', color: '#9aa3ad', desc: v => `+${v}% de Armadura (multiplicativo)` },
+  { id: 'power', name: 'Poder Ancestral', stat: 'soulDmg', per: 8, comp: true, base: 1, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `+${U.fmt(v)}% de Dano (cada nível ×1,08)` },
+  { id: 'vigor', name: 'Vigor Eterno', stat: 'soulHp', per: 8, comp: true, base: 1, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `+${U.fmt(v)}% de Vida (cada nível ×1,08)` },
+  { id: 'aegis', name: 'Égide Imortal', stat: 'soulDef', per: 8, comp: true, base: 1, growth: 1.25, icon: 'sk_shield', color: '#9aa3ad', desc: v => `+${U.fmt(v)}% de Armadura (cada nível ×1,08)` },
   { id: 'fortune', name: 'Fortuna Divina', stat: 'goldPct', per: 25, base: 1, growth: 1.3, icon: 'sk_coin', color: '#ffd04a', desc: v => `+${v}% de Ouro` },
   { id: 'wisdom', name: 'Sabedoria Antiga', stat: 'xpPct', per: 20, base: 1, growth: 1.3, icon: 'sk_book', color: '#b874ff', desc: v => `+${v}% de Experiência` },
   { id: 'luck', name: 'Bênção do Destino', stat: 'mf', per: 10, base: 2, growth: 1.35, icon: 'sk_clover', color: '#4cff7a', desc: v => `+${v}% de Sorte` },

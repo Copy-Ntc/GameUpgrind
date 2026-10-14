@@ -56,7 +56,7 @@ const World = {
   addEnt(W, e) { W.ents.push(e); W.occ[e.y * W.w + e.x] = e.id; },
 
   spawnEnemy(W, sp, extra = {}) {
-    const z = W.z, S = enemyScale(z);
+    const z = W.z, S = enemyScale(z), SA = enemyAtkScale(z);
     let def = ENEMIES[sp.type], name, sprite, pal, abil = [], lordDef = null;
     if (sp.lord) {
       lordDef = LORDS[sp.type];
@@ -66,7 +66,7 @@ const World = {
       name = def.name; sprite = def.sprite; pal = def.pal;
     }
     const gi = def.g === 'f' ? 1 : 0;
-    let hp = 40 * S * def.hp, atk = 16 * S * def.atk;
+    let hp = 40 * S * def.hp, atk = 16 * SA * def.atk;
     // Início mais suave nas primeiras zonas
     if (z <= 5) { atk *= 0.55 + 0.09 * (z - 1); hp *= 0.75 + 0.05 * (z - 1); }
     let scale = 1, xpMult = 1;
@@ -445,7 +445,7 @@ const World = {
     if (hero.effects.stun > 0 || hero.effects.freeze > 0) { hero.status = 'Atordoado!'; return; }
     if (hero.opening) {
       hero.opening.t -= dt;
-      hero.status = hero.opening.kind === 'chest' ? 'Abrindo baú…' : hero.opening.kind === 'recruit' ? `Libertando ${hero.opening.obj.name}…` : 'Ativando santuário…';
+      hero.status = hero.opening.kind === 'chest' ? 'Abrindo baú…' : hero.opening.kind === 'recruit' ? (hero.opening.obj.kind === 'relic' ? 'Reivindicando a Arma Ancestral…' : `Libertando ${hero.opening.obj.name}…`) : 'Ativando santuário…';
       if (hero.opening.t <= 0) {
         const o = hero.opening; hero.opening = null;
         if (o.kind === 'chest') this.openChest(W, o.obj);
@@ -513,7 +513,7 @@ const World = {
       const path = this.bfs(W, hero.x, hero.y, goal, { self: hero.id, avoid: true });
       if (path) {
         const k0 = goals.get(list[0]);
-        hero.status = k0 === 'chest' ? 'Indo até um baú…' : k0 === 'recruit' ? 'Indo resgatar o prisioneiro…' : 'Indo ao santuário…';
+        hero.status = k0 === 'chest' ? 'Indo até um baú…' : k0 === 'recruit' ? (list[0].kind === 'relic' ? 'Indo ao Cofre Ancestral…' : 'Indo resgatar o prisioneiro…') : 'Indo ao santuário…';
         if (!this.stepPath(W, hero, path)) this.stuck(W, hero, dt);
         return;
       }
@@ -707,7 +707,7 @@ const World = {
       if (S.flags.has('bulwark')) this.healHero(W, hero.maxHp * 0.02);
       Sfx.play('block', 100);
     }
-    const K = 30 * enemyScale(W.z);
+    const K = 30 * enemyAtkScale(W.z);
     const def = S.def * (1 + bm.def);
     dmg *= 1 - Math.min(0.85, def / (def + K));
     if (hero.shield > 0) {
@@ -782,7 +782,7 @@ const World = {
         UI.banner('FIM DE JOGO', 'Seus três corações se foram…', 'red', 3);
         Game.log(`<b>${st.name}</b> perdeu o último coração na zona ${W.z}. <b style="color:#ff6a6a">Fim de jogo.</b>`, 'bad');
       } else {
-        UI.banner('DERROTADO', `${st.hearts} ${st.hearts > 1 ? 'corações restantes' : 'coração restante'}`, 'red', 2.8);
+        UI.banner('DERROTADO', `${st.hearts} ${st.hearts > 1 ? 'corações restantes' : 'coração restante'} · recuando`, 'red', 2.8);
         Game.log(`<b>${st.name}</b> foi derrotado na zona ${W.z} e perdeu um coração (${st.hearts} restantes).`, 'bad');
       }
     } else {
@@ -802,7 +802,7 @@ const World = {
   respawn(W) {
     const hero = W.hero, st = Game.state;
     if (st.hardcore && st.hearts <= 0) { Game.gameOver(); return; }
-    if (st.deathsInZone >= 3 && W.z > 1 && st.mode === 'advance') { Game.retreat(); return; }
+    if (st.deathsInZone >= (st.hardcore ? 1 : 3) && W.z > 1 && st.mode === 'advance') { Game.retreat(); return; }
     hero.dead = false;
     hero.hp = hero.maxHp;
     let p = [W.start.x, W.start.y];
@@ -1350,6 +1350,9 @@ const World = {
     else if (!e.summoned && Math.random() < 0.04) n = 1;
     for (let i = 0; i < n; i++) Game.dropItem(Items.generate(ilvl, { cls: st.cls, minR, mf: S.mf, boost }), e.rx, e.ry);
     if (!e.summoned && Math.random() < (e.boss ? 1 : e.elite ? 0.2 : 0.035)) Game.gainPotion(e.rx, e.ry);
+    if (e.lord) Game.gainShards(1 + Math.floor(z / 25), e.rx, e.ry);
+    else if (e.boss && Math.random() < 0.2) Game.gainShards(1, e.rx, e.ry);
+    else if (e.type === 'mimic' && Math.random() < 0.25) Game.gainShards(1, e.rx, e.ry);
     if (e.boss) {
       st.stats.bosses++;
       if (e.lord) { st.stats.lordsKilled = (st.stats.lordsKilled || 0) + 1; st.stats['lord_' + e.type] = (st.stats['lord_' + e.type] || 0) + 1; }
@@ -1401,7 +1404,8 @@ const World = {
     W.occ[R.y * W.w + R.x] = 0;
     this.fx(W, 'holy', R.x + 0.5, R.y + 0.5, { r: 2, color: '#ffe680', life: 1 });
     this.burst(W, R.x + 0.5, R.y + 0.4, '#ffe680', 30, 4);
-    Game.unlock(R.kind, R.id, `${R.name} foi resgatado(a)`);
+    if (R.kind === 'relic') Game.gainRelic(R.id);
+    else Game.unlock(R.kind, R.id, `${R.name} foi resgatado(a)`);
   },
 
   useShrine(W, s) {

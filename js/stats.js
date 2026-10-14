@@ -2,13 +2,17 @@
 // ============================================================
 // Cálculo de atributos do herói, poder, XP e custos
 // ============================================================
-const MULTI_XP = 1.4;        // multiclasse precisa de 40% mais XP por nível
-const MULTI_SYNERGY = 15;    // bônus de sinergia multiclasse (% de Dano e Vida)
-const HARDCORE_BONUS = { goldPct: 30, xpPct: 30, mf: 20 };
+const MULTI_XP = 1.4;         // multiclasse precisa de 40% mais XP por nível
+const MULTI_SYNERGY = 15;     // bônus de sinergia multiclasse (% de Dano e Vida)
+const MULTI_SP_XP = 1.25;     // mestiçagem (duas espécies) precisa de 25% mais XP por nível
+const MULTI_SP_SYNERGY = 10;  // bônus de sinergia da mestiçagem (% de Dano e Vida)
+const MULTI_SP_SHARE = 0.5;   // a espécie secundária contribui com 50% dos atributos
+const RELAXED_SOULS = 0.6;    // Modo Relaxado (sem corações): só 60% das Almas
+const INNATE_CAP = 300;       // nível máximo considerado pelo talento inato
 
 const Stats = {
   needXp(L) { return Math.floor(100 * Math.pow(1.1, L - 1)); },
-  needXpFor(st, L = st.level) { return Math.floor(this.needXp(L) * (st.cls2 ? MULTI_XP : 1)); },
+  needXpFor(st, L = st.level) { return Math.floor(this.needXp(L) * (st.cls2 ? MULTI_XP : 1) * (st.species2 ? MULTI_SP_XP : 1)); },
   growth(L) { return Math.pow(1.04, L - 1); },
 
   // Habilidades ativas disponíveis (classe principal + 2 primeiras da secundária)
@@ -24,12 +28,31 @@ const Stats = {
   },
   talentIds(st) { return [...this.activeIds(st), ...this.passiveIds(st)]; },
 
+  // Arma Ancestral da classe (se já foi encontrada): atributos e poderes conforme a raridade
+  relicInfo(st, cls = st.cls) {
+    const R = st.relics && st.relics[cls];
+    if (!R || !RELICS[cls]) return null;
+    const def = RELICS[cls], r = R.r;
+    const list = WEAPON_BASES[cls];
+    const base = list[list.length - 1];
+    const ilvl = Math.max(1, st.maxZone || 1);
+    const stats = { atk: SLOT_MAIN.weapon.atk * zoneScale(ilvl) * RARITIES[r].mult * (base.atk || 1) * RELIC_ATK, dmgPct: RELIC_DMG[r] };
+    for (const k in def.per) stats[k] = (stats[k] || 0) + def.per[k] * (r + 1);
+    const powers = r >= 5 ? def.powers.slice(0, 2) : r >= 3 ? [def.powers[0]] : [];
+    return { def, r, ilvl, stats, powers, base };
+  },
+
+  // Valor de uma melhoria do Altar (as de Poder/Vida/Armadura acumulam multiplicando)
+  soulVal(u, r) { return u.comp ? (Math.pow(1 + u.per / 100, r) - 1) * 100 : r * u.per; },
+
   compute(st, override) {
     const c = CLASSES[st.cls], b = c.base;
     const c2 = st.cls2 ? CLASSES[st.cls2] : null;
     const rar = Math.max(c.rarity || 0, c2 ? c2.rarity || 0 : 0);
     const g = this.growth(st.level);
     const sp = SPECIES[st.species] || SPECIES.human;
+    const sp2 = st.species2 ? SPECIES[st.species2] : null;
+    const spRar = Math.max(sp.rarity || 0, sp2 ? sp2.rarity || 0 : 0);
     const base = c2 ? {
       hp: (b.hp + c2.base.hp) / 2, atk: (b.atk + c2.base.atk) / 2, def: (b.def + c2.base.def) / 2,
       crit: Math.max(b.crit, c2.base.crit), critDmg: Math.max(b.critDmg, c2.base.critDmg), dodge: Math.max(b.dodge, c2.base.dodge),
@@ -42,10 +65,15 @@ const Stats = {
       soulDmg: 0, soulHp: 0, soulDef: 0, talentPts: 0, invSlots: 0, startZone: 0, soulPct: 0, offline: 0, dr: 0, regenPct: 0,
     };
     const flags = new Set(sp.flags || []);
-    // Espécie
+    // Espécie (e a secundária, na mestiçagem)
     for (const k in sp.stats) s[k] = (s[k] || 0) + sp.stats[k];
+    if (sp2) {
+      for (const k in sp2.stats) s[k] = (s[k] || 0) + sp2.stats[k] * MULTI_SP_SHARE;
+      for (const f of sp2.flags || []) flags.add(f);
+      s.dmgPct += MULTI_SP_SYNERGY; s.hpPct += MULTI_SP_SYNERGY;
+    }
     // Talentos inatos (crescem com o nível)
-    const lv = Math.min(st.level, 120);
+    const lv = Math.min(st.level, INNATE_CAP);
     const addInnate = (cls, k) => {
       const inn = cls.innate;
       if (!inn) return;
@@ -57,7 +85,6 @@ const Stats = {
       addInnate(c2, 0.6);
       s.dmgPct += MULTI_SYNERGY; s.hpPct += MULTI_SYNERGY;
     }
-    if (st.hardcore) for (const k in HARDCORE_BONUS) s[k] += HARDCORE_BONUS[k];
     const powers = new Set();
     const eq = override ? Object.assign({}, st.equip, override) : st.equip;
     for (const slot of SLOTS) {
@@ -67,21 +94,35 @@ const Stats = {
       for (const k in is) s[k] = (s[k] || 0) + is[k];
       for (const p of it.powers) powers.add(p);
     }
+    // Arma Ancestral (a da classe secundária empresta metade do bônus de dano)
+    const rel = this.relicInfo(st);
+    if (rel) {
+      for (const k in rel.stats) s[k] = (s[k] || 0) + rel.stats[k];
+      for (const p of rel.powers) powers.add(p);
+    }
+    if (c2) { const rel2 = this.relicInfo(st, st.cls2); if (rel2) s.dmgPct += rel2.stats.dmgPct * 0.5; }
     for (const t of TRAINING) { const r = st.training[t.id] || 0; if (r) s[t.stat] += r * t.per; }
     for (const id of this.passiveIds(st)) { const r = st.talents[id] || 0; if (r) s[SKILLS[id].stat] += r * SKILLS[id].per; }
+    for (const m of MAESTRIA) {
+      const r = st.talents[m.id] || 0;
+      if (!r) continue;
+      s[m.stat] += r * m.per;
+      if (m.also) s[m.also] += r * m.per;
+    }
     for (const a of ACHIEVEMENTS) if (st.ach[a.id]) for (const k in a.reward) s[k] += a.reward[k];
     for (const u of SOUL_UPGRADES) {
       const r = st.soulUpg[u.id] || 0;
       if (!r) continue;
-      s[u.stat] += r * u.per;
-      if (u.id === 'haste') s.moveSpd += r * u.per;
+      const v = this.soulVal(u, r);
+      s[u.stat] += v;
+      if (u.id === 'haste') s.moveSpd += v;
     }
     if (powers.has('greed')) s.mf += 25;
     if (powers.has('swift')) { s.moveSpd += 20; s.atkSpd += 10; }
     if (powers.has('midas')) s.goldPct += 40;
 
     // Raridade da classe e da espécie multiplicam o resultado final (como o "Poder" do Vampire Survivors)
-    const rm = HERO_RARITY[rar].mult * HERO_RARITY[sp.rarity || 0].spMult;
+    const rm = HERO_RARITY[rar].mult * HERO_RARITY[spRar].spMult;
     const out = {
       maxHp: Math.max(1, s.hp * (1 + s.hpPct / 100) * (1 + s.soulHp / 100) * rm),
       atk: s.atk * (1 + s.dmgPct / 100) * (1 + s.soulDmg / 100) * rm,
@@ -109,7 +150,7 @@ const Stats = {
   },
 
   power(s, z) {
-    const K = 30 * enemyScale(Math.max(1, z || 1));
+    const K = 30 * enemyAtkScale(Math.max(1, z || 1));
     const red = Math.min(0.8, s.def / (s.def + K));
     const dps = s.atk * s.atkSpd * (1 + (s.crit / 100) * (s.critDmg / 100 - 1)) * (1 + s.bossDmg / 400) * (1 + s.minion / 400);
     const ehp = s.maxHp / (1 - red) / (1 - s.dodge / 100) / (1 - s.block / 100 * 0.6) / (1 - (s.dr || 0) / 100) * (1 + s.lifesteal / 25) + s.regen * 8;
@@ -130,20 +171,26 @@ const Stats = {
   talentSpent(st) {
     let n = 0;
     for (const id of this.talentIds(st)) n += st.talents[id] || 0;
+    for (const m of MAESTRIA) n += st.talents[m.id] || 0;
     return n - 1; // primeira habilidade da classe principal é gratuita
   },
   talentFree(st) { return this.talentTotal(st) - this.talentSpent(st); },
+  maestriaOpen(st) { return st.level >= MAESTRIA_LVL; },
 
   trainCost(t, rank) { return Math.ceil(t.base * Math.pow(t.growth, rank) * (1 + rank * 0.05)); },
   soulCost(u, rank) { return Math.ceil(u.base * Math.pow(u.growth, rank) * (1 + rank * 0.1)); },
   soulsOnAscend(st) {
     if (st.maxZone < 15) return 0;
     const sp = Game.stats ? Game.stats.soulPct : 0;
-    return Math.floor((Math.pow(st.maxZone - 9, 1.55) * (1 + sp / 100) + st.level * 0.2) * (st.hardcore ? 1.5 : 1));
+    const z = st.maxZone;
+    const raw = Math.pow(z - 9, 1.5) * Math.pow(SCALE.soul, z - 15) * (1 + sp / 100) + st.level * 0.2;
+    return Math.floor(raw * (st.hardcore ? 1 : RELAXED_SOULS));
   },
   invSize(st) { return 30 + (st.soulUpg.bag || 0) * 6; },
 
-  // Classe dominada: zona recorde com ela ≥ MASTERY_ZONE
+  // Classe/espécie dominada: zona recorde numa jornada iniciada com ela ≥ MASTERY_ZONE
   mastered(st, cls) { return ((st.classStats || {})[cls] || {}).best >= MASTERY_ZONE; },
+  speciesMastered(st, sp) { return ((st.speciesStats || {})[sp] || {}).best >= MASTERY_ZONE; },
   multiclassOpen(st) { return (st.stats.ascensions || 0) >= MULTI_ASC; },
+  multiSpeciesOpen(st) { return (st.stats.ascensions || 0) >= MULTI_SP_ASC; },
 };

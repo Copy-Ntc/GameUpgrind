@@ -200,10 +200,11 @@ const MapGen = {
         if (!p) continue;
         recruit = Object.assign({}, encounter, { x: p[0], y: p[1], freed: false, seen: false });
         take(p[0], p[1]);
-        const guards = 2 + (z >= 10 ? 1 : 0);
+        const relic = encounter.kind === 'relic';
+        const guards = relic ? 4 : 2 + (z >= 10 ? 1 : 0);
         for (let i = 0; i < guards; i++) {
           const g = randIn(r);
-          if (g) { take(g[0], g[1]); spawns.push({ x: g[0], y: g[1], type: U.pick(biome.enemies), elite: Math.random() < 0.5 }); }
+          if (g) { take(g[0], g[1]); spawns.push({ x: g[0], y: g[1], type: U.pick(biome.enemies), elite: relic || Math.random() < 0.5 }); }
         }
       }
     }

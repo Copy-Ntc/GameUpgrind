@@ -7,6 +7,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11a.5.5 0 0 0 .77.42l8.5-5.5a.5.5 0 0 0 0-.84l-8.5-5.5A.5.5 0 0 0 4 2.5z"/></svg>',
   sound: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.5 6.5 0 0 1 0 9"/></svg>',
   mute: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11 6l4 4M15 6l-4 4"/></svg>',
+  exit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5H3.5v11H9"/><path d="M7 8h7M11.5 5.5 14 8l-2.5 2.5"/></svg>',
   gear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm6.3 3.7-.1-1.8 1.4-1.2-1.4-2.5-1.8.5-1.4-1L10.6 1H7.8l-.4 1.9-1.5.9-1.8-.5L2.7 5.8l1.4 1.3v1.8l-1.4 1.2 1.4 2.5 1.8-.5 1.5 1 .4 1.8h2.8l.4-1.9 1.4-.9 1.8.5 1.4-2.5z"/></svg>',
 };
 
@@ -34,40 +35,57 @@ const UI = {
     this.titleMode = mode;
     const el = this.$('title-screen');
     el.classList.remove('hidden');
-    const save = mode === 'new' ? Game.peekSave() : null;
     const over = mode === 'gameover';
     const asc = mode === 'ascend' || over;
+    const slots = mode === 'new' ? [1, 2, 3].map(n => Game.peekSave(n)) : null;
+    if (slots && (!this.selSlot || slots[this.selSlot - 1])) this.selSlot = Game.freeSlot();
     const un = this.titleUnlocks();
     if (!un.classes.includes(this.selCls)) this.selCls = asc ? Game.state.cls : un.classes[0];
     if (!un.species.includes(this.selSp)) this.selSp = asc ? Game.state.species : 'human';
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
     h += `<div class="ts-logo"><h1>UPGRIND</h1><p>${over ? 'Fim de Jogo' : asc ? 'Ascensão' : 'Crônicas do Abismo'}</p></div>`;
     h += over
-      ? `<div class="ts-tag">Seus três corações se foram. Almas, Altar, conquistas e desbloqueios permanecem — escolha como recomeçar.</div>`
+      ? `<div class="ts-tag">Seus três corações se foram. Almas, Altar, conquistas, Armas Ancestrais e desbloqueios permanecem — escolha como recomeçar.</div>`
       : asc
-      ? `<div class="ts-tag">Sua alma renasce mais forte. Escolha classe e espécie para a nova jornada — Almas, Altar, conquistas e desbloqueios permanecem.</div>`
+      ? `<div class="ts-tag">Sua alma renasce mais forte. Escolha classe e espécie para a nova jornada — Almas, Altar, conquistas, Armas Ancestrais e desbloqueios permanecem.</div>`
       : `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
-    if (save) {
-      const c = CLASSES[save.cls] || CLASSES.fighter, sp = SPECIES[save.species] || SPECIES.human;
-      h += `<div class="ts-continue"><canvas id="ts-cont-spr" width="64" height="64"></canvas><div class="info"><b>${U.esc(save.name)}${save.hardcore ? ` <span style="color:#ff6a7a">${'❤'.repeat(Math.max(0, save.hearts))}</span>` : ''}</b><span>${c.name}${save.cls2 && CLASSES[save.cls2] ? ' / ' + CLASSES[save.cls2].name : ''} ${sp.name} · Nível ${save.level} · Zona ${save.zone} (recorde ${save.stats.maxZone})${save.stats.ascensions ? ` · ${save.stats.ascensions} ${save.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span></div><button class="btn gold" id="ts-continue">Continuar</button></div>`;
+    if (slots) {
+      h += '<div class="ts-slots">';
+      slots.forEach((sv, i) => {
+        const n = i + 1;
+        if (sv) {
+          const cl = CLASSES[sv.cls] ? sv.cls : 'fighter', spId = SPECIES[sv.species] ? sv.species : 'human';
+          const c = CLASSES[cl], sp = SPECIES[spId];
+          h += `<div class="ts-slot full"><div class="sl-n">Slot ${n}</div><img src="${Sprites.classUrl(cl, spId, 3)}" alt="">
+            <div class="info"><b>${U.esc(sv.name)}${sv.hardcore ? ` <span class="sl-h">${'❤'.repeat(Math.max(0, sv.hearts))}</span>` : ''}</b>
+            <span>${c.name}${sv.cls2 && CLASSES[sv.cls2] ? ' / ' + CLASSES[sv.cls2].name : ''} · ${sp.name}${sv.species2 && SPECIES[sv.species2] ? ' / ' + SPECIES[sv.species2].name : ''}</span>
+            <span>Nível ${sv.level} · Zona ${sv.zone} · Recorde ${sv.stats.maxZone}${sv.stats.ascensions ? ` · ${sv.stats.ascensions} ${sv.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span></div>
+            <div class="sl-btns"><button class="btn gold" data-cont="${n}">Continuar</button><button class="btn small danger" data-del="${n}">Apagar</button></div></div>`;
+        } else {
+          h += `<div class="ts-slot empty${this.selSlot === n ? ' sel' : ''}" data-newslot="${n}"><div class="sl-n">Slot ${n}</div><div class="sl-empty">Vazio</div><div class="hint">${this.selSlot === n ? 'O novo herói será criado aqui ↓' : 'Clique para criar um herói aqui'}</div></div>`;
+        }
+      });
+      h += '</div>';
     }
+    const full = slots && !this.selSlot;
     h += '<div class="ts-grid"><div class="ts-left">';
-    h += `<div class="ts-h">${save ? 'Nova jornada — ' : ''}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
+    h += `<div class="ts-h">${slots ? (full ? 'Slots cheios — ' : `Novo herói no slot ${this.selSlot} — `) : ''}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
     for (const id of CLASS_ORDER) {
       const c = CLASSES[id], lk = !un.classes.includes(id), R = HERO_RARITY[c.rarity];
       h += `<div class="pick${lk ? ' locked' : ''}${id === this.selCls ? ' sel' : ''}" data-pick="class" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.classUrl(id, 'human', 3)}" alt=""><div class="pn">${c.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
     }
     h += `</div><div class="ts-h">Espécie <span>${un.species.length}/${SPECIES_ORDER.length} desbloqueadas</span></div><div class="pick-grid sp">`;
     for (const id of SPECIES_ORDER) {
-      const s = SPECIES[id], lk = !un.species.includes(id), R = HERO_RARITY[s.rarity];
-      h += `<div class="pick${lk ? ' locked' : ''}${id === this.selSp ? ' sel' : ''}" data-pick="species" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.speciesUrl(id, 3)}" alt=""><div class="pn">${s.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
+      const sp = SPECIES[id], lk = !un.species.includes(id), R = HERO_RARITY[sp.rarity];
+      h += `<div class="pick${lk ? ' locked' : ''}${id === this.selSp ? ' sel' : ''}" data-pick="species" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.speciesUrl(id, 3)}" alt=""><div class="pn">${sp.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
     }
     h += '</div></div><div class="ts-right"><div class="ts-detail" id="ts-detail"></div>';
     const nm = asc ? Game.state.name : U.pick(HERO_NAMES);
     h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(nm)}" ${asc ? 'disabled' : ''} placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório" ${asc ? 'disabled' : ''}>Sortear</button></div>`;
-    const hcOn = Game.state && asc ? Game.state.hardcore : false;
-    h += `<label class="ts-hc"><input type="checkbox" id="ts-hc" ${hcOn ? 'checked' : ''}><div><b>Modo Desafio: 3 Corações</b><span>Ao ser derrotado 3 vezes a jornada acaba (Fim de Jogo). Em troca: +30% de Ouro e XP, +20% de Sorte e Almas ×1,5.</span></div></label>`;
-    h += `<div class="ts-start"><button class="btn gold big" id="ts-go">${over ? 'Recomeçar' : asc ? 'Renascer' : save ? 'Nova Jornada' : 'Começar Jornada'}</button>${asc && !over ? '<button class="btn ghost" id="ts-cancel">Cancelar</button>' : ''}</div>`;
+    const relaxOn = Game.state && asc ? !Game.state.hardcore : false;
+    h += `<label class="ts-hc"><input type="checkbox" id="ts-relax" ${relaxOn ? 'checked' : ''}><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
+    h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>${over ? 'Recomeçar' : asc ? 'Renascer' : 'Começar Jornada'}</button>${asc && !over ? '<button class="btn ghost" id="ts-cancel">Cancelar</button>' : ''}</div>`;
+    if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Apague um para criar outro herói.</div>';
     h += '</div></div>';
     h += '<div class="ts-foot">Classes e espécies bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
     el.innerHTML = h;
@@ -78,24 +96,32 @@ const UI = {
       el.querySelectorAll(`[data-pick="${card.dataset.pick}"]`).forEach(c => c.classList.toggle('sel', c === card));
       this.renderTitleDetail();
     }));
+    el.querySelectorAll('[data-cont]').forEach(b => b.onclick = () => {
+      Sfx.init(); this.hideTitle();
+      Game.load(+b.dataset.cont); Game.start();
+      if (Game.state.pendingEnd) setTimeout(() => this.gameOverModal(), 50);
+    });
+    el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      const n = +b.dataset.del, sv = Game.peekSave(n);
+      this.confirm('Apagar slot', `Apagar <b>${U.esc(sv ? sv.name : '')}</b> (slot ${n})? Todo o progresso desse slot — Almas, desbloqueios e Armas Ancestrais — será perdido para sempre.`, 'Apagar', () => { Game.deleteSlot(n); this.selSlot = n; this.showTitle('new'); }, 'danger');
+    });
+    el.querySelectorAll('[data-newslot]').forEach(b => b.onclick = () => { Sfx.init(); Sfx.play('click'); this.selSlot = +b.dataset.newslot; this.showTitle('new'); });
     const dice = this.$('ts-dice');
     if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
-    if (this.$('ts-continue')) this.$('ts-continue').onclick = () => {
-      Sfx.init(); this.hideTitle(); Game.load(); Game.start();
-      if (Game.state.pendingEnd) setTimeout(() => this.gameOverModal(), 50);
-    };
     if (this.$('ts-cancel')) this.$('ts-cancel').onclick = () => { this.hideTitle(); Game.paused = false; Music.zone(Game.W ? Game.W.biome.id : 'title'); };
     this.$('ts-go').onclick = () => {
       Sfx.init();
       const un2 = this.titleUnlocks();
       if (!un2.classes.includes(this.selCls) || !un2.species.includes(this.selSp)) { this.notice('Essa combinação ainda está bloqueada.', 'var(--red)'); return; }
-      const hc = !!(this.$('ts-hc') && this.$('ts-hc').checked);
+      const hc = !(this.$('ts-relax') && this.$('ts-relax').checked);
       if (over) { this.hideTitle(); Game.finishGameOver(this.selCls, this.selSp, hc); return; }
       if (asc) { this.hideTitle(); Game.paused = false; Game.ascend(this.selCls, this.selSp, hc); return; }
+      if (!this.selSlot) { this.notice('Os 3 slots estão ocupados. Apague um para começar outro herói.', 'var(--red)'); return; }
       const name = (this.$('ts-name').value || '').trim() || U.pick(HERO_NAMES);
-      const go = () => { this.hideTitle(); Game.newGame(this.selCls, this.selSp, name, hc); Game.start(); };
-      if (save) this.confirm('Nova jornada', 'Isso apagará o progresso salvo atual (incluindo almas, conquistas e desbloqueios). Tem certeza?', 'Apagar e começar', go, 'danger');
-      else go();
+      this.hideTitle();
+      Game.slot = this.selSlot;
+      Game.newGame(this.selCls, this.selSp, name, hc);
+      Game.start();
     };
     this.renderTitleDetail();
     Music.title();
@@ -138,7 +164,6 @@ const UI = {
     const ctx = bg.getContext('2d');
     const parts = [];
     let last = performance.now();
-    const save = this.titleMode === 'new' ? Game.peekSave() : null;
     const step = (ts) => {
       const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
       Music.update();
@@ -165,13 +190,6 @@ const UI = {
         const bob = Math.round(Math.sin(ts / 300) * 3);
         g.drawImage(s.c, 60 - s.sw * 3, 112 - s.sh * 6 + bob, s.sw * 6, s.sh * 6);
       }
-      const cont = this.$('ts-cont-spr');
-      if (cont && save) {
-        const g = cont.getContext('2d'); g.clearRect(0, 0, 64, 64); g.imageSmoothingEnabled = false;
-        const cl = CLASSES[save.cls] ? save.cls : 'fighter';
-        const s = Sprites.get(CLASSES[cl].sprite, Sprites.heroPal(cl, save.species));
-        g.drawImage(s.c, 32 - s.sw * 1.5, 60 - s.sh * 3 + Math.round(Math.sin(ts / 300) * 1.5), s.sw * 3, s.sh * 3);
-      }
       this.titleAnim = requestAnimationFrame(step);
     };
     this.titleAnim = requestAnimationFrame(step);
@@ -186,6 +204,7 @@ const UI = {
     this.$('ico-gold').src = Sprites.goldUrl();
     this.$('ico-soul').src = Sprites.soulUrl();
     this.$('btn-settings').innerHTML = ICONS.gear;
+    this.$('btn-exit').innerHTML = ICONS.exit;
     // Abas
     this.$('tabs').innerHTML = TABS.map(([id, nm]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${nm}</button>`).join('');
     // Velocidade
@@ -226,6 +245,7 @@ const UI = {
       const s = Game.state.settings; s.sound = !s.sound; Sfx.enabled = s.sound; Sfx.init(); this.dirty('top');
     };
     this.$('btn-settings').onclick = () => this.settingsModal();
+    this.$('btn-exit').onclick = () => this.exitPrompt();
     this.$('log-filters').addEventListener('click', e => {
       const b = e.target.closest('[data-lf]'); if (!b) return;
       this.logFilter = b.dataset.lf;
@@ -344,7 +364,7 @@ const UI = {
       this._pk = pk;
       const url = Sprites.potionUrl();
       let ph = '';
-      if (st.hardcore) ph += `<span class="hearts" title="Modo Desafio: corações restantes">${[0, 1, 2].map(i => `<i class="${i < st.hearts ? 'on' : ''}">❤</i>`).join('')}</span>`;
+      if (st.hardcore) ph += `<span class="hearts" title="Corações restantes nesta jornada">${[0, 1, 2].map(i => `<i class="${i < st.hearts ? 'on' : ''}">❤</i>`).join('')}</span>`;
       ph += Array.from({ length: pm }, (_, i) => `<img src="${url}" class="${i < st.potions ? '' : 'empty'}" alt="">`).join('');
       this.$('potions').innerHTML = ph;
     }
@@ -440,9 +460,9 @@ const UI = {
       const it = st.equip[s];
       h += `<div class="eslot${it ? '' : ' empty'}">${this.itemHtml(it)}<div class="info"><div class="lbl">${SLOT_NAMES[s]}</div><div class="nm ${it ? 'c' + it.rarity : ''}">${it ? U.esc(it.name) + (it.plus ? ` +${it.plus}` : '') : 'Vazio'}</div></div></div>`;
     }
-    h += '</div></div>';
+    h += '</div>' + this.relicCard(st.cls, true) + '</div>';
     // Atributos
-    const K = 30 * enemyScale(st.zone);
+    const K = 30 * enemyAtkScale(st.zone);
     const red = Math.min(0.85, S.def / (S.def + K)) * 100;
     const rows = [
       ['Vida', U.fmt(S.maxHp)], ['Dano', U.fmt(S.atk)],
@@ -488,6 +508,24 @@ const UI = {
     return h;
   },
 
+  // Card da Arma Ancestral (equipamento e Salão)
+  relicCard(cls, compact) {
+    const st = Game.state, info = Stats.relicInfo(st, cls), def = RELICS[cls];
+    if (!def) return '';
+    if (!info) {
+      return `<div class="relic-card locked"><div class="item empty"><img src="${Sprites.relicUrl(cls, 0)}" alt=""></div><div class="info"><div class="lbl">Arma Ancestral · ${CLASSES[cls].name}</div><div class="nm">${compact ? 'Ainda não encontrada' : def.name}</div><div class="ds">Encontre o <b>Cofre Ancestral</b> jogando de ${CLASSES[cls].name} a partir da zona ${RELIC_ZONE}. Só pode ser obtida uma vez.</div></div></div>`;
+    }
+    const R = RARITIES[info.r];
+    const lines = Object.entries(info.stats).map(([k, v]) => k === 'atk' ? `+${U.fmt(v)} Dano (cresce com a zona recorde)` : Items.statLine(k, v)).join(' · ');
+    const pw = info.powers.map(p => `<b style="color:var(--orange)">✦ ${POWERS[p].name}</b>`).join(' ');
+    const nx = info.r < 5 ? RARITIES[info.r + 1] : null;
+    const block = Game.relicBlock(cls);
+    let act = '';
+    if (!compact && nx) act = `<button class="btn small purple" data-act="awaken" data-id="${cls}" ${block ? 'disabled' : ''}>Despertar → <span style="color:${nx.color}">${RELIC_RNAME[info.r + 1]}</span></button><div class="hint" style="margin:4px 0 0">${block || `Custa ${RELIC_COST[info.r + 1]} Fragmentos`}</div>`;
+    else if (compact && nx) act = `<div class="hint" style="margin:4px 0 0">Próxima raridade: ${block || '<b style="color:var(--green)">pronta para despertar no Salão!</b>'}</div>`;
+    return `<div class="relic-card" style="--rc:${R.color}"><div class="item r${info.r}"><img src="${Sprites.relicUrl(cls, info.r)}" alt=""></div><div class="info"><div class="lbl">Arma Ancestral · ${CLASSES[cls].name}${st.cls !== cls ? '' : ''}</div><div class="nm" style="color:${R.color}">${def.name} <span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${RELIC_RNAME[info.r]}</span></div><div class="ds">${lines}${pw ? '<br>' + pw : ''}${info.r < 3 ? `<br><span style="color:var(--muted)">Ganha o poder ${POWERS[def.powers[0]].name} ao despertar para Épica e ${POWERS[def.powers[1]].name} em Mítica.</span>` : info.r < 5 ? `<br><span style="color:var(--muted)">Ganha ${POWERS[def.powers[1]].name} em Mítica.</span>` : ''}</div>${act}</div></div>`;
+  },
+
   tab_talents() {
     const st = Game.state, cls = CLASSES[st.cls], c2 = st.cls2 ? CLASSES[st.cls2] : null;
     const free = Stats.talentFree(st);
@@ -510,6 +548,17 @@ const UI = {
     if (c2) h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas — ${c2.name}</h3></div>` + c2.skills.slice(0, 2).map(row).join('') + '</div>';
     h += `<div class="sec"><div class="sec-h"><h3>Passivas${c2 ? ' — ' + cls.name : ''}</h3></div>` + cls.passives.map(row).join('') + '</div>';
     if (c2) h += `<div class="sec"><div class="sec-h"><h3>Passivas — ${c2.name}</h3></div>` + c2.passives.map(row).join('') + '</div>';
+    const mOpen = Stats.maestriaOpen(st);
+    const mrow = m => {
+      const r = st.talents[m.id] || 0, can = Game.canMaestria(m.id);
+      const txt = v => Items.statLine(m.stat, v) + (m.also ? ' e ' + Items.statLine(m.also, v) : '');
+      return `<div class="up-row${mOpen ? '' : ' locked'}"><div class="ic"><img src="${Sprites.skillUrl(m.icon, m.color, 44)}" alt=""></div>
+        <div><div class="nm" style="color:${r ? m.color : 'inherit'}">${m.name}<span class="rk">${r}${m.max ? '/' + m.max : ''}</span></div>
+        <div class="ds">${r ? txt(r * m.per) : '—'}<br><span class="nx">Próximo: ${txt((r + 1) * m.per)}</span></div></div>
+        <div class="act"><button class="btn small gold" data-act="maestria" data-id="${m.id}" ${can ? '' : 'disabled'}>+1</button><button class="btn small" data-act="maestria10" data-id="${m.id}" ${can ? '' : 'disabled'}>+10</button></div></div>`;
+    };
+    h += `<div class="sec"><div class="sec-h"><h3>Maestria</h3><span class="sub">${mOpen ? 'sem limite de pontos' : 'nível ' + MAESTRIA_LVL}</span></div>
+      <div class="hint">${mOpen ? 'Gaste aqui os pontos que sobram quando os talentos da classe estão no máximo. Não há limite de níveis (exceto Celeridade). Com a distribuição automática, os pontos extras vêm para cá sozinhos.' : `Desbloqueia no nível ${MAESTRIA_LVL}: talentos sem limite de nível para os pontos que sobrarem.`}</div>` + MAESTRIA.map(mrow).join('') + '</div>';
     return h;
   },
 
@@ -576,7 +625,7 @@ const UI = {
       const c = Stats.soulCost(u, r);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(u.icon, u.color, 44)}" alt=""></div>
         <div><div class="nm">${u.name}<span class="rk">Nv ${r}${u.max ? '/' + u.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? u.desc(r * u.per) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${u.desc((r + 1) * u.per)}</span>`}</div></div>
+        <div class="ds">Atual: <b>${r ? u.desc(Stats.soulVal(u, r)) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${u.desc(Stats.soulVal(u, r + 1))}</span>`}</div></div>
         <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" style="color:${st.souls >= c ? '#d9b8ff' : 'var(--red)'}">${soul}${U.fmt(c)}</div><button class="btn small purple" data-act="soul" data-id="${u.id}" ${st.souls >= c ? '' : 'disabled'}>Comprar</button>`}</div></div>`;
     }
     return h + '</div>';
@@ -656,6 +705,13 @@ const UI = {
         this.confirm('Trocar de classe', `Tornar-se <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Seus talentos serão redistribuídos e suas armas reforjadas para a nova classe (raridade, nível e aprimoramento são mantidos).`, 'Trocar', () => { Game.switchClass(id); this.renderTab(false); });
         break;
       case 'useSpecies': Game.switchSpecies(id); this.renderTab(false); break;
+      case 'maestria': Game.maestriaUp(id, 1); this.renderTab(false); break;
+      case 'maestria10': Game.maestriaUp(id, 10); this.renderTab(false); break;
+      case 'awaken': Game.awakenRelic(id); this.renderTab(false); break;
+      case 'setMultiSp':
+        if (!id) { Game.setMultiSpecies(null); this.renderTab(false); break; }
+        this.confirm('Mestiçagem', `Combinar <b>${SPECIES[Game.state.species].name}</b> com <b>${SPECIES[id].name}</b>? Cada nível passa a exigir ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP.`, 'Combinar', () => { Game.setMultiSpecies(id); this.renderTab(false); }, 'purple');
+        break;
       case 'setMulti':
         if (!id) { Game.setMulticlass(null); this.renderTab(false); break; }
         this.confirm('Multiclasse', `Combinar <b style="color:${CLASSES[Game.state.cls].color}">${CLASSES[Game.state.cls].name}</b> com <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Os talentos serão redistribuídos e cada nível passa a exigir ${Math.round((MULTI_XP - 1) * 100)}% mais XP.`, 'Combinar', () => { Game.setMulticlass(id); this.renderTab(false); }, 'purple');
@@ -763,7 +819,7 @@ const UI = {
     const C = CLASSES[st.cls], S = SPECIES[st.species];
     let h = `<div class="sec"><div class="sec-h"><h3>Salão dos Heróis</h3></div>
       <div class="hall-cur"><img src="${Sprites.classUrl(st.cls, st.species, 3)}" alt=""><div><div class="hc-n" style="color:${C.color}">${C.name} ${S.name}</div>
-      <div class="hint" style="margin:2px 0 0">Troque de classe ou espécie quando quiser. Trocar de classe redistribui os talentos e reforja suas armas para a nova classe.</div></div></div></div>`;
+      <div class="hint" style="margin:2px 0 0">Troque de classe ou espécie quando quiser. Mas recordes de classe e espécie (domínio, metas e Armas Ancestrais) só contam para a classe e a espécie com que a jornada <b>começou</b>.</div></div></div></div>`;
     const prog = u => {
       if (u.t !== 'stat') return '';
       const v = st.stats[u.stat] || 0;
@@ -781,11 +837,16 @@ const UI = {
       else tip += `<div class='tt-sep'></div>` + def.traits.map(([n, d]) => `<div><b style='color:#e8dff5'>${n}:</b> <span style='color:var(--muted)'>${d}</span></div>`).join('');
       if (!owned) tip += `<div class='tt-foot'><span>🔒 ${unlockText(def.unlock)}</span></div>`;
       let act;
-      const cs = kind === 'class' ? (st.classStats[id] || {}) : null;
-      const mastery = kind === 'class' && owned ? `<div class="hc-m${Stats.mastered(st, id) ? ' ok' : ''}">${Stats.mastered(st, id) ? '★ Dominada' : `Recorde: zona ${cs.best || 0}/${MASTERY_ZONE}`}</div>` : '';
+      const cs = (kind === 'class' ? st.classStats[id] : (st.speciesStats || {})[id]) || {};
+      const isM = kind === 'class' ? Stats.mastered(st, id) : Stats.speciesMastered(st, id);
+      const mastery = owned ? `<div class="hc-m${isM ? ' ok' : ''}">${isM ? (kind === 'class' ? '★ Dominada' : '★ Dominada') : `Recorde: zona ${cs.best || 0}/${MASTERY_ZONE}`}</div>` : '';
+      const multiBtn = kind === 'class'
+        ? (Game.canMulticlass(id) ? `<button class="btn small purple" data-act="setMulti" data-id="${id}">Multiclasse</button>` : '')
+        : (Game.canMultiSpecies(id) ? `<button class="btn small purple" data-act="setMultiSp" data-id="${id}">Mestiço</button>` : '');
       if (cur) act = '<span class="hc-cur">Atual</span>' + mastery;
       else if (kind === 'class' && st.cls2 === id) act = '<span class="hc-cur" style="color:#c9a0ff">Secundária</span>' + mastery;
-      else if (owned) act = `<button class="btn small gold" data-act="${kind === 'class' ? 'useClass' : 'useSpecies'}" data-id="${id}">Usar</button>${kind === 'class' && Game.canMulticlass(id) ? `<button class="btn small purple" data-act="setMulti" data-id="${id}">Multiclasse</button>` : ''}${mastery}`;
+      else if (kind === 'species' && st.species2 === id) act = '<span class="hc-cur" style="color:#c9a0ff">Secundária</span>' + mastery;
+      else if (owned) act = `<button class="btn small gold" data-act="${kind === 'class' ? 'useClass' : 'useSpecies'}" data-id="${id}">Usar</button>${multiBtn}${mastery}`;
       else act = `<div class="hc-lock">${unlockText(def.unlock)}</div>${prog(def.unlock)}`;
       return `<div class="hcard${owned ? '' : ' locked'}${cur ? ' cur' : ''}" style="--rc:${R.color}" data-tip="${tip.replace(/"/g, '&quot;')}"><img src="${img}" alt=""><div class="hc-n">${def.name}</div><div class="hc-r" style="color:${R.color}">${R.name}</div>${act}</div>`;
     };
@@ -795,10 +856,24 @@ const UI = {
     const mHint = !open
       ? `🔒 Liberada após <b>${MULTI_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
       : !Stats.mastered(st, st.cls)
-      ? `Domine a classe atual (alcance a zona <b>${MASTERY_ZONE}</b> com ela) para combiná-la com outra classe dominada.`
+      ? `Domine a classe atual (zona <b>${MASTERY_ZONE}</b> numa jornada iniciada com ela) para combiná-la com outra classe dominada.`
       : st.cls2 ? `Ativa: <b>${Game.className()}</b>.` : 'Escolha uma classe dominada abaixo (botão <b>Multiclasse</b>) para combinar com a atual.';
     h += `<div class="sec"><div class="sec-h"><h3>Multiclasse</h3>${st.cls2 ? '<button class="btn small" data-act="setMulti" data-id="">Remover</button>' : ''}</div>
       <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas classes dominadas: habilidades das duas (4 + 2), passivas das duas, +${MULTI_SYNERGY}% de Dano e Vida e o inato da secundária a 60%. Em troca, cada nível exige ${Math.round((MULTI_XP - 1) * 100)}% mais XP.</div><div style="font-size:12px">${mHint}</div></div></div>`;
+    // Mestiçagem
+    const spOpen = Stats.multiSpeciesOpen(st);
+    const sHint = !spOpen
+      ? `🔒 Liberada após <b>${MULTI_SP_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
+      : !Stats.speciesMastered(st, st.species)
+      ? `Domine a espécie atual (zona <b>${MASTERY_ZONE}</b> numa jornada iniciada com ela) para combiná-la com outra espécie dominada.`
+      : st.species2 ? `Ativa: <b>${Game.speciesName()}</b>.` : 'Escolha uma espécie dominada abaixo (botão <b>Mestiço</b>) para combinar com a atual.';
+    h += `<div class="sec"><div class="sec-h"><h3>Mestiçagem</h3>${st.species2 ? '<button class="btn small" data-act="setMultiSp" data-id="">Remover</button>' : ''}</div>
+      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas espécies dominadas: os traços da segunda a ${Math.round(MULTI_SP_SHARE * 100)}%, os poderes das duas, a raridade mais alta e +${MULTI_SP_SYNERGY}% de Dano e Vida. Em troca, cada nível exige ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP (acumula com a multiclasse).</div><div style="font-size:12px">${sHint}</div></div></div>`;
+    // Armas Ancestrais
+    const nr = Object.keys(st.relics || {}).length;
+    h += `<div class="sec"><div class="sec-h"><h3>Armas Ancestrais</h3><span class="sub">${nr}/${CLASS_ORDER.length} · <b style="color:var(--gold)">${Math.floor(st.shards || 0)}</b> Fragmentos</span></div>
+      <div class="hint">Cada classe tem uma arma exclusiva, encontrada uma única vez no <b>Cofre Ancestral</b> (aparece jogando com a classe a partir da zona ${RELIC_ZONE}). Ela acompanha a classe em todas as jornadas e pode ser despertada de Comum até Mítica com <b style="color:var(--gold)">Fragmentos Ancestrais</b> — que caem dos Senhores de bioma, às vezes de chefes e Mímicos — e recordes cada vez maiores com a classe.</div>
+      <div class="relic-list">${[st.cls, ...CLASS_ORDER.filter(c => c !== st.cls)].map(c => this.relicCard(c, false)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Classes</h3><span class="sub">${nc}/${CLASS_ORDER.length}</span></div><div class="hall-grid">${CLASS_ORDER.map(id => card('class', id)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Espécies</h3><span class="sub">${ns}/${SPECIES_ORDER.length}</span></div><div class="hall-grid">${SPECIES_ORDER.map(id => card('species', id)).join('')}</div></div>`;
     h += '<div class="hint">Prisioneiros aparecem nas masmorras numa jaula com um <b style="color:var(--gold)">!</b> dourado. O herói vai até eles sozinho para libertá-los.</div>';
@@ -935,6 +1010,10 @@ const UI = {
     this.modal(title, `<p style="margin:0;color:#d8cfe6">${msg}</p>`, [{ label: 'Cancelar' }, { label: okLabel, cls, fn }]);
   },
 
+  exitPrompt() {
+    this.confirm('Sair para o menu', `O progresso fica salvo no <b>slot ${Game.slot}</b> e o herói espera parado até você voltar (sem progresso offline). Você pode continuar este herói ou jogar com outro slot.`, 'Sair', () => Game.exitToMenu());
+  },
+
   settingsModal() {
     const s = Game.state.settings;
     const tog = (k, l, d) => `<div class="set-row"><div><div class="l">${l}</div><div class="d">${d}</div></div><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}></div>`;
@@ -953,7 +1032,8 @@ const UI = {
       ${tog('autoEquip', 'Auto-equipar', 'Equipa automaticamente itens melhores')}
       ${tog('autoTalent', 'Talentos automáticos', 'Distribui pontos de talento sozinho')}
       <div class="set-row"><div><div class="l">Salvamento</div><div class="d">Exporte para guardar um backup ou jogar em outro navegador</div></div><div style="display:flex;gap:6px"><button class="btn small" data-x="export">Exportar</button><button class="btn small" data-x="import">Importar</button></div></div>
-      <div class="set-row"><div><div class="l" style="color:var(--red)">Apagar tudo</div><div class="d">Recomeçar do zero (irreversível)</div></div><button class="btn small danger" data-x="reset">Apagar</button></div>`;
+      <div class="set-row"><div><div class="l">Sair para o menu</div><div class="d">Salva e volta para a tela de slots (até 3 heróis)</div></div><button class="btn small" data-x="exit">Sair</button></div>
+      <div class="set-row"><div><div class="l" style="color:var(--red)">Apagar este slot</div><div class="d">Apaga o herói do slot ${Game.slot} e todo o progresso dele (irreversível)</div></div><button class="btn small danger" data-x="reset">Apagar</button></div>`;
     const m = this.modal('Configurações', body, [{ label: 'Fechar', cls: 'gold' }]);
     m.addEventListener('input', e => {
       const k = e.target.dataset.s; if (!k) return;
@@ -973,8 +1053,10 @@ const UI = {
         this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O progresso atual será substituído.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
           try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
         } }]);
+      } else if (x.dataset.x === 'exit') {
+        this.closeModal(); this.exitPrompt();
       } else if (x.dataset.x === 'reset') {
-        this.confirm('Apagar tudo', 'Todo o progresso será perdido permanentemente. Tem certeza?', 'Apagar tudo', () => Game.hardReset(), 'danger');
+        this.confirm('Apagar este slot', `Todo o progresso do slot ${Game.slot} será perdido permanentemente. Tem certeza?`, 'Apagar', () => Game.hardReset(), 'danger');
       }
     });
   },
