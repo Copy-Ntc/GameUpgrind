@@ -1,0 +1,1004 @@
+'use strict';
+// ============================================================
+// Interface: tela de título, HUD, painéis, tooltips e modais
+// ============================================================
+const ICONS = {
+  pause: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>',
+  play: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11a.5.5 0 0 0 .77.42l8.5-5.5a.5.5 0 0 0 0-.84l-8.5-5.5A.5.5 0 0 0 4 2.5z"/></svg>',
+  sound: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.5 6.5 0 0 1 0 9"/></svg>',
+  mute: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11 6l4 4M15 6l-4 4"/></svg>',
+  gear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm6.3 3.7-.1-1.8 1.4-1.2-1.4-2.5-1.8.5-1.4-1L10.6 1H7.8l-.4 1.9-1.5.9-1.8-.5L2.7 5.8l1.4 1.3v1.8l-1.4 1.2 1.4 2.5 1.8-.5 1.5 1 .4 1.8h2.8l.4-1.9 1.4-.9 1.8.5 1.4-2.5z"/></svg>',
+};
+
+const TABS = [['equip', 'Herói'], ['talents', 'Talentos'], ['hall', 'Salão'], ['train', 'Treino'], ['forge', 'Forja'], ['asc', 'Ascensão'], ['ach', 'Conquistas']];
+
+const UI = {
+  tab: 'equip', dirt: new Set(), tickT: 0, hudT: 0, logs: [], logFilter: 'all',
+  forgeSel: 'weapon', renderT: {}, menuItem: null, titleMode: 'new', selCls: 'fighter', selSp: 'human', titleAnim: null,
+  selecting: false, picked: new Set(),
+
+  $(id) { return document.getElementById(id); },
+  dirty(...k) { for (const x of k) this.dirt.add(x); },
+
+  // ==========================================================
+  // Tela de título
+  // ==========================================================
+  titleUnlocks() {
+    if ((this.titleMode === 'ascend' || this.titleMode === 'gameover') && Game.state) return Game.state.unlocks;
+    return { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() };
+  },
+
+  rarityTag(r) { const R = HERO_RARITY[r]; return `<span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${R.name}</span>`; },
+
+  showTitle(mode = 'new') {
+    this.titleMode = mode;
+    const el = this.$('title-screen');
+    el.classList.remove('hidden');
+    const save = mode === 'new' ? Game.peekSave() : null;
+    const over = mode === 'gameover';
+    const asc = mode === 'ascend' || over;
+    const un = this.titleUnlocks();
+    if (!un.classes.includes(this.selCls)) this.selCls = asc ? Game.state.cls : un.classes[0];
+    if (!un.species.includes(this.selSp)) this.selSp = asc ? Game.state.species : 'human';
+    let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
+    h += `<div class="ts-logo"><h1>UPGRIND</h1><p>${over ? 'Fim de Jogo' : asc ? 'Ascensão' : 'Crônicas do Abismo'}</p></div>`;
+    h += over
+      ? `<div class="ts-tag">Seus três corações se foram. Almas, Altar, conquistas e desbloqueios permanecem — escolha como recomeçar.</div>`
+      : asc
+      ? `<div class="ts-tag">Sua alma renasce mais forte. Escolha classe e espécie para a nova jornada — Almas, Altar, conquistas e desbloqueios permanecem.</div>`
+      : `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
+    if (save) {
+      const c = CLASSES[save.cls] || CLASSES.fighter, sp = SPECIES[save.species] || SPECIES.human;
+      h += `<div class="ts-continue"><canvas id="ts-cont-spr" width="64" height="64"></canvas><div class="info"><b>${U.esc(save.name)}${save.hardcore ? ` <span style="color:#ff6a7a">${'❤'.repeat(Math.max(0, save.hearts))}</span>` : ''}</b><span>${c.name}${save.cls2 && CLASSES[save.cls2] ? ' / ' + CLASSES[save.cls2].name : ''} ${sp.name} · Nível ${save.level} · Zona ${save.zone} (recorde ${save.stats.maxZone})${save.stats.ascensions ? ` · ${save.stats.ascensions} ${save.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span></div><button class="btn gold" id="ts-continue">Continuar</button></div>`;
+    }
+    h += '<div class="ts-grid"><div class="ts-left">';
+    h += `<div class="ts-h">${save ? 'Nova jornada — ' : ''}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
+    for (const id of CLASS_ORDER) {
+      const c = CLASSES[id], lk = !un.classes.includes(id), R = HERO_RARITY[c.rarity];
+      h += `<div class="pick${lk ? ' locked' : ''}${id === this.selCls ? ' sel' : ''}" data-pick="class" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.classUrl(id, 'human', 3)}" alt=""><div class="pn">${c.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
+    }
+    h += `</div><div class="ts-h">Espécie <span>${un.species.length}/${SPECIES_ORDER.length} desbloqueadas</span></div><div class="pick-grid sp">`;
+    for (const id of SPECIES_ORDER) {
+      const s = SPECIES[id], lk = !un.species.includes(id), R = HERO_RARITY[s.rarity];
+      h += `<div class="pick${lk ? ' locked' : ''}${id === this.selSp ? ' sel' : ''}" data-pick="species" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.speciesUrl(id, 3)}" alt=""><div class="pn">${s.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
+    }
+    h += '</div></div><div class="ts-right"><div class="ts-detail" id="ts-detail"></div>';
+    const nm = asc ? Game.state.name : U.pick(HERO_NAMES);
+    h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(nm)}" ${asc ? 'disabled' : ''} placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório" ${asc ? 'disabled' : ''}>Sortear</button></div>`;
+    const hcOn = Game.state && asc ? Game.state.hardcore : false;
+    h += `<label class="ts-hc"><input type="checkbox" id="ts-hc" ${hcOn ? 'checked' : ''}><div><b>Modo Desafio: 3 Corações</b><span>Ao ser derrotado 3 vezes a jornada acaba (Fim de Jogo). Em troca: +30% de Ouro e XP, +20% de Sorte e Almas ×1,5.</span></div></label>`;
+    h += `<div class="ts-start"><button class="btn gold big" id="ts-go">${over ? 'Recomeçar' : asc ? 'Renascer' : save ? 'Nova Jornada' : 'Começar Jornada'}</button>${asc && !over ? '<button class="btn ghost" id="ts-cancel">Cancelar</button>' : ''}</div>`;
+    h += '</div></div>';
+    h += '<div class="ts-foot">Classes e espécies bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
+    el.innerHTML = h;
+
+    el.querySelectorAll('[data-pick]').forEach(card => card.addEventListener('click', () => {
+      Sfx.init(); Sfx.play('click');
+      if (card.dataset.pick === 'class') this.selCls = card.dataset.id; else this.selSp = card.dataset.id;
+      el.querySelectorAll(`[data-pick="${card.dataset.pick}"]`).forEach(c => c.classList.toggle('sel', c === card));
+      this.renderTitleDetail();
+    }));
+    const dice = this.$('ts-dice');
+    if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
+    if (this.$('ts-continue')) this.$('ts-continue').onclick = () => {
+      Sfx.init(); this.hideTitle(); Game.load(); Game.start();
+      if (Game.state.pendingEnd) setTimeout(() => this.gameOverModal(), 50);
+    };
+    if (this.$('ts-cancel')) this.$('ts-cancel').onclick = () => { this.hideTitle(); Game.paused = false; Music.zone(Game.W ? Game.W.biome.id : 'title'); };
+    this.$('ts-go').onclick = () => {
+      Sfx.init();
+      const un2 = this.titleUnlocks();
+      if (!un2.classes.includes(this.selCls) || !un2.species.includes(this.selSp)) { this.notice('Essa combinação ainda está bloqueada.', 'var(--red)'); return; }
+      const hc = !!(this.$('ts-hc') && this.$('ts-hc').checked);
+      if (over) { this.hideTitle(); Game.finishGameOver(this.selCls, this.selSp, hc); return; }
+      if (asc) { this.hideTitle(); Game.paused = false; Game.ascend(this.selCls, this.selSp, hc); return; }
+      const name = (this.$('ts-name').value || '').trim() || U.pick(HERO_NAMES);
+      const go = () => { this.hideTitle(); Game.newGame(this.selCls, this.selSp, name, hc); Game.start(); };
+      if (save) this.confirm('Nova jornada', 'Isso apagará o progresso salvo atual (incluindo almas, conquistas e desbloqueios). Tem certeza?', 'Apagar e começar', go, 'danger');
+      else go();
+    };
+    this.renderTitleDetail();
+    Music.title();
+    this.animTitle();
+  },
+
+  renderTitleDetail() {
+    const box = this.$('ts-detail');
+    if (!box) return;
+    const un = this.titleUnlocks();
+    const c = CLASSES[this.selCls], s = SPECIES[this.selSp];
+    const clk = !un.classes.includes(this.selCls), slk = !un.species.includes(this.selSp);
+    let h = `<canvas id="ts-preview" width="120" height="120"></canvas>`;
+    h += `<div class="td-name" style="color:${c.color}">${c.name} ${this.rarityTag(c.rarity)}</div><div class="td-ttl">${c.title}</div>`;
+    if (clk) h += `<div class="td-lock">🔒 ${unlockText(c.unlock)}</div>`;
+    h += `<div class="td-ds">${c.desc}</div><div class="cls-bars">`;
+    for (const [k, v] of Object.entries(c.bars)) h += `<div class="b"><span>${k}</span><div class="pips">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= v ? 'on' : ''}"></i>`).join('')}</div></div>`;
+    h += '</div>';
+    if (c.innate) h += `<div class="td-innate"><b>✦ ${c.innate.name}</b> ${c.innate.desc}</div>`;
+    h += '<div class="cls-skills">';
+    for (const id of c.skills) h += `<div><b style="color:${SKILLS[id].color}">${SKILLS[id].name}</b>${SKILLS[id].unlock > 1 ? ` · nv ${SKILLS[id].unlock}` : ''}</div>`;
+    h += '</div>';
+    h += `<div class="td-sp"><img src="${Sprites.speciesUrl(this.selSp, 2)}" alt=""><div><div class="td-name sm">${s.name} ${this.rarityTag(s.rarity)}</div><div class="td-ds">${s.desc}</div></div></div>`;
+    if (slk) h += `<div class="td-lock">🔒 ${unlockText(s.unlock)}</div>`;
+    h += '<div class="td-traits">' + s.traits.map(([n, d]) => `<div><b>${n}:</b> ${d}</div>`).join('') + '</div>';
+    box.innerHTML = h;
+    const go = this.$('ts-go');
+    if (go) go.disabled = clk || slk;
+  },
+
+  hideTitle() {
+    this.$('title-screen').classList.add('hidden');
+    if (this.titleAnim) cancelAnimationFrame(this.titleAnim);
+    this.titleAnim = null;
+  },
+
+  animTitle() {
+    if (this.titleAnim) cancelAnimationFrame(this.titleAnim);
+    const bg = this.$('ts-bg');
+    const ctx = bg.getContext('2d');
+    const parts = [];
+    let last = performance.now();
+    const save = this.titleMode === 'new' ? Game.peekSave() : null;
+    const step = (ts) => {
+      const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+      Music.update();
+      if (bg.width !== innerWidth || bg.height !== innerHeight) { bg.width = innerWidth; bg.height = innerHeight; }
+      ctx.clearRect(0, 0, bg.width, bg.height);
+      if (parts.length < 90) parts.push({ x: Math.random() * bg.width, y: bg.height + 10, v: U.rand(15, 50), s: U.rand(1, 3), c: Math.random() < 0.7 ? '#f2a94a' : '#b874ff', w: U.rand(0, 6) });
+      for (const p of parts) {
+        p.y -= p.v * dt; p.x += Math.sin(ts / 1000 + p.w) * 10 * dt;
+        ctx.globalAlpha = Math.min(1, p.y / bg.height) * 0.8;
+        ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s);
+      }
+      for (let i = parts.length - 1; i >= 0; i--) if (parts[i].y < -10) parts.splice(i, 1);
+      ctx.globalAlpha = 1;
+      const pv = this.$('ts-preview');
+      if (pv) {
+        const g = pv.getContext('2d');
+        g.clearRect(0, 0, 120, 120); g.imageSmoothingEnabled = false;
+        const col = CLASSES[this.selCls].color;
+        const gr = g.createRadialGradient(60, 66, 0, 60, 66, 58);
+        gr.addColorStop(0, U.rgba(col, 0.35)); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 120, 120);
+        g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(60, 110, 26, 7, 0, 0, 7); g.fill();
+        const s = Sprites.get(CLASSES[this.selCls].sprite, Sprites.heroPal(this.selCls, this.selSp));
+        const bob = Math.round(Math.sin(ts / 300) * 3);
+        g.drawImage(s.c, 60 - s.sw * 3, 112 - s.sh * 6 + bob, s.sw * 6, s.sh * 6);
+      }
+      const cont = this.$('ts-cont-spr');
+      if (cont && save) {
+        const g = cont.getContext('2d'); g.clearRect(0, 0, 64, 64); g.imageSmoothingEnabled = false;
+        const cl = CLASSES[save.cls] ? save.cls : 'fighter';
+        const s = Sprites.get(CLASSES[cl].sprite, Sprites.heroPal(cl, save.species));
+        g.drawImage(s.c, 32 - s.sw * 1.5, 60 - s.sh * 3 + Math.round(Math.sin(ts / 300) * 1.5), s.sw * 3, s.sh * 3);
+      }
+      this.titleAnim = requestAnimationFrame(step);
+    };
+    this.titleAnim = requestAnimationFrame(step);
+  },
+
+  // ==========================================================
+  // Jogo
+  // ==========================================================
+  initGame() {
+    this.$('app').classList.remove('hidden');
+    const st = Game.state;
+    this.$('ico-gold').src = Sprites.goldUrl();
+    this.$('ico-soul').src = Sprites.soulUrl();
+    this.$('btn-settings').innerHTML = ICONS.gear;
+    // Abas
+    this.$('tabs').innerHTML = TABS.map(([id, nm]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${nm}</button>`).join('');
+    // Velocidade
+    this.$('speed').innerHTML = [1, 2, 3, 5].map(s => `<button data-speed="${s}">${s}x</button>`).join('');
+    // Retrato
+    const pc = this.$('portrait').getContext('2d');
+    pc.clearRect(0, 0, 40, 40); pc.imageSmoothingEnabled = false;
+    const spr = Sprites.get(CLASSES[st.cls].sprite, Sprites.heroPal(st.cls, st.species));
+    pc.drawImage(spr.c, 2, 2, 36, 36);
+    // Filtros do log
+    this.$('log-filters').innerHTML = [['all', 'Tudo'], ['loot', 'Saque'], ['events', 'Eventos']].map(([k, n]) => `<button data-lf="${k}" class="${k === this.logFilter ? 'on' : ''}">${n}</button>`).join('');
+    this.buildSkillbar();
+    if (!this.bound) this.bind();
+    this.dirty('top', 'zone', 'equip', 'talents', 'train', 'forge', 'asc', 'ach', 'hall');
+    this.selecting = false; this.picked.clear();
+    this.renderTab(true);
+  },
+
+  bind() {
+    this.bound = true;
+    this.$('tabs').addEventListener('click', e => {
+      const b = e.target.closest('[data-tab]'); if (!b) return;
+      this.tab = b.dataset.tab;
+      this.$('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      Sfx.play('click');
+      this.renderTab(true);
+    });
+    this.$('speed').addEventListener('click', e => {
+      const b = e.target.closest('[data-speed]'); if (!b) return;
+      Game.speed = +b.dataset.speed; Game.state.settings.speed = Game.speed; this.dirty('top');
+    });
+    this.$('zone-prev').onclick = () => Game.setZone(Game.state.zone - 1);
+    this.$('zone-next').onclick = () => Game.setZone(Game.state.zone + 1);
+    this.$('btn-mode').onclick = () => Game.toggleMode();
+    this.$('btn-pause').onclick = () => this.setPause(!Game.paused);
+    this.$('pause-veil').onclick = () => this.setPause(false);
+    this.$('btn-sound').onclick = () => {
+      const s = Game.state.settings; s.sound = !s.sound; Sfx.enabled = s.sound; Sfx.init(); this.dirty('top');
+    };
+    this.$('btn-settings').onclick = () => this.settingsModal();
+    this.$('log-filters').addEventListener('click', e => {
+      const b = e.target.closest('[data-lf]'); if (!b) return;
+      this.logFilter = b.dataset.lf;
+      this.$('log-filters').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      this.renderLog();
+    });
+    const body = this.$('tab-body');
+    body.addEventListener('click', e => this.onPanelClick(e));
+    body.addEventListener('change', e => this.onPanelChange(e));
+    // Tooltips
+    document.addEventListener('mouseover', e => this.onHover(e));
+    document.addEventListener('mousemove', e => { if (!this.$('tooltip').classList.contains('hidden')) this.placeTip(e.clientX, e.clientY); });
+    document.addEventListener('mouseout', e => { if (e.target.closest('[data-uid],[data-skill],[data-tip]') && !e.relatedTarget?.closest?.('[data-uid],[data-skill],[data-tip]')) this.hideTip(); });
+    document.addEventListener('click', e => { if (!e.target.closest('#menu') && !e.target.closest('[data-uid]') && !e.target.closest('[data-keepmenu]')) this.closeMenu(); });
+    body.addEventListener('contextmenu', e => {
+      const el = e.target.closest('.inv-grid [data-uid]');
+      if (!el) return;
+      e.preventDefault();
+      const f = Game.findItem(el.dataset.uid);
+      if (!f || f.where !== 'inv') return;
+      this.quickSell(f.item, e.shiftKey);
+    });
+    this.$('menu').addEventListener('click', e => this.onMenu(e));
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || !Game.running) return;
+      if (e.key === 'p' || e.key === 'P') this.setPause(!Game.paused);
+      const sp = { 1: 1, 2: 2, 3: 3, 4: 5 }[e.key];
+      if (sp) { Game.speed = sp; Game.state.settings.speed = sp; this.dirty('top'); }
+      if (e.key === 'Escape') { this.closeMenu(); this.closeModal(); }
+    });
+  },
+
+  setPause(p) {
+    Game.paused = p;
+    this.$('pause-veil').classList.toggle('hidden', !p);
+    this.dirty('top');
+  },
+
+  // ---------------------------------------------------------- tick
+  tick(dt) {
+    this.hudT -= dt;
+    if (this.hudT <= 0) { this.hudT = 0.1; this.updateHud(); this.updateSkillbar(); }
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = 0.25;
+    if (this.dirt.has('top') || this.dirt.has('zone')) { this.updateTop(); this.dirt.delete('top'); this.dirt.delete('zone'); }
+    if (this.dirt.has('gold')) { this.dirt.delete('gold'); this.refreshGold(); }
+    const map = { equip: 'equip', talents: 'talents', train: 'train', forge: 'forge', asc: 'asc', ach: 'ach', hall: 'hall' };
+    const key = map[this.tab];
+    if (this.dirt.has(key)) {
+      const now = performance.now();
+      const minGap = key === 'equip' ? 600 : key === 'ach' ? 1500 : 300;
+      if (!this.renderT[key] || now - this.renderT[key] > minGap) {
+        this.dirt.delete(key);
+        this.renderT[key] = now;
+        this.renderTab(false);
+      }
+    }
+    // Indicador de pontos de talento
+    const free = Stats.talentFree(Game.state);
+    const tb = this.$('tabs').querySelector('[data-tab="talents"]');
+    if (tb) {
+      const want = free > 0 && !Game.state.settings.autoTalent ? `Talentos<span class="dot">${free}</span>` : 'Talentos';
+      if (tb.innerHTML !== want) tb.innerHTML = want;
+    }
+  },
+
+  updateTop() {
+    const st = Game.state, S = Game.stats;
+    const set = (id, v) => { const e = this.$(id); if (e.textContent !== String(v)) e.textContent = v; };
+    set('hero-name', st.name);
+    set('hero-sub', `${Game.className()} · Nível ${st.level}`);
+    const need = Stats.needXpFor(st);
+    this.$('xp-fill').style.width = (st.xp / need * 100).toFixed(1) + '%';
+    set('xp-text', `${U.fmt(st.xp)} / ${U.fmt(need)} XP`);
+    set('gold', U.fmt(st.gold));
+    set('souls', U.fmt(st.souls));
+    set('power', U.fmt(Game.power));
+    set('zone-num', `Zona ${st.zone}`);
+    set('zone-biome', MapGen.biomeOf(st.zone).name);
+    this.$('zone-prev').disabled = st.zone <= 1;
+    this.$('zone-next').disabled = st.zone >= st.maxZone;
+    const mb = this.$('btn-mode');
+    mb.className = 'mode-btn ' + (st.mode === 'advance' ? 'advance' : 'farm');
+    mb.textContent = st.mode === 'advance' ? '▲ Avançar' : '⟳ Farmar';
+    this.$('speed').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.speed === Game.speed));
+    this.$('btn-pause').innerHTML = Game.paused ? ICONS.play : ICONS.pause;
+    this.$('btn-sound').innerHTML = st.settings.sound ? ICONS.sound : ICONS.mute;
+    this.$('btn-sound').classList.toggle('on', st.settings.sound);
+  },
+
+  updateHud() {
+    const W = Game.W, st = Game.state;
+    if (!W) return;
+    const h = W.hero;
+    // Zona
+    const exp = Math.round(World.exploredPct(W) * 100);
+    const opened = W.chests.filter(c => c.opened).length;
+    let tag = '';
+    if (st.mode === 'farm') tag = '<span class="ztag farm">FARMANDO</span>';
+    else if (st.retreatLeft > 0) tag = `<span class="ztag retreat">RECUANDO · ${st.retreatLeft}</span>`;
+    else tag = '<span class="ztag adv">AVANÇANDO</span>';
+    const zh = `<div class="zt">Zona ${W.z}${W.isLord ? ' · Covil' : ''}</div><div class="zb">${W.biome.name}</div><div class="zr"><span>Inimigos <b>${W.killed}/${W.total}</b></span><span>Baús <b>${opened}/${W.chests.length}</b></span><span><b>${exp}%</b></span></div>${tag}`;
+    if (this._zh !== zh) { this.$('hud-zone').innerHTML = zh; this._zh = zh; }
+    // Vida
+    this.$('hp-fill').style.width = (h.hp / h.maxHp * 100).toFixed(1) + '%';
+    this.$('shield-fill').style.width = Math.min(100, h.shield / h.maxHp * 100).toFixed(1) + '%';
+    const ht = h.dead ? 'Derrotado' : `${U.fmt(Math.min(Math.ceil(h.hp), Math.ceil(h.maxHp)))} / ${U.fmt(Math.ceil(h.maxHp))}${h.shield > 0 ? ` (+${U.fmt(h.shield)})` : ''}`;
+    if (this.$('hp-text').textContent !== ht) this.$('hp-text').textContent = ht;
+    const stt = h.dead ? `Revivendo em ${Math.ceil(h.deathT)}s…` : h.status;
+    if (this.$('hero-status').textContent !== stt) this.$('hero-status').textContent = stt;
+    // Poções
+    const pm = Game.stats.potionMax;
+    const pk = st.potions + '/' + pm + '/' + (st.hardcore ? st.hearts : '-');
+    if (this._pk !== pk) {
+      this._pk = pk;
+      const url = Sprites.potionUrl();
+      let ph = '';
+      if (st.hardcore) ph += `<span class="hearts" title="Modo Desafio: corações restantes">${[0, 1, 2].map(i => `<i class="${i < st.hearts ? 'on' : ''}">❤</i>`).join('')}</span>`;
+      ph += Array.from({ length: pm }, (_, i) => `<img src="${url}" class="${i < st.potions ? '' : 'empty'}" alt="">`).join('');
+      this.$('potions').innerHTML = ph;
+    }
+    // Buffs
+    const bh = h.buffs.map(b => `<span class="buff" style="border-color:${b.color};color:${b.color}">${b.name} ${Math.ceil(b.t)}s</span>`).join('');
+    if (this._bh !== bh) { this.$('buffs').innerHTML = bh; this._bh = bh; }
+    // Chefe
+    const b = W.boss;
+    const showBoss = b && !b.dead && b.aggro && !h.dead;
+    this.$('hud-boss').classList.toggle('hidden', !showBoss);
+    if (showBoss) {
+      if (this.$('boss-name').textContent !== b.name) this.$('boss-name').textContent = b.name;
+      this.$('boss-fill').style.width = (b.hp / b.maxHp * 100).toFixed(1) + '%';
+      this.$('boss-text').textContent = `${U.fmt(Math.max(0, b.hp))} / ${U.fmt(b.maxHp)}`;
+    }
+  },
+
+  // ---------------------------------------------------------- barra de habilidades
+  skillbarIds() {
+    const st = Game.state, sp = SPECIES[st.species];
+    return [...Stats.activeIds(st), ...(sp && sp.skill ? [sp.skill] : [])];
+  },
+  buildSkillbar() {
+    let h = '';
+    for (const id of this.skillbarIds()) {
+      const sk = SKILLS[id];
+      if (sk.racial) h += '<div class="sb-sep"></div>';
+      h += `<div class="skill${sk.racial ? ' racial' : ''}" data-skill="${id}" id="sk-${id}"><img src="${Sprites.skillUrl(sk.icon, sk.color, 52)}" alt=""><div class="cd" style="transform:scaleY(0)"></div><div class="cdt"></div><div class="rk"></div><div class="lk"></div></div>`;
+    }
+    this.$('skillbar').innerHTML = h;
+  },
+  updateSkillbar() {
+    const st = Game.state, W = Game.W;
+    if (!W) return;
+    const h = W.hero, S = Game.stats;
+    for (const id of this.skillbarIds()) {
+      const el = this.$('sk-' + id);
+      if (!el) continue;
+      const sk = SKILLS[id], r = sk.racial ? U.clamp(1 + Math.floor(st.level / 8), 1, 10) : st.talents[id] || 0;
+      const locked = st.level < sk.unlock || !r;
+      el.classList.toggle('locked', locked);
+      const lk = el.querySelector('.lk');
+      const lkt = st.level < sk.unlock ? `Nível ${sk.unlock}` : !r ? 'Sem pontos' : '';
+      if (lk.textContent !== lkt) lk.textContent = lkt;
+      el.querySelector('.rk').textContent = r ? r : '';
+      const cd = Math.max(0, h.skillCd[id] || 0), max = sk.cd * (1 - S.cdr / 100);
+      el.querySelector('.cd').style.transform = `scaleY(${locked ? 0 : U.clamp(cd / max, 0, 1).toFixed(3)})`;
+      el.querySelector('.cdt').textContent = !locked && cd > 0.05 ? (cd >= 10 ? Math.ceil(cd) : cd.toFixed(1)) : '';
+      el.classList.toggle('ready', !locked && cd <= 0.05);
+    }
+  },
+  skillFlash(id) {
+    const el = this.$('sk-' + id);
+    if (!el) return;
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  },
+
+  // Atualiza apenas estados dependentes de ouro, sem recriar o DOM
+  refreshGold() {
+    const st = Game.state, body = this.$('tab-body');
+    if (this.tab !== 'train' && this.tab !== 'forge') return;
+    body.querySelectorAll('[data-cost]').forEach(el => {
+      const ok = st.gold >= +el.dataset.cost;
+      if (el.tagName === 'BUTTON') el.disabled = !ok;
+      else el.style.color = ok ? 'var(--gold)' : 'var(--red)';
+    });
+    const g = this.$('train-gold');
+    if (g) g.textContent = U.fmt(st.gold);
+  },
+
+  // ==========================================================
+  // Painéis
+  // ==========================================================
+  renderTab(full) {
+    const body = this.$('tab-body');
+    const scroll = body.scrollTop;
+    const fn = this['tab_' + this.tab];
+    if (fn) body.innerHTML = fn.call(this);
+    if (!full) body.scrollTop = scroll; else body.scrollTop = 0;
+    this.renderT[this.tab] = performance.now();
+  },
+
+  itemHtml(it, opts = {}) {
+    if (!it) return `<div class="item empty"></div>`;
+    const up = opts.inv && Stats.compareItem(it) > 0.002;
+    return `<div class="item r${it.rarity}${it.isNew && opts.inv ? ' new' : ''}" data-uid="${it.uid}"><img src="${Sprites.itemUrl(it)}" alt="">${it.plus ? `<span class="plus">+${it.plus}</span>` : ''}<span class="lvl">${it.ilvl}</span>${it.locked ? '<span class="lock">🔒</span>' : ''}${up ? '<span class="up">▲</span>' : ''}</div>`;
+  },
+
+  tab_equip() {
+    const st = Game.state, S = Game.stats;
+    let h = `<div class="sec"><div class="sec-h"><h3>Equipamento</h3><span class="sub">Poder <b style="color:#ffd9a0">${U.fmt(Game.power)}</b></span></div><div class="equip-grid" style="grid-template-columns:1fr 1fr">`;
+    for (const s of SLOTS) {
+      const it = st.equip[s];
+      h += `<div class="eslot${it ? '' : ' empty'}">${this.itemHtml(it)}<div class="info"><div class="lbl">${SLOT_NAMES[s]}</div><div class="nm ${it ? 'c' + it.rarity : ''}">${it ? U.esc(it.name) + (it.plus ? ` +${it.plus}` : '') : 'Vazio'}</div></div></div>`;
+    }
+    h += '</div></div>';
+    // Atributos
+    const K = 30 * enemyScale(st.zone);
+    const red = Math.min(0.85, S.def / (S.def + K)) * 100;
+    const rows = [
+      ['Vida', U.fmt(S.maxHp)], ['Dano', U.fmt(S.atk)],
+      ['Armadura', `${U.fmt(S.def)} <span style="color:var(--muted);font-weight:400">(${U.fmtNum(red, 0)}%)</span>`], ['Vel. de Ataque', U.fmtNum(S.atkSpd, 2) + '/s'],
+      ['Chance Crítica', U.fmtPct(S.crit)], ['Dano Crítico', U.fmtPct(S.critDmg, 0)],
+      ['Esquiva', U.fmtPct(S.dodge)], ['Bloqueio', U.fmtPct(S.block)],
+      ['Roubo de Vida', U.fmtPct(S.lifesteal)], ['Regeneração', U.fmt(S.regen) + '/s'],
+      ['Vel. Movimento', U.fmtNum(S.moveSpd, 2)], ['Redução Recarga', U.fmtPct(S.cdr)],
+      ['Ouro Extra', U.fmtPct(S.goldPct, 0)], ['Experiência', U.fmtPct(S.xpPct, 0)],
+      ['Sorte', U.fmtPct(S.mf, 0)], ['Dano a Chefes', U.fmtPct(S.bossDmg, 0)],
+    ];
+    if (S.minion) rows.push(['Poder Lacaios', U.fmtPct(S.minion, 0)]);
+    if (S.dr) rows.push(['Redução de Dano', U.fmtPct(S.dr, 0)]);
+    h += `<div class="sec"><div class="sec-h"><h3>Atributos</h3></div><div class="stat-list">${rows.map(([a, b]) => `<div class="r"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
+    if (S.powers.size) h += `<div class="card" style="margin-top:10px">${[...S.powers].map(p => `<div style="margin-bottom:4px"><b style="color:var(--orange);font-family:var(--pixel)">✦ ${POWERS[p].name}</b> <span style="color:var(--muted);font-size:11px">${POWERS[p].desc}</span></div>`).join('')}</div>`;
+    h += '</div>';
+    // Mochila
+    const cap = Stats.invSize(st);
+    const sel = this.selecting;
+    h += `<div class="sec"><div class="sec-h"><h3>Mochila</h3><span class="sub">${st.inv.length}/${cap}</span></div>`;
+    h += `<div class="inv-tools"><button class="btn small" data-act="bulkMenu" data-keepmenu>Vender ▾</button>
+      <button class="btn small${sel ? ' gold' : ''}" data-act="selectMode">${sel ? 'Concluir seleção' : 'Selecionar'}</button>
+      <button class="btn small" data-act="sortInv">Ordenar</button>
+      <select class="sel" data-set="autoSell" title="Vende automaticamente itens até essa raridade que não sejam melhorias (nunca vende itens travados ou forjados)">
+        ${['Auto-venda: desligada', 'Auto-venda: Comuns', 'Auto-venda: até Incomuns', 'Auto-venda: até Raros', 'Auto-venda: até Épicos', 'Auto-venda: até Lendários'].map((t, i) => `<option value="${i}" ${st.settings.autoSell === i ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>
+      <label class="chk"><input type="checkbox" data-set="autoEquip" ${st.settings.autoEquip ? 'checked' : ''}> Auto-equipar</label></div>`;
+    if (sel) {
+      let n = 0, g = 0;
+      for (const it of st.inv) if (this.picked.has(it.uid) && !it.locked) { n++; g += Items.sellPrice(it); }
+      h += `<div class="sel-bar"><span><b>${n}</b> ${n === 1 ? 'item selecionado' : 'itens selecionados'} · <b style="color:var(--gold)">${U.fmt(g)}</b> ouro</span>
+        <span class="sb-btns"><button class="btn small" data-act="selAll">Todos</button><button class="btn small" data-act="selNone">Limpar</button>
+        <button class="btn small danger" data-act="sellSelected" ${n ? '' : 'disabled'}>Vender</button></span></div>`;
+    }
+    h += `<div class="inv-grid${sel ? ' selecting' : ''}">`;
+    for (const it of st.inv) {
+      let ih = this.itemHtml(it, { inv: true });
+      if (sel && this.picked.has(it.uid)) ih = ih.replace('class="item', 'class="item picked');
+      h += ih;
+    }
+    for (let i = st.inv.length; i < cap; i++) h += '<div class="item empty"></div>';
+    h += `</div><div class="hint" style="margin-top:8px">${sel ? 'Clique nos itens para marcá-los e depois em <b>Vender</b>. Itens travados nunca são vendidos.' : 'Clique em um item para equipar, vender ou travar. <b>Botão direito</b> vende na hora. <span class="up-g">▲</span> indica melhoria.'}</div></div>`;
+    return h;
+  },
+
+  tab_talents() {
+    const st = Game.state, cls = CLASSES[st.cls], c2 = st.cls2 ? CLASSES[st.cls2] : null;
+    const free = Stats.talentFree(st);
+    let h = `<div class="sec"><div class="sec-h"><h3>Talentos de ${Game.className()}</h3><span class="pts-badge">${free} ${free === 1 ? 'ponto' : 'pontos'}</span></div>
+      <div class="hint">Você ganha 1 ponto por nível. As habilidades ativas são lançadas automaticamente em combate.</div>
+      <div class="inv-tools"><label class="chk"><input type="checkbox" data-set="autoTalent" ${st.settings.autoTalent ? 'checked' : ''}> Distribuir pontos automaticamente</label><button class="btn small" data-act="resetTalents" style="margin-left:auto">Redistribuir</button></div></div>`;
+    const row = (id) => {
+      const sk = SKILLS[id], r = st.talents[id] || 0, locked = st.level < sk.unlock;
+      const can = Game.canTalent(id);
+      const cur = sk.desc(Math.max(1, r));
+      const nx = r > 0 && r < sk.max ? `<br><span class="nx">Próximo: ${sk.desc(r + 1).replace(/<\/?b>/g, '')}</span>` : '';
+      return `<div class="up-row${locked ? ' locked' : ''}"><div class="ic"><img src="${Sprites.skillUrl(sk.icon, sk.color, 44)}" alt=""></div>
+        <div><div class="nm" style="color:${r ? sk.color : 'inherit'}">${sk.name}<span class="rk">${r}/${sk.max}</span>${sk.ult ? '<span class="tag ult">SUPREMA</span>' : ''}${sk.cd ? `<span class="tag">${sk.cd}s</span>` : ''}</div>
+        <div class="ds">${locked ? `<b>Desbloqueia no nível ${sk.unlock}.</b> ` : ''}${cur}${nx}</div></div>
+        <div class="act"><button class="btn small gold" data-act="talent" data-id="${id}" ${can ? '' : 'disabled'}>+1</button></div></div>`;
+    };
+    const innate = (c, k) => c.innate ? `<div class="up-row innate"><div class="ic"><div class="glyph" style="color:${c.color}">✦</div></div><div><div class="nm" style="color:${c.color}">${c.innate.name}<span class="tag">INATO${k < 1 ? ' · 60%' : ''}</span></div><div class="ds">${c.innate.desc}</div></div><div></div></div>` : '';
+    h += `<div class="sec"><div class="sec-h"><h3>Talento Inato</h3></div>${innate(cls, 1)}${c2 ? innate(c2, 0.6) : ''}</div>`;
+    h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas${c2 ? ' — ' + cls.name : ''}</h3></div>` + cls.skills.map(row).join('') + '</div>';
+    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas — ${c2.name}</h3></div>` + c2.skills.slice(0, 2).map(row).join('') + '</div>';
+    h += `<div class="sec"><div class="sec-h"><h3>Passivas${c2 ? ' — ' + cls.name : ''}</h3></div>` + cls.passives.map(row).join('') + '</div>';
+    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Passivas — ${c2.name}</h3></div>` + c2.passives.map(row).join('') + '</div>';
+    return h;
+  },
+
+  tab_train() {
+    const st = Game.state;
+    const gold = `<img src="${Sprites.goldUrl()}" alt="">`;
+    let h = `<div class="sec"><div class="sec-h"><h3>Campo de Treinamento</h3><span class="sub" style="display:flex;align-items:center;gap:5px;font:600 13px var(--pixel);color:var(--gold)"><img src="${Sprites.goldUrl()}" alt="" style="width:16px;height:16px;image-rendering:pixelated"><span id="train-gold">${U.fmt(st.gold)}</span></span></div><div class="hint">Melhorias permanentes compradas com ouro. São reiniciadas na Ascensão.</div>`;
+    for (const t of TRAINING) {
+      const r = st.training[t.id] || 0;
+      const maxed = t.max && r >= t.max;
+      const c = Stats.trainCost(t, r);
+      h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(t.icon, t.color, 44)}" alt=""></div>
+        <div><div class="nm">${t.name}<span class="rk">Nv ${r}${t.max ? '/' + t.max : ''}</span></div>
+        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${t.desc((r + 1) * t.per, r + 1)}</span>`}</div></div>
+        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" data-cost="${c}" style="color:${st.gold >= c ? 'var(--gold)' : 'var(--red)'}">${gold}${U.fmt(c)}</div>
+        <button class="btn small gold" data-act="train" data-id="${t.id}" data-cost="${c}" ${st.gold >= c ? '' : 'disabled'}>Comprar</button>
+        <button class="btn small" data-act="trainMax" data-id="${t.id}" data-cost="${c}" ${st.gold >= c ? '' : 'disabled'}>Máx</button>`}</div></div>`;
+    }
+    return h + '</div>';
+  },
+
+  tab_forge() {
+    const st = Game.state;
+    let h = `<div class="sec"><div class="sec-h"><h3>Forja</h3><span class="sub">Aprimore seu equipamento</span></div>
+      <div class="hint">Cada nível de aprimoramento aumenta os atributos principais do item em 8%. A partir de +5 a forja pode falhar (o ouro é perdido, o item não).</div>
+      <div class="forge-sel">`;
+    for (const s of SLOTS) {
+      const it = st.equip[s];
+      h += `<div data-act="forgeSel" data-slot="${s}" style="cursor:pointer">${it ? this.itemHtml(it).replace('class="item', `class="item${this.forgeSel === s ? ' sel' : ''}`) : `<div class="item empty${this.forgeSel === s ? ' sel' : ''}" title="${SLOT_NAMES[s]}"></div>`}</div>`;
+    }
+    h += '</div>';
+    const it = st.equip[this.forgeSel];
+    if (!it) {
+      h += `<div class="card forge-box"><div class="forge-anvil">Nenhum item equipado em ${SLOT_NAMES[this.forgeSel]}.</div></div>`;
+    } else {
+      const cost = Items.forgeCost(it), ch = Items.forgeChance(it);
+      const cur = Items.stats(it);
+      const nxt = Items.stats(Object.assign({}, it, { plus: it.plus + 1 }));
+      const lines = Object.keys(it.main).filter(k => !STAT_INFO[k].pct).map(k => `<div>${STAT_INFO[k].name}: <b>${U.fmt(cur[k])}</b> → <b class="up-g">${U.fmt(nxt[k])}</b></div>`).join('');
+      h += `<div class="card forge-box"><div class="c${it.rarity}" style="font:600 15px var(--pixel)">${U.esc(it.name)}</div>
+        <div class="big">+${it.plus} <span style="color:var(--muted);font-size:16px">→</span> +${it.plus + 1}</div>
+        <div style="margin:8px 0;font-size:12px;display:grid;gap:2px">${lines}</div>
+        <div class="chance" style="color:${ch >= 1 ? 'var(--green)' : ch >= 0.6 ? 'var(--gold)' : 'var(--red)'}">Chance de sucesso: ${Math.round(ch * 100)}%</div>
+        <div class="meter" style="margin:8px auto;max-width:220px"><div style="width:${ch * 100}%"></div></div>
+        <div class="cost" data-cost="${cost}" style="justify-content:center;display:flex;gap:6px;align-items:center;margin:8px 0;font:600 14px var(--pixel);color:${st.gold >= cost ? 'var(--gold)' : 'var(--red)'}"><img src="${Sprites.goldUrl()}" style="width:16px;height:16px;image-rendering:pixelated" alt="">${U.fmt(cost)}</div>
+        <button class="btn gold" data-act="forge" data-cost="${cost}" ${st.gold >= cost ? '' : 'disabled'} style="min-width:160px">Forjar</button></div>`;
+    }
+    h += '</div>';
+    return h;
+  },
+
+  tab_asc() {
+    const st = Game.state;
+    const gain = Stats.soulsOnAscend(st);
+    const soul = `<img src="${Sprites.soulUrl()}" alt="">`;
+    let h = `<div class="asc-hero"><div style="font:600 13px var(--pixel);color:var(--muted)">ALMAS</div><div class="souls-big">${soul}${U.fmt(st.souls)}</div>
+      <div style="margin:8px 0 12px;font-size:12px;color:#cfc4de">${st.maxZone >= 15 ? `Ascender agora concede <b style="color:#d9b8ff">+${U.fmt(gain)} Almas</b> (zona recorde desta jornada: ${st.maxZone}).` : `Alcance a <b>zona 15</b> para poder ascender. (Atual: ${st.maxZone})`}</div>
+      <button class="btn purple" data-act="ascend" ${gain > 0 ? '' : 'disabled'}>Ascender</button>
+      <div class="hint" style="margin-top:10px">Ascender reinicia nível, ouro, itens, treino e talentos, mas mantém Almas, o Altar e conquistas. Você pode trocar de classe.</div></div>`;
+    h += '<div class="sec"><div class="sec-h"><h3>Altar das Almas</h3></div>';
+    for (const u of SOUL_UPGRADES) {
+      const r = st.soulUpg[u.id] || 0;
+      const maxed = u.max && r >= u.max;
+      const c = Stats.soulCost(u, r);
+      h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(u.icon, u.color, 44)}" alt=""></div>
+        <div><div class="nm">${u.name}<span class="rk">Nv ${r}${u.max ? '/' + u.max : ''}</span></div>
+        <div class="ds">Atual: <b>${r ? u.desc(r * u.per) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${u.desc((r + 1) * u.per)}</span>`}</div></div>
+        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" style="color:${st.souls >= c ? '#d9b8ff' : 'var(--red)'}">${soul}${U.fmt(c)}</div><button class="btn small purple" data-act="soul" data-id="${u.id}" ${st.souls >= c ? '' : 'disabled'}>Comprar</button>`}</div></div>`;
+    }
+    return h + '</div>';
+  },
+
+  tab_ach() {
+    const st = Game.state;
+    const done = ACHIEVEMENTS.filter(a => st.ach[a.id]).length;
+    let h = `<div class="sec"><div class="sec-h"><h3>Conquistas</h3><span class="sub">${done}/${ACHIEVEMENTS.length}</span></div>`;
+    const list = [...ACHIEVEMENTS].sort((a, b) => (!!st.ach[a.id]) - (!!st.ach[b.id]));
+    for (const a of list) {
+      const v = st.stats[a.stat] || 0, ok = !!st.ach[a.id];
+      const pct = Math.min(1, v / a.goal);
+      const rw = Object.entries(a.reward).map(([k, x]) => Items.statLine(k, x)).join(', ');
+      h += `<div class="ach${ok ? ' done' : ''}"><div class="medal">${ok ? '★' : '☆'}</div><div><div class="nm">${a.name}</div><div class="ds">${a.desc}</div>${ok ? '' : `<div class="meter"><div style="width:${pct * 100}%"></div></div>`}</div><div class="rw">${rw}<br><span style="color:var(--muted);font-weight:400">${ok ? 'Concluída' : `${U.fmt(Math.min(v, a.goal))}/${U.fmt(a.goal)}`}</span></div></div>`;
+    }
+    h += '</div>';
+    const s = st.stats;
+    const rows = [
+      ['Tempo de jogo', U.fmtTime(s.playTime)], ['Inimigos derrotados', U.fmtInt(s.kills)], ['Chefes derrotados', U.fmtInt(s.bosses)],
+      ['Baús abertos', U.fmtInt(s.chests)], ['Zonas concluídas', U.fmtInt(s.zonesCleared)], ['Zona recorde', s.maxZone],
+      ['Nível recorde', s.maxLevel], ['Itens encontrados', U.fmtInt(s.itemsFound)], ['Épicos', s.epics], ['Lendários', s.legendaries], ['Míticos', s.mythics],
+      ['Ouro total', U.fmt(s.goldEarned)], ['Maior golpe', U.fmt(s.highestHit)], ['Maior forja', '+' + s.maxForge], ['Derrotas', s.deaths], ['Ascensões', s.ascensions],
+    ];
+    h += `<div class="sec"><div class="sec-h"><h3>Estatísticas</h3></div><div class="stat-list">${rows.map(([a, b]) => `<div class="r"><span>${a}</span><span>${b}</span></div>`).join('')}</div></div>`;
+    return h;
+  },
+
+  onPanelClick(e) {
+    const it = e.target.closest('[data-uid]');
+    if (it && !e.target.closest('[data-act="forgeSel"]')) {
+      if (this.selecting && e.target.closest('.inv-grid')) {
+        const uid = it.dataset.uid;
+        if (this.picked.has(uid)) this.picked.delete(uid); else this.picked.add(uid);
+        Sfx.play('click');
+        this.renderTab(false);
+        return;
+      }
+      this.openMenu(it.dataset.uid, e.clientX, e.clientY);
+      return;
+    }
+    const a = e.target.closest('[data-act]');
+    if (!a || a.disabled) return;
+    const id = a.dataset.id;
+    switch (a.dataset.act) {
+      case 'bulkMenu': this.openBulkMenu(a); break;
+      case 'selectMode': this.selecting = !this.selecting; this.picked.clear(); this.renderTab(false); break;
+      case 'selAll': for (const x of Game.state.inv) if (!x.locked) this.picked.add(x.uid); this.renderTab(false); break;
+      case 'selNone': this.picked.clear(); this.renderTab(false); break;
+      case 'sellSelected': {
+        const set = new Set(this.picked);
+        const pv = Game.sellPreview(x => set.has(x.uid));
+        const hasGood = Game.state.inv.some(x => set.has(x.uid) && !x.locked && (x.rarity >= 3 || Stats.compareItem(x) > 0.002));
+        const go = () => { const r = Game.sellWhere(x => set.has(x.uid)); this.picked.clear(); this.selecting = false; this.soldNotice(r); this.renderTab(false); };
+        if (hasGood) this.confirm('Vender selecionados', `Vender <b>${pv.n}</b> itens por <b style="color:var(--gold)">${U.fmt(pv.gold)}</b> ouro? A seleção inclui itens Épicos+ ou melhorias.`, 'Vender', go, 'danger');
+        else go();
+        break;
+      }
+      case 'sortInv': Game.sortInv(); this.renderTab(false); break;
+      case 'talent': Game.talentUp(id); this.renderTab(false); break;
+      case 'resetTalents': this.confirm('Redistribuir talentos', 'Todos os pontos serão devolvidos para você distribuir novamente.', 'Redistribuir', () => { Game.resetTalents(); this.renderTab(false); }); break;
+      case 'train': Game.buyTraining(id, false); this.renderTab(false); break;
+      case 'trainMax': Game.buyTraining(id, true); this.renderTab(false); break;
+      case 'forgeSel': this.forgeSel = a.dataset.slot; Sfx.play('click'); this.renderTab(false); break;
+      case 'forge': {
+        const item = Game.state.equip[this.forgeSel];
+        if (item) { const ok = Game.forge(item); this.renderTab(false); this.notice(ok ? `Sucesso! Agora +${item.plus}` : 'A forja falhou…', ok ? 'var(--green)' : 'var(--red)'); }
+        break;
+      }
+      case 'soul': Game.buySoul(id); this.renderTab(false); break;
+      case 'ascend': {
+        const gain = Stats.soulsOnAscend(Game.state);
+        this.confirm('Ascender', `Você receberá <b style="color:#d9b8ff">${U.fmt(gain)} Almas</b>. Nível, ouro, itens, treino e talentos serão reiniciados. Escolha classe e espécie da próxima jornada a seguir.`, 'Continuar', () => { Game.paused = true; this.showTitle('ascend'); }, 'purple');
+        break;
+      }
+      case 'useClass':
+        this.confirm('Trocar de classe', `Tornar-se <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Seus talentos serão redistribuídos e suas armas reforjadas para a nova classe (raridade, nível e aprimoramento são mantidos).`, 'Trocar', () => { Game.switchClass(id); this.renderTab(false); });
+        break;
+      case 'useSpecies': Game.switchSpecies(id); this.renderTab(false); break;
+      case 'setMulti':
+        if (!id) { Game.setMulticlass(null); this.renderTab(false); break; }
+        this.confirm('Multiclasse', `Combinar <b style="color:${CLASSES[Game.state.cls].color}">${CLASSES[Game.state.cls].name}</b> com <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Os talentos serão redistribuídos e cada nível passa a exigir ${Math.round((MULTI_XP - 1) * 100)}% mais XP.`, 'Combinar', () => { Game.setMulticlass(id); this.renderTab(false); }, 'purple');
+        break;
+    }
+  },
+  onPanelChange(e) {
+    const t = e.target, k = t.dataset.set;
+    if (!k) return;
+    const st = Game.state;
+    if (t.type === 'checkbox') st.settings[k] = t.checked; else st.settings[k] = +t.value;
+    if (k === 'autoTalent' && t.checked) Game.autoTalents();
+    if (k === 'autoSell') {
+      const r = Game.applyAutoSell();
+      if (r.n) this.notice(`Auto-venda: ${r.n} ${r.n > 1 ? 'itens vendidos' : 'item vendido'} (+${U.fmt(r.gold)} ouro)`, 'var(--gold)');
+    }
+    this.renderTab(false);
+  },
+
+  soldNotice(r) {
+    if (r.n) {
+      this.notice(`Vendidos ${r.n} ${r.n > 1 ? 'itens' : 'item'} por ${U.fmt(r.gold)} ouro`, 'var(--gold)');
+      Game.log(`Vendeu ${r.n} ${r.n > 1 ? 'itens' : 'item'} por ${U.fmt(r.gold)} ouro.`, 'gold');
+    } else this.notice('Nenhum item para vender.');
+  },
+
+  quickSell(item, skipConfirm) {
+    if (item.locked) { this.notice('Item travado — destrave para vender.'); return; }
+    const go = () => { Game.sell(item); this.renderTab(false); };
+    if (item.rarity >= 3 && !skipConfirm) this.confirm('Vender item', `Vender <span class="c${item.rarity}">${U.esc(item.name)}</span> (${RARITIES[item.rarity].name}) por ${U.fmt(Items.sellPrice(item))} ouro?<br><small style="color:var(--muted)">Dica: Shift + botão direito vende sem perguntar.</small>`, 'Vender', go, 'danger');
+    else go();
+  },
+
+  openBulkMenu(btn) {
+    const m = this.$('menu');
+    this.menuItem = null;
+    this.hideTip();
+    let h = '<div class="mh">Venda em massa</div><div class="mnote">Itens travados nunca são vendidos</div>';
+    for (const f of Game.bulkFilters()) {
+      const pv = Game.sellPreview(f.pred);
+      h += `<button data-bulk="${f.id}" ${pv.n ? '' : 'disabled'}><span style="color:${f.color}">${f.label}</span><span class="mc">${pv.n}${pv.up ? ` <span class="up-g">▲${pv.up}</span>` : ''} · ${U.fmt(pv.gold)}</span></button>`;
+    }
+    m.innerHTML = h;
+    m.classList.remove('hidden');
+    const r = btn.getBoundingClientRect(), mr = m.getBoundingClientRect();
+    m.style.left = Math.min(r.left, innerWidth - mr.width - 8) + 'px';
+    m.style.top = Math.min(r.bottom + 4, innerHeight - mr.height - 8) + 'px';
+  },
+
+  // ---------------------------------------------------------- menu de item
+  openMenu(uid, x, y) {
+    const f = Game.findItem(uid);
+    if (!f) return;
+    const it = f.item;
+    it.isNew = false;
+    this.menuItem = it;
+    this.hideTip();
+    let h = `<div class="mh c${it.rarity}">${U.esc(it.name)}</div>`;
+    if (f.where === 'inv') {
+      h += `<button data-m="equip">Equipar</button>`;
+      h += `<button data-m="lock">${it.locked ? 'Destravar' : 'Travar'}</button>`;
+      h += `<button data-m="sell" ${it.locked ? 'disabled style="opacity:.4"' : ''}>Vender (${U.fmt(Items.sellPrice(it))} ouro)</button>`;
+    } else {
+      h += `<button data-m="forge">Forjar</button>`;
+      h += `<button data-m="lock">${it.locked ? 'Destravar' : 'Travar'}</button>`;
+      h += `<button data-m="unequip">Desequipar</button>`;
+    }
+    const m = this.$('menu');
+    m.innerHTML = h;
+    m.classList.remove('hidden');
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+    m.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  },
+  closeMenu() { this.$('menu').classList.add('hidden'); this.menuItem = null; },
+  onMenu(e) {
+    const bk = e.target.closest('[data-bulk]');
+    if (bk) {
+      if (bk.disabled) return;
+      const f = Game.bulkFilters().find(x => x.id === bk.dataset.bulk);
+      this.closeMenu();
+      const pv = Game.sellPreview(f.pred);
+      const go = () => { this.soldNotice(Game.sellWhere(f.pred)); this.renderTab(false); };
+      if (f.confirm || pv.up) this.confirm('Venda em massa', `${f.label}: vender <b>${pv.n}</b> ${pv.n > 1 ? 'itens' : 'item'} por <b style="color:var(--gold)">${U.fmt(pv.gold)}</b> ouro?${pv.up ? `<br><small class="up-g">Inclui ${pv.up} ${pv.up > 1 ? 'itens que seriam melhorias' : 'item que seria melhoria'} (▲).</small>` : ''}`, 'Vender', go, 'danger');
+      else go();
+      return;
+    }
+    const b = e.target.closest('[data-m]');
+    if (!b || !this.menuItem) return;
+    const it = this.menuItem;
+    switch (b.dataset.m) {
+      case 'equip': Game.equip(it); break;
+      case 'sell': this.closeMenu(); this.quickSell(it); return;
+      case 'lock': Game.toggleLock(it); break;
+      case 'unequip': Game.unequip(it.slot); break;
+      case 'forge': this.forgeSel = it.slot; this.tab = 'forge'; this.$('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.tab === 'forge')); break;
+    }
+    this.closeMenu();
+    this.renderTab(false);
+  },
+
+  // ---------------------------------------------------------- Salão dos Heróis
+  tab_hall() {
+    const st = Game.state;
+    const C = CLASSES[st.cls], S = SPECIES[st.species];
+    let h = `<div class="sec"><div class="sec-h"><h3>Salão dos Heróis</h3></div>
+      <div class="hall-cur"><img src="${Sprites.classUrl(st.cls, st.species, 3)}" alt=""><div><div class="hc-n" style="color:${C.color}">${C.name} ${S.name}</div>
+      <div class="hint" style="margin:2px 0 0">Troque de classe ou espécie quando quiser. Trocar de classe redistribui os talentos e reforja suas armas para a nova classe.</div></div></div></div>`;
+    const prog = u => {
+      if (u.t !== 'stat') return '';
+      const v = st.stats[u.stat] || 0;
+      return `<div class="meter"><div style="width:${Math.min(100, v / u.goal * 100)}%"></div></div><div class="hc-p">${U.fmt(Math.min(v, u.goal))}/${U.fmt(u.goal)}</div>`;
+    };
+    const card = (kind, id) => {
+      const def = kind === 'class' ? CLASSES[id] : SPECIES[id];
+      const R = HERO_RARITY[def.rarity];
+      const owned = Game.isUnlocked(kind, id);
+      const cur = kind === 'class' ? st.cls === id : st.species === id;
+      const img = kind === 'class' ? Sprites.classUrl(id, st.species, 3) : Sprites.speciesUrl(id, 3);
+      let tip = `<div class='tt-name' style='color:${R.color}'>${def.name}</div><div class='tt-sub'>${kind === 'class' ? 'Classe' : 'Espécie'} ${R.name}${def.title ? ' · ' + def.title : ''}</div><div style='color:#d8cfe6'>${def.desc}</div>`;
+      if (kind === 'class' && def.innate) tip += `<div class='tt-sep'></div><div><b style='color:var(--gold)'>✦ ${def.innate.name}:</b> <span style='color:var(--muted)'>${def.innate.desc}</span></div>`;
+      if (kind === 'class') tip += `<div class='tt-sep'></div>` + def.skills.map(sid => `<div><b style='color:${SKILLS[sid].color}'>${SKILLS[sid].name}</b><span style='color:var(--muted)'>${SKILLS[sid].unlock > 1 ? ' · nv ' + SKILLS[sid].unlock : ''}</span></div>`).join('');
+      else tip += `<div class='tt-sep'></div>` + def.traits.map(([n, d]) => `<div><b style='color:#e8dff5'>${n}:</b> <span style='color:var(--muted)'>${d}</span></div>`).join('');
+      if (!owned) tip += `<div class='tt-foot'><span>🔒 ${unlockText(def.unlock)}</span></div>`;
+      let act;
+      const cs = kind === 'class' ? (st.classStats[id] || {}) : null;
+      const mastery = kind === 'class' && owned ? `<div class="hc-m${Stats.mastered(st, id) ? ' ok' : ''}">${Stats.mastered(st, id) ? '★ Dominada' : `Recorde: zona ${cs.best || 0}/${MASTERY_ZONE}`}</div>` : '';
+      if (cur) act = '<span class="hc-cur">Atual</span>' + mastery;
+      else if (kind === 'class' && st.cls2 === id) act = '<span class="hc-cur" style="color:#c9a0ff">Secundária</span>' + mastery;
+      else if (owned) act = `<button class="btn small gold" data-act="${kind === 'class' ? 'useClass' : 'useSpecies'}" data-id="${id}">Usar</button>${kind === 'class' && Game.canMulticlass(id) ? `<button class="btn small purple" data-act="setMulti" data-id="${id}">Multiclasse</button>` : ''}${mastery}`;
+      else act = `<div class="hc-lock">${unlockText(def.unlock)}</div>${prog(def.unlock)}`;
+      return `<div class="hcard${owned ? '' : ' locked'}${cur ? ' cur' : ''}" style="--rc:${R.color}" data-tip="${tip.replace(/"/g, '&quot;')}"><img src="${img}" alt=""><div class="hc-n">${def.name}</div><div class="hc-r" style="color:${R.color}">${R.name}</div>${act}</div>`;
+    };
+    const nc = st.unlocks.classes.length, ns = st.unlocks.species.length;
+    // Multiclasse
+    const open = Stats.multiclassOpen(st);
+    const mHint = !open
+      ? `🔒 Liberada após <b>${MULTI_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
+      : !Stats.mastered(st, st.cls)
+      ? `Domine a classe atual (alcance a zona <b>${MASTERY_ZONE}</b> com ela) para combiná-la com outra classe dominada.`
+      : st.cls2 ? `Ativa: <b>${Game.className()}</b>.` : 'Escolha uma classe dominada abaixo (botão <b>Multiclasse</b>) para combinar com a atual.';
+    h += `<div class="sec"><div class="sec-h"><h3>Multiclasse</h3>${st.cls2 ? '<button class="btn small" data-act="setMulti" data-id="">Remover</button>' : ''}</div>
+      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas classes dominadas: habilidades das duas (4 + 2), passivas das duas, +${MULTI_SYNERGY}% de Dano e Vida e o inato da secundária a 60%. Em troca, cada nível exige ${Math.round((MULTI_XP - 1) * 100)}% mais XP.</div><div style="font-size:12px">${mHint}</div></div></div>`;
+    h += `<div class="sec"><div class="sec-h"><h3>Classes</h3><span class="sub">${nc}/${CLASS_ORDER.length}</span></div><div class="hall-grid">${CLASS_ORDER.map(id => card('class', id)).join('')}</div></div>`;
+    h += `<div class="sec"><div class="sec-h"><h3>Espécies</h3><span class="sub">${ns}/${SPECIES_ORDER.length}</span></div><div class="hall-grid">${SPECIES_ORDER.map(id => card('species', id)).join('')}</div></div>`;
+    h += '<div class="hint">Prisioneiros aparecem nas masmorras numa jaula com um <b style="color:var(--gold)">!</b> dourado. O herói vai até eles sozinho para libertá-los.</div>';
+    return h;
+  },
+
+  // ---------------------------------------------------------- tooltips
+  onHover(e) {
+    const el = e.target.closest('[data-uid],[data-skill],[data-tip]');
+    if (!el || !this.$('menu').classList.contains('hidden')) return;
+    const tip = this.$('tooltip');
+    if (el.dataset.uid) {
+      const f = Game.findItem(el.dataset.uid);
+      if (!f) return;
+      const it = f.item;
+      if (it.isNew) { it.isNew = false; el.classList.remove('new'); }
+      const cur = Game.state.equip[it.slot];
+      if (f.where === 'inv' && cur) {
+        tip.className = 'compare';
+        tip.innerHTML = `<div>${Items.tooltip(it, { tag: 'Na mochila' })}</div><div>${Items.tooltip(cur, { tag: 'Equipado', compare: false })}</div>`;
+      } else {
+        tip.className = '';
+        tip.innerHTML = Items.tooltip(it, { tag: f.where === 'equip' ? 'Equipado' : '' });
+      }
+    } else if (el.dataset.skill) {
+      const sk = SKILLS[el.dataset.skill], r = sk.racial ? U.clamp(1 + Math.floor(Game.state.level / 8), 1, 10) : Game.state.talents[el.dataset.skill] || 0;
+      tip.className = '';
+      tip.innerHTML = `<div class="tt-name" style="color:${sk.color}">${sk.name}</div><div class="tt-sub">${sk.racial ? `Racial (${SPECIES[Game.state.species].name}) · ` : ''}${sk.type === 'passive' ? 'Passiva' : `Ativa · Recarga ${sk.cd}s`} · Rank ${r}/${sk.max}${sk.ult ? ' · Suprema' : ''}</div><div style="color:#d8cfe6">${sk.desc(Math.max(1, r))}</div>${Game.state.level < sk.unlock ? `<div class="tt-foot"><span>Desbloqueia no nível ${sk.unlock}</span></div>` : ''}`;
+    } else {
+      tip.className = '';
+      tip.innerHTML = el.dataset.tip;
+    }
+    tip.classList.remove('hidden');
+    this.placeTip(e.clientX, e.clientY);
+  },
+  placeTip(x, y) {
+    const t = this.$('tooltip');
+    const r = t.getBoundingClientRect();
+    let L = x + 16, T = y + 12;
+    if (L + r.width > innerWidth - 8) L = x - r.width - 16;
+    if (T + r.height > innerHeight - 8) T = Math.max(8, innerHeight - r.height - 8);
+    t.style.left = Math.max(8, L) + 'px';
+    t.style.top = T + 'px';
+  },
+  hideTip() { this.$('tooltip').classList.add('hidden'); },
+
+  // ---------------------------------------------------------- avisos
+  banner(title, sub, cls = '', dur = 2) {
+    const b = this.$('banner');
+    if (!b) return;
+    b.className = 'banner show ' + cls;
+    b.innerHTML = `<div class="b1">${U.esc(title)}</div>${sub ? `<div class="b2">${U.esc(sub)}</div>` : ''}`;
+    clearTimeout(this._bt);
+    this._bt = setTimeout(() => b.classList.remove('show'), dur * 1000);
+  },
+  pushToast(html, color) {
+    const box = this.$('toasts');
+    if (!box) return;
+    const d = document.createElement('div');
+    d.className = 'toast';
+    d.style.borderColor = color;
+    d.innerHTML = html;
+    box.prepend(d);
+    while (box.children.length > 5) box.lastChild.remove();
+    setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 400); }, 3200);
+  },
+  toast(item, extra) {
+    const col = RARITIES[item.rarity].color;
+    this.pushToast(`<img src="${Sprites.itemUrl(item)}" alt=""><span><span class="c${item.rarity}">${U.esc(item.name)}</span>${extra ? `<br><small style="color:var(--green)">${extra}</small>` : ''}</span>`, col);
+  },
+  toastText(title, sub, color) {
+    this.pushToast(`<span><b style="color:${color}">${title}</b>${sub ? `<br><small style="color:var(--muted)">${sub}</small>` : ''}</span>`, color);
+  },
+  notice(msg, color = 'var(--text)') { this.pushToast(`<span style="color:${color}">${msg}</span>`, '#3c3056'); },
+  nowPlaying(name) {
+    const np = this.$('np-name');
+    if (np) np.textContent = name;
+    if (!Game.running || document.hidden) return;
+    this.pushToast(`<span><b style="color:#c9a0ff">♪ ${name}</b><br><small style="color:var(--muted)">Trilha sonora</small></span>`, '#6f3fb0');
+  },
+
+  drawTransition(tr) {
+    let f = this.$('fade');
+    if (!f) {
+      f = document.createElement('div'); f.id = 'fade';
+      f.style.cssText = 'position:absolute;inset:0;background:#05030a;pointer-events:none;opacity:0;z-index:3';
+      this.$('viewport').appendChild(f);
+    }
+    const a = tr ? 1 - Math.abs(tr.t - tr.half) / tr.half : 0;
+    f.style.opacity = U.clamp(a, 0, 1).toFixed(2);
+  },
+
+  // ---------------------------------------------------------- log
+  addLog(html, cls = '') {
+    const entry = { html, cls, t: U.clock() };
+    this.logs.push(entry);
+    if (this.logs.length > 150) this.logs.shift();
+    if (!this.logPass(entry)) return;
+    const box = this.$('log');
+    if (!box) return;
+    const near = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.insertAdjacentHTML('beforeend', this.logLine(entry));
+    while (box.children.length > 150) box.firstChild.remove();
+    if (near) box.scrollTop = box.scrollHeight;
+  },
+  logPass(e) {
+    if (this.logFilter === 'all') return true;
+    const loot = e.cls === 'loot' || e.cls === 'gold';
+    return this.logFilter === 'loot' ? loot : !loot;
+  },
+  logLine(e) { return `<div class="ln ${e.cls}"><span class="t">${e.t}</span>${e.html}</div>`; },
+  renderLog() {
+    const box = this.$('log');
+    box.innerHTML = this.logs.filter(e => this.logPass(e)).map(e => this.logLine(e)).join('');
+    box.scrollTop = box.scrollHeight;
+  },
+
+  // ---------------------------------------------------------- modais
+  modal(title, body, buttons = [], opts = {}) {
+    this.closeModal();
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML = `<div class="modal"><div class="modal-h"><span>${title}</span>${opts.locked ? '' : '<button class="icon-btn" data-close>✕</button>'}</div><div class="modal-b">${body}</div>${buttons.length ? `<div class="modal-f">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-b="${i}">${b.label}</button>`).join('')}</div>` : ''}</div>`;
+    bg.addEventListener('click', e => {
+      if (!opts.locked && (e.target === bg || e.target.closest('[data-close]'))) { this.closeModal(); return; }
+      const b = e.target.closest('[data-b]');
+      if (b) { const def = buttons[+b.dataset.b]; if (def.close !== false) this.closeModal(); if (def.fn) def.fn(bg); }
+    });
+    this.$('modal-root').appendChild(bg);
+    return bg;
+  },
+  closeModal() { this.$('modal-root').innerHTML = ''; },
+  confirm(title, msg, okLabel, fn, cls = 'gold') {
+    this.modal(title, `<p style="margin:0;color:#d8cfe6">${msg}</p>`, [{ label: 'Cancelar' }, { label: okLabel, cls, fn }]);
+  },
+
+  settingsModal() {
+    const s = Game.state.settings;
+    const tog = (k, l, d) => `<div class="set-row"><div><div class="l">${l}</div><div class="d">${d}</div></div><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}></div>`;
+    const trackOpts = `<option value="auto" ${s.musicTrack === 'auto' ? 'selected' : ''}>Automática (por bioma)</option>` + MUSIC_ORDER.map(id => `<option value="${id}" ${s.musicTrack === id ? 'selected' : ''}>${MUSIC_TRACKS[id].name}</option>`).join('');
+    const body = `<div class="set-h">Áudio</div>
+      ${tog('music', 'Música', 'Trilha sonora procedural — 10 faixas, uma para cada bioma, título e chefes')}
+      <div class="set-row"><div><div class="l">Volume da música</div></div><input type="range" min="0" max="1" step="0.05" value="${s.musicVol}" data-s="musicVol"></div>
+      <div class="set-row"><div><div class="l">Faixa</div><div class="d">Tocando agora: <span id="np-name">${Music.currentName() || '—'}</span></div></div><select class="sel" data-s="musicTrack">${trackOpts}</select></div>
+      ${tog('sound', 'Efeitos sonoros', 'Golpes, saque, magias e interface')}
+      <div class="set-row"><div><div class="l">Volume dos efeitos</div></div><input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-s="volume"></div>
+      ${tog('bgSfx', 'Efeitos em segundo plano', 'Tocar efeitos com a aba minimizada (a música sempre continua)')}
+      <div class="set-h">Jogo</div>
+      ${tog('dmgNumbers', 'Números de dano', 'Mostrar dano flutuante no mapa')}
+      ${tog('shake', 'Tremor de tela', 'Em críticos, explosões e chefes')}
+      ${tog('exploreAll', 'Explorar tudo', 'Explorar o mapa inteiro antes de usar o portal (mais baús)')}
+      ${tog('autoEquip', 'Auto-equipar', 'Equipa automaticamente itens melhores')}
+      ${tog('autoTalent', 'Talentos automáticos', 'Distribui pontos de talento sozinho')}
+      <div class="set-row"><div><div class="l">Salvamento</div><div class="d">Exporte para guardar um backup ou jogar em outro navegador</div></div><div style="display:flex;gap:6px"><button class="btn small" data-x="export">Exportar</button><button class="btn small" data-x="import">Importar</button></div></div>
+      <div class="set-row"><div><div class="l" style="color:var(--red)">Apagar tudo</div><div class="d">Recomeçar do zero (irreversível)</div></div><button class="btn small danger" data-x="reset">Apagar</button></div>`;
+    const m = this.modal('Configurações', body, [{ label: 'Fechar', cls: 'gold' }]);
+    m.addEventListener('input', e => {
+      const k = e.target.dataset.s; if (!k) return;
+      s[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.tagName === 'SELECT' && k === 'musicTrack' ? e.target.value : +e.target.value;
+      if (k === 'music' || k === 'musicVol' || k === 'musicTrack') { Sfx.init(); Music.configure(s); }
+      if (k === 'sound') { Sfx.enabled = s.sound; Sfx.init(); }
+      if (k === 'volume') Sfx.setVolume(s.volume);
+      if (k === 'autoTalent' && s.autoTalent) Game.autoTalents();
+      this.dirty('top', this.tab);
+    });
+    m.addEventListener('click', e => {
+      const x = e.target.closest('[data-x]'); if (!x) return;
+      if (x.dataset.x === 'export') {
+        const code = Game.exportSave();
+        this.modal('Exportar progresso', `<p class="hint">Copie e guarde este código:</p><textarea readonly onclick="this.select()">${code}</textarea>`, [{ label: 'Copiar', cls: 'gold', fn: () => { navigator.clipboard && navigator.clipboard.writeText(code); this.notice('Código copiado!'); } }]);
+      } else if (x.dataset.x === 'import') {
+        this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O progresso atual será substituído.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
+          try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
+        } }]);
+      } else if (x.dataset.x === 'reset') {
+        this.confirm('Apagar tudo', 'Todo o progresso será perdido permanentemente. Tem certeza?', 'Apagar tudo', () => Game.hardReset(), 'danger');
+      }
+    });
+  },
+
+  gameOverModal() {
+    const st = Game.state, pe = st.pendingEnd;
+    if (!pe) return;
+    this.modal('Fim de Jogo', `<p style="margin:0 0 6px;color:#d8cfe6"><b>${U.esc(st.name)}</b> (${Game.className()}) perdeu os três corações.</p>
+      <div class="offline-list">
+        <div><span>Zona alcançada</span><b>${pe.zone}</b></div>
+        <div><span>Nível</span><b style="color:#c9a0ff">${pe.level}</b></div>
+        <div><span>Almas obtidas</span><b style="color:#d9b8ff">+${U.fmt(pe.gain)}</b></div>
+      </div>
+      <p class="hint" style="margin-top:10px">Suas Almas, o Altar, conquistas e desbloqueios continuam.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''} Escolha a próxima jornada.</p>`,
+      [{ label: 'Escolher nova jornada', cls: 'gold', fn: () => this.showTitle('gameover') }], { locked: true });
+  },
+
+  offlineModal(sec, eff, g, r) {
+    this.modal('Bem-vindo de volta!', `<p style="margin:0 0 4px;color:#d8cfe6">Seu herói continuou explorando por <b>${U.fmtTime(sec)}</b> (eficiência ${Math.round(eff * 100)}%).</p>
+      <div class="offline-list">
+        <div><span>Ouro</span><b>+${U.fmt(g.gold)}</b></div>
+        <div><span>Experiência</span><b style="color:#c9a0ff">+${U.fmt(g.xp)}</b></div>
+        ${r.levels ? `<div><span>Níveis</span><b style="color:#c9a0ff">+${r.levels}</b></div>` : ''}
+        <div><span>Itens encontrados</span><b style="color:var(--text)">${r.items}${r.sold ? ` <small style="color:var(--muted);font-family:var(--sans)">(${r.sold} vendidos)</small>` : ''}</b></div>
+      </div>`, [{ label: 'Continuar', cls: 'gold' }]);
+  },
+};

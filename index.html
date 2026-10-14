@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upgrind — Crônicas do Abismo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Tela inicial / seleção de classe -->
+<div id="title-screen" class="screen"></div>
+
+<!-- Jogo -->
+<div id="app" class="hidden">
+  <header id="topbar">
+    <div class="brand">UPGRIND</div>
+    <div class="hero-chip">
+      <canvas id="portrait" width="40" height="40"></canvas>
+      <div class="hero-info">
+        <div class="hero-line"><span id="hero-name" class="hero-name">—</span><span id="hero-sub" class="hero-sub">—</span></div>
+        <div class="bar xp-bar" title="Experiência"><div id="xp-fill" class="fill"></div><span id="xp-text" class="bar-text"></span></div>
+      </div>
+    </div>
+    <div class="resources">
+      <div class="res" title="Ouro"><img id="ico-gold" alt=""><span id="gold">0</span></div>
+      <div class="res" title="Almas (moeda de Ascensão)"><img id="ico-soul" alt=""><span id="souls">0</span></div>
+      <div class="res power" title="Poder — estimativa de força geral do herói"><span class="pw-ico">PODER</span><span id="power">0</span></div>
+    </div>
+    <div class="zone-ctrl">
+      <button id="zone-prev" class="icon-btn" title="Zona anterior">&#9664;</button>
+      <div class="zone-label"><div id="zone-num">Zona 1</div><div id="zone-biome">—</div></div>
+      <button id="zone-next" class="icon-btn" title="Próxima zona (já alcançada)">&#9654;</button>
+    </div>
+    <div class="ctrls">
+      <button id="btn-mode" class="mode-btn" title="Avançar: segue para a próxima zona. Farmar: repete a zona atual."></button>
+      <div class="speed" id="speed"></div>
+      <button id="btn-pause" class="icon-btn" title="Pausar (P)"></button>
+      <button id="btn-sound" class="icon-btn" title="Som"></button>
+      <button id="btn-settings" class="icon-btn" title="Configurações"></button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="stage">
+      <div id="viewport">
+        <canvas id="game"></canvas>
+        <div id="hud-zone" class="hud"></div>
+        <div id="minimap-wrap" class="hud"><canvas id="minimap"></canvas></div>
+        <div id="hud-boss" class="hud hidden">
+          <div class="boss-name" id="boss-name"></div>
+          <div class="bar boss-bar"><div id="boss-fill" class="fill"></div><span id="boss-text" class="bar-text"></span></div>
+        </div>
+        <div id="hud-hero" class="hud">
+          <div class="status" id="hero-status">Explorando…</div>
+          <div class="bar hp-bar"><div id="hp-fill" class="fill"></div><div id="shield-fill" class="shield"></div><span id="hp-text" class="bar-text"></span></div>
+          <div class="hud-row"><div id="potions" class="potions"></div><div id="buffs" class="buffs"></div></div>
+        </div>
+        <div id="banner" class="banner"></div>
+        <div id="toasts"></div>
+        <div id="pause-veil" class="hidden"><div>PAUSADO</div><small>Pressione P ou clique para continuar</small></div>
+      </div>
+      <div id="skillbar"></div>
+      <div id="log-wrap">
+        <div class="log-head"><span>Diário de Aventura</span><div class="log-filters" id="log-filters"></div></div>
+        <div id="log"></div>
+      </div>
+    </section>
+
+    <aside id="panel">
+      <nav id="tabs"></nav>
+      <div id="tab-body"></div>
+    </aside>
+  </main>
+</div>
+
+<div id="tooltip" class="hidden"></div>
+<div id="menu" class="hidden"></div>
+<div id="modal-root"></div>
+
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/heroes.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/music.js"></script>
+<script src="js/items.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/mapgen.js"></script>
+<script src="js/world.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

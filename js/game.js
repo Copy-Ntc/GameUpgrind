@@ -1,0 +1,866 @@
+'use strict';
+// ============================================================
+// Controlador principal: estado, progressão, desbloqueios,
+// saque, economia, salvamento e loop
+// ============================================================
+const SAVE_KEY = 'upgrind_save_v1';
+
+// Relógio em Web Worker: continua batendo com a aba em segundo plano
+// (timers da página principal são congelados/limitados pelo navegador)
+const Ticker = {
+  started: false,
+  start(fn) {
+    if (this.started) return;
+    this.started = true;
+    try {
+      const src = 'let t=null;onmessage=e=>{clearInterval(t);t=setInterval(()=>postMessage(0),e.data)};';
+      this.worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      this.worker.onmessage = fn;
+      this.worker.postMessage(50);
+    } catch (e) {
+      setInterval(fn, 50);
+    }
+  },
+};
+
+// Jornada adiantada (Atalho Astral): nível = zona × HEADSTART_LVL e kit completo dessa raridade.
+// Só começa numa zona em que o poder do herói seja ≥ HEADSTART_POW × escala dos inimigos (×1,4 no Modo Desafio).
+const HEADSTART_LVL = 2;
+const HEADSTART_RAR = 2;
+const HEADSTART_POW = 120;
+const DEFAULT_CLASSES = () => CLASS_ORDER.filter(id => CLASSES[id].unlock.t === 'default');
+const DEFAULT_SPECIES = () => SPECIES_ORDER.filter(id => SPECIES[id].unlock.t === 'default');
+
+const Game = {
+  state: null, stats: null, W: null,
+  speed: 1, paused: false, running: false,
+  lastSim: 0, lastFrame: 0, saveT: 0, achT: 0, rateT: 0, rateAcc: { gold: 0, xp: 0 },
+  transition: null, autoSold: { n: 0, gold: 0 },
+
+  // ---------------------------------------------------------- estado
+  defaultState(cls, species, name, hardcore) {
+    return {
+      v: 3, name, cls, cls2: null, species: species || 'human', level: 1, xp: 0, gold: 0, souls: 0,
+      hardcore: !!hardcore, hearts: 3, pendingEnd: null, classStats: {},
+      talents: { [CLASSES[cls].skills[0]]: 1 },
+      equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null },
+      inv: [], training: {}, soulUpg: {},
+      zone: 1, maxZone: 1, mode: 'advance', retreatLeft: 0, deathsInZone: 0, potions: 3,
+      unlocks: { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() }, encPity: 0,
+      stats: {
+        kills: 0, chests: 0, bosses: 0, deaths: 0, goldEarned: 0, itemsFound: 0, epics: 0, legendaries: 0, mythics: 0,
+        maxForge: 0, mimics: 0, shrines: 0, playTime: 0, maxLevel: 1, ascensions: 0, maxZone: 1, highestHit: 0, zonesCleared: 0, soulsEarned: 0,
+        lordsKilled: 0, recruits: 0, gameOvers: 0,
+      },
+      ach: {},
+      settings: {
+        sound: true, volume: 0.5, music: true, musicVol: 0.45, musicTrack: 'auto', bgSfx: false,
+        autoSell: 2, autoEquip: true, autoTalent: true, dmgNumbers: true, shake: true, exploreAll: true, speed: 1,
+      },
+      rates: { gold: 0, xp: 0 },
+      lastSave: Date.now(), created: Date.now(),
+    };
+  },
+
+  newGame(cls, species, name, hardcore) {
+    this.state = this.defaultState(cls, species, name, hardcore);
+    this.giveStarter();
+    this.recalc();
+    this.state.potions = this.stats.potionMax;
+    this.save();
+  },
+
+  giveStarter() {
+    const st = this.state, z = Math.max(1, st.zone || 1);
+    // Jornadas que começam adiantadas (Atalho Astral) recebem um kit completo da zona
+    for (const slot of z > 1 ? SLOTS : ['weapon']) {
+      const it = Items.generate(z, { cls: st.cls, slot, rarity: z > 1 ? HEADSTART_RAR : 0 });
+      it.isNew = false;
+      st.equip[slot] = it;
+    }
+  },
+
+  // Mescla campos novos em saves antigos
+  migrate(s) {
+    if (!CLASSES[s.cls]) s.cls = 'fighter';
+    const d = this.defaultState(s.cls, s.species, s.name || 'Herói');
+    for (const k in d) if (s[k] === undefined) s[k] = d[k];
+    for (const k in d.stats) if (s.stats[k] === undefined) s.stats[k] = d.stats[k];
+    for (const k in d.settings) if (s.settings[k] === undefined) s.settings[k] = d.settings[k];
+    for (const k of SLOTS) if (s.equip[k] === undefined) s.equip[k] = null;
+    if (!SPECIES[s.species]) s.species = 'human';
+    for (const id of DEFAULT_CLASSES()) if (!s.unlocks.classes.includes(id)) s.unlocks.classes.push(id);
+    for (const id of DEFAULT_SPECIES()) if (!s.unlocks.species.includes(id)) s.unlocks.species.push(id);
+    if (!s.unlocks.classes.includes(s.cls)) s.unlocks.classes.push(s.cls);
+    if (!s.unlocks.species.includes(s.species)) s.unlocks.species.push(s.species);
+    if (s.cls2 && !CLASSES[s.cls2]) s.cls2 = null;
+    if (!s.classStats[s.cls]) s.classStats[s.cls] = { best: s.maxZone || 1, kills: 0, bosses: 0 };
+    // Armas antigas sem classe registrada pertencem à classe atual
+    const all = [...SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
+    for (const it of all) if (it.slot === 'weapon' && !it.cls) it.cls = s.cls;
+    return s;
+  },
+
+  hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } },
+  peekSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.cls ? s : null; } catch (e) { return null; } },
+
+  save() {
+    if (!this.state) return;
+    this.state.lastSave = Date.now();
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); } catch (e) { /* armazenamento indisponível */ }
+  },
+  load() {
+    const s = this.peekSave();
+    if (!s) return false;
+    this.state = this.migrate(s);
+    this.recalc();
+    return true;
+  },
+  exportSave() {
+    this.save();
+    return btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
+  },
+  importSave(str) {
+    const s = JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
+    if (!s || !s.cls) throw new Error('inválido');
+    this.state = this.migrate(s);
+    this.save();
+  },
+  hardReset() {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ok */ }
+    this.state = null;
+    location.reload();
+  },
+
+  // ---------------------------------------------------------- atributos
+  recalc() {
+    const st = this.state;
+    const W = this.W;
+    const ratio = W && W.hero && W.hero.maxHp ? W.hero.hp / W.hero.maxHp : 1;
+    this.stats = Stats.compute(st);
+    this.power = Stats.power(this.stats, st.zone);
+    if (W && W.hero) {
+      W.hero.maxHp = this.stats.maxHp;
+      if (!W.hero.dead) W.hero.hp = Math.max(1, Math.min(this.stats.maxHp, this.stats.maxHp * ratio));
+    }
+    if (st.potions > this.stats.potionMax) st.potions = this.stats.potionMax;
+    UI.dirty('top', 'equip', 'talents', 'train', 'forge', 'asc', 'hall');
+  },
+
+  // ---------------------------------------------------------- início e loop
+  start() {
+    this.running = true;
+    this.speed = this.state.settings.speed || 1;
+    Sfx.enabled = this.state.settings.sound;
+    Sfx.setVolume(this.state.settings.volume);
+    Music.configure(this.state.settings);
+    UI.initGame();
+    if (!this.state.pendingEnd) this.offlineProgress();
+    this.enterZone(this.state.zone, true);
+    if (this.state.pendingEnd) this.paused = true;
+    this.lastSim = this.lastFrame = performance.now();
+    requestAnimationFrame(t => this.frame(t));
+    Ticker.start(() => this.pump());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.save();
+      else UI.dirty('top', 'zone', UI.tab);
+    });
+    window.addEventListener('beforeunload', () => this.save());
+  },
+
+  // Quadro visual (só roda com a aba visível)
+  frame(ts) {
+    requestAnimationFrame(t => this.frame(t));
+    const dt = Math.min(0.1, Math.max(0, (ts - this.lastFrame) / 1000));
+    this.lastFrame = ts;
+    this.pump();
+    Render.frame(this.W, this.paused ? 0 : dt);
+    UI.drawTransition(this.transition);
+    UI.tick(dt);
+  },
+
+  // Avança a simulação até o tempo real atual (chamado pelo quadro e pelo relógio do worker)
+  pump() {
+    if (!this.running) return;
+    const now = performance.now();
+    let dt = (now - this.lastSim) / 1000;
+    this.lastSim = now;
+    if (dt <= 0) return;
+    if (dt > 30) { this.backgroundCatchUp(dt); dt = 0.05; }
+    this.simulate(dt);
+    this.housekeeping(dt);
+    Music.update();
+  },
+
+  simulate(dt) {
+    const st = this.state;
+    if (this.transition) {
+      this.transition.t -= Math.min(dt, 0.1);
+      if (!this.transition.fired && this.transition.t <= this.transition.half) { this.transition.fired = true; this.transition.fn(); }
+      if (this.transition.t <= 0) this.transition = null;
+      return;
+    }
+    if (this.paused || !this.W) return;
+    let sim = dt * this.speed;
+    st.stats.playTime += dt;
+    while (sim > 1e-6 && !this.transition) {
+      const step = Math.min(sim, 1 / 30);
+      World.update(this.W, step);
+      sim -= step;
+      this.rateT += step;
+    }
+  },
+
+  housekeeping(dt) {
+    const st = this.state;
+    if (this.rateT >= 10) {
+      const g = this.rateAcc.gold / this.rateT, x = this.rateAcc.xp / this.rateT;
+      st.rates.gold = st.rates.gold ? st.rates.gold * 0.8 + g * 0.2 : g;
+      st.rates.xp = st.rates.xp ? st.rates.xp * 0.8 + x * 0.2 : x;
+      this.rateAcc.gold = 0; this.rateAcc.xp = 0; this.rateT = 0;
+    }
+    this.saveT += dt;
+    if (this.saveT > 15) { this.saveT = 0; this.save(); }
+    this.achT += dt;
+    if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
+  },
+
+  // Registra feitos da(s) classe(s) atual(is): best (zona recorde), kills, bosses
+  classStat(key, v) {
+    const st = this.state;
+    for (const c of [st.cls, st.cls2]) {
+      if (!c) continue;
+      const cs = st.classStats[c] || (st.classStats[c] = { best: 0, kills: 0, bosses: 0 });
+      if (key === 'best') cs.best = Math.max(cs.best, v); else cs[key] = (cs[key] || 0) + v;
+    }
+  },
+
+  // ---------------------------------------------------------- zonas
+  enterZone(z, first) {
+    const st = this.state;
+    z = Math.max(1, z);
+    st.zone = z;
+    if (z > st.maxZone) st.maxZone = z;
+    if (z > st.stats.maxZone) st.stats.maxZone = z;
+    this.classStat('best', z);
+    st.deathsInZone = 0;
+    this.recalc();
+    this.W = World.create(z);
+    Render.mapCanvas = null;
+    Render.cam.init = false;
+    if (!first) st.potions = Math.min(this.stats.potionMax, st.potions + 1);
+    const b = this.W.biome;
+    const cyc = MapGen.cycleOf(z);
+    const sub = b.name + (cyc ? ` — Ciclo ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][cyc] || cyc + 1}` : '');
+    UI.banner(`Zona ${z}`, sub + (this.W.isLord ? ' · Covil do Senhor' : ''), this.W.isLord ? 'purple' : '', 2.4);
+    this.log(`Entrando na <b>Zona ${z}</b> — ${sub}.`, '');
+    Music.zone(b.id);
+    UI.dirty('top', 'zone');
+  },
+
+  completeZone() {
+    const st = this.state, W = this.W;
+    st.stats.zonesCleared++;
+    this.log(`<b>Zona ${W.z} concluída</b> em ${U.fmtTime(W.t)} · ${W.killed} inimigos · ${W.chestsOpened} baús · ${W.zoneItems} itens.`, 'good');
+    Sfx.play('portal');
+    let next = W.z;
+    if (st.mode === 'advance') {
+      if (st.retreatLeft > 0) { st.retreatLeft--; next = st.retreatLeft > 0 ? W.z : W.z + 1; }
+      else next = W.z + 1;
+    }
+    this.goZone(next);
+  },
+
+  goZone(z) {
+    this.transition = { t: 1.0, half: 0.5, fired: false, fn: () => this.enterZone(z) };
+  },
+
+  retreat() {
+    const st = this.state;
+    st.retreatLeft = 2;
+    this.log('Derrotado 3 vezes. Recuando para a zona anterior para ficar mais forte…', 'bad');
+    this.goZone(Math.max(1, st.zone - 1));
+  },
+
+  setZone(z) {
+    const st = this.state;
+    z = U.clamp(z, 1, st.maxZone);
+    if (z === st.zone) return;
+    st.retreatLeft = 0;
+    this.goZone(z);
+  },
+
+  toggleMode() {
+    const st = this.state;
+    st.mode = st.mode === 'advance' ? 'farm' : 'advance';
+    st.retreatLeft = 0;
+    this.log(st.mode === 'advance' ? 'Modo <b>Avançar</b>: seguirá para novas zonas.' : 'Modo <b>Farmar</b>: repetirá a zona atual.', '');
+    UI.dirty('top', 'zone');
+  },
+
+  // ---------------------------------------------------------- desbloqueios
+  unlockKey(kind) { return kind === 'class' ? 'classes' : 'species'; },
+  isUnlocked(kind, id) { return this.state.unlocks[this.unlockKey(kind)].includes(id); },
+  unlock(kind, id, reason) {
+    const st = this.state;
+    const list = st.unlocks[this.unlockKey(kind)];
+    if (list.includes(id)) return false;
+    list.push(id);
+    const def = kind === 'class' ? CLASSES[id] : SPECIES[id];
+    const R = HERO_RARITY[def.rarity];
+    const tag = kind === 'class' ? 'Nova Classe' : 'Nova Espécie';
+    if (reason && reason.includes('resgatado')) st.stats.recruits++;
+    UI.banner(`${tag}: ${def.name}`, reason || R.name, 'purple', 3.2);
+    UI.toastText(`✦ ${tag}: ${def.name}`, `${R.name} · use no Salão dos Heróis`, R.color);
+    this.log(`✦ <b style="color:${R.color}">${tag} desbloqueada: ${def.name}</b> (${R.name})${reason ? ' — ' + reason : ''}. Experimente no <b>Salão dos Heróis</b>!`, 'lvl');
+    Sfx.play('legendary');
+    UI.dirty('hall');
+    this.save();
+    return true;
+  },
+  checkUnlocks() {
+    const st = this.state;
+    const test = (kind, id, u) => {
+      if ((u.t !== 'stat' && u.t !== 'class') || this.isUnlocked(kind, id)) return;
+      if ((st.stats.ascensions || 0) < (u.asc || 0)) return;
+      const v = u.t === 'class' ? ((st.classStats[u.cls] || {})[u.stat] || 0) : (st.stats[u.stat] || 0);
+      if (v >= u.goal) this.unlock(kind, id, unlockText(u));
+    };
+    for (const id of CLASS_ORDER) test('class', id, CLASSES[id].unlock);
+    for (const id of SPECIES_ORDER) test('species', id, SPECIES[id].unlock);
+  },
+  // Sorteia um prisioneiro resgatável para a zona (classes/espécies bloqueadas por encontro)
+  pickEncounter(z) {
+    const st = this.state;
+    if (!st) return null;
+    const biome = MapGen.biomeOf(z);
+    const cands = [];
+    const ok = u => u.t === 'encounter' && z >= u.minZone && (st.stats.ascensions || 0) >= (u.asc || 0) && (!u.biomes || u.biomes.includes(biome.id));
+    for (const id of CLASS_ORDER) if (ok(CLASSES[id].unlock) && !this.isUnlocked('class', id)) cands.push({ kind: 'class', id });
+    for (const id of SPECIES_ORDER) if (ok(SPECIES[id].unlock) && !this.isUnlocked('species', id)) cands.push({ kind: 'species', id });
+    if (!cands.length) return null;
+    const chance = 0.12 + (st.encPity || 0) * 0.04;
+    if (Math.random() > chance) { st.encPity = (st.encPity || 0) + 1; return null; }
+    st.encPity = 0;
+    const c = U.pick(cands);
+    const def = c.kind === 'class' ? CLASSES[c.id] : SPECIES[c.id];
+    c.name = U.pick(NPC_NAMES);
+    c.label = c.kind === 'class' ? def.name : def.name;
+    return c;
+  },
+
+  // Troca de classe a qualquer momento (talentos redistribuídos, armas reforjadas)
+  switchClass(id) {
+    const st = this.state;
+    if (!this.isUnlocked('class', id) || st.cls === id) return;
+    st.cls = id;
+    if (st.cls2 === id || (st.cls2 && !Stats.mastered(st, id))) st.cls2 = null;
+    st.talents = { [CLASSES[id].skills[0]]: 1 };
+    if (st.equip.weapon) Items.convertWeapon(st.equip.weapon, id);
+    for (const it of st.inv) if (it.slot === 'weapon') Items.convertWeapon(it, id);
+    if (!st.equip.weapon) this.giveStarter();
+    this.recalc();
+    if (st.settings.autoTalent) this.autoTalents();
+    this.refreshHero(true);
+    UI.initGame();
+    UI.banner(CLASSES[id].name, CLASSES[id].title, '', 2);
+    this.log(`Você agora é um <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>. Talentos redistribuídos e armas reforjadas.`, 'lvl');
+    Sfx.play('ascend');
+    this.save();
+  },
+  // Multiclasse: exige ascensões e as duas classes dominadas
+  canMulticlass(id) {
+    const st = this.state;
+    return Stats.multiclassOpen(st) && id !== st.cls && this.isUnlocked('class', id) && Stats.mastered(st, st.cls) && Stats.mastered(st, id);
+  },
+  setMulticlass(id) {
+    const st = this.state;
+    if (id && !this.canMulticlass(id)) return;
+    st.cls2 = id || null;
+    st.talents = { [CLASSES[st.cls].skills[0]]: 1 };
+    this.recalc();
+    if (st.settings.autoTalent) this.autoTalents();
+    this.refreshHero(true);
+    UI.initGame();
+    if (id) {
+      UI.banner(`${CLASSES[st.cls].name} / ${CLASSES[id].name}`, 'Multiclasse', 'purple', 2.4);
+      this.log(`Multiclasse: <b>${CLASSES[st.cls].name} / ${CLASSES[id].name}</b> — +${MULTI_SYNERGY}% de Dano e Vida, habilidades das duas classes, mas ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
+    } else this.log('Multiclasse removida.', '');
+    Sfx.play('ascend');
+    this.save();
+  },
+  className(st = this.state) { return CLASSES[st.cls].name + (st.cls2 ? ' / ' + CLASSES[st.cls2].name : ''); },
+
+  switchSpecies(id) {
+    const st = this.state;
+    if (!this.isUnlocked('species', id) || st.species === id) return;
+    st.species = id;
+    this.recalc();
+    this.refreshHero(false);
+    UI.initGame();
+    this.log(`Sua espécie agora é <b style="color:${HERO_RARITY[SPECIES[id].rarity].color}">${SPECIES[id].name}</b>.`, 'lvl');
+    Sfx.play('buff');
+    this.save();
+  },
+  refreshHero(classChanged) {
+    const W = this.W, st = this.state;
+    if (!W) return;
+    const h = W.hero;
+    h.cls = st.cls;
+    h.sprite = CLASSES[st.cls].sprite;
+    h.pal = Sprites.heroPal(st.cls, st.species);
+    h.fly = this.stats.flags.has('flying');
+    if (classChanged) {
+      h.skillCd = {}; h.blades = null; h.target = null;
+      for (const e of W.ents) if (e.kind === 'minion' && !e.dead) World.killMinion(W, e);
+    }
+    World.fx(W, 'holy', h.rx + 0.5, h.ry + 0.5, { r: 1.8, color: '#d9b8ff', life: 0.8 });
+  },
+
+  // ---------------------------------------------------------- progressão
+  gainXp(x) {
+    const st = this.state, S = this.stats;
+    const bm = this.W ? World.buffMods(this.W.hero) : { xp: 0 };
+    x *= (1 + S.xpPct / 100) * (1 + (bm.xp || 0));
+    st.xp += x;
+    this.rateAcc.xp += x;
+    if (this.W) this.W.zoneXp += x;
+    let leveled = false;
+    while (st.xp >= Stats.needXpFor(st)) {
+      st.xp -= Stats.needXpFor(st);
+      st.level++;
+      leveled = true;
+      if (st.level > st.stats.maxLevel) st.stats.maxLevel = st.level;
+      for (const id of Stats.talentIds(st)) {
+        if (SKILLS[id].unlock === st.level) this.log(`Nova ${SKILLS[id].type === 'passive' ? 'habilidade passiva' : 'habilidade'} disponível: <b style="color:${SKILLS[id].color}">${SKILLS[id].name}</b>!`, 'lvl');
+      }
+    }
+    if (leveled) {
+      this.recalc();
+      if (st.settings.autoTalent) this.autoTalents();
+      const W = this.W;
+      if (W && !W.hero.dead) {
+        W.hero.hp = W.hero.maxHp;
+        World.fx(W, 'ring', W.hero.rx + 0.5, W.hero.ry + 0.5, { r: 2.5, color: '#c9a0ff', life: 0.8 });
+        World.fx(W, 'holy', W.hero.rx + 0.5, W.hero.ry + 0.5, { r: 1.5, color: '#b874ff', life: 0.7 });
+        World.text(W, W.hero.rx + 0.5, W.hero.ry - 0.6, `NÍVEL ${st.level}!`, '#d9b8ff', 16, 1.6, -1, true);
+      }
+      Sfx.play('levelup');
+      this.log(`<b>${st.name}</b> alcançou o <b>nível ${st.level}</b>!`, 'lvl');
+      UI.dirty('talents');
+    }
+    UI.dirty('top');
+  },
+
+  gainGold(g) {
+    const st = this.state, S = this.stats;
+    const bm = this.W ? World.buffMods(this.W.hero) : { gold: 0 };
+    g *= (1 + S.goldPct / 100) * (1 + (bm.gold || 0));
+    g = Math.max(1, Math.round(g));
+    st.gold += g;
+    st.stats.goldEarned += g;
+    this.rateAcc.gold += g;
+    if (this.W) this.W.zoneGold += g;
+    Sfx.play('coin', 120);
+    UI.dirty('top', 'gold');
+    return g;
+  },
+
+  gainPotion(x, y) {
+    const st = this.state;
+    if (st.potions >= this.stats.potionMax) return;
+    st.potions++;
+    if (this.W) World.text(this.W, x + 0.5, y - 0.2, '+Poção', '#ff7a9a', 11);
+  },
+
+  // ---------------------------------------------------------- itens
+  dropItem(item, x, y) {
+    const st = this.state, W = this.W;
+    if (!item.dup && this.stats.flags.has('fairyDust') && Math.random() < 0.2) {
+      const twin = Items.generate(item.ilvl, { cls: st.cls, rarity: item.rarity, slot: item.slot, mf: this.stats.mf });
+      twin.dup = true;
+      setTimeout(() => this.dropItem(twin, x, y), 0);
+      if (W) World.text(W, x + 0.5, y - 0.9, 'Pó de Fada!', '#ff9af0', 11);
+    }
+    st.stats.itemsFound++;
+    if (item.rarity === 3) st.stats.epics++;
+    if (item.rarity === 4) st.stats.legendaries++;
+    if (item.rarity === 5) st.stats.mythics++;
+    if (W) W.zoneItems++;
+    const col = RARITIES[item.rarity].color;
+    const diff = Stats.compareItem(item);
+    const equipIt = st.settings.autoEquip && diff > 0.002;
+
+    // Lixo: vendido na hora, sem celebração
+    if (!equipIt && this.isJunk(item)) {
+      const p = this.autoSell(item);
+      if (W && st.settings.dmgNumbers) World.text(W, x + 0.5, y - 0.4, `Vendido +${U.fmt(p)}`, col, 10, 1.1, -0.8);
+      if (item.rarity >= 2) this.log(`Saque: <span class="c${item.rarity}">${U.esc(item.name)}</span> <span style="color:var(--dim)">— vendido automaticamente (+${U.fmt(p)} ouro)</span>`, 'loot');
+      return;
+    }
+
+    if (W) {
+      World.burst(W, x + 0.5, y + 0.5, col, 6 + item.rarity * 4, 3);
+      if (item.rarity >= 3) {
+        World.fx(W, 'ring', x + 0.5, y + 0.5, { r: 1.5 + item.rarity * 0.3, color: col, life: 0.9 });
+        World.text(W, x + 0.5, y - 0.6, RARITIES[item.rarity].name.toUpperCase() + '!', col, 13, 1.6, -0.8, true);
+      }
+    }
+    if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
+    else if (item.rarity === 4) { Sfx.play('legendary'); UI.banner(item.name, 'Item Lendário encontrado!', '', 2.2); }
+    else if (item.rarity === 3) Sfx.play('epic');
+    else if (item.rarity === 2) Sfx.play('rare');
+    if (item.rarity >= 2) this.log(`Saque: <span class="c${item.rarity}">${U.esc(item.name)}</span> <span style="color:var(--dim)">(${RARITIES[item.rarity].name}, Nv ${item.ilvl})</span>`, 'loot');
+
+    if (equipIt) {
+      const old = st.equip[item.slot];
+      this.equip(item, true);
+      UI.toast(item, `Equipado! +${U.fmtNum(diff * 100, 1)}% Poder`);
+      if (old) this.addToInv(old);
+      return;
+    }
+    UI.toast(item);
+    this.addToInv(item);
+  },
+
+  // Item que a auto-venda pode vender (nunca travados, forjados ou melhorias)
+  isJunk(item, lvl = this.state.settings.autoSell) {
+    return lvl > 0 && item.rarity < lvl && !item.locked && item.plus === 0 && Stats.compareItem(item) <= 0;
+  },
+
+  addToInv(item) {
+    const st = this.state;
+    if (this.isJunk(item)) { this.autoSell(item); return; }
+    const cap = Stats.invSize(st);
+    if (st.inv.length >= cap) {
+      // Vende o pior item destravado (incluindo o novo)
+      let worst = item, ws = this.itemScore(item);
+      for (const it of st.inv) {
+        if (it.locked) continue;
+        const s = this.itemScore(it);
+        if (s < ws) { ws = s; worst = it; }
+      }
+      if (worst !== item) st.inv.splice(st.inv.indexOf(worst), 1);
+      this.autoSell(worst);
+      if (worst === item) return;
+    }
+    st.inv.push(item);
+    UI.dirty('equip', 'forge');
+  },
+  itemScore(it) { return it.rarity * 10 + it.ilvl * 0.3 + Stats.compareItem(it) * 50 + it.plus * 3; },
+
+  autoSell(item) {
+    const p = Items.sellPrice(item);
+    this.state.gold += p;
+    this.state.stats.goldEarned += p;
+    this.autoSold.n++; this.autoSold.gold += p;
+    UI.dirty('top', 'gold');
+    return p;
+  },
+  flushAutoSold() {
+    if (this.autoSold.n > 0) {
+      this.log(`Vendidos automaticamente: ${this.autoSold.n} ${this.autoSold.n > 1 ? 'itens' : 'item'} (+${U.fmt(this.autoSold.gold)} ouro).`, 'gold');
+      this.autoSold.n = 0; this.autoSold.gold = 0;
+    }
+  },
+
+  // Aplica a regra de auto-venda aos itens que já estão na mochila
+  applyAutoSell() {
+    const r = this.sellWhere(it => this.isJunk(it));
+    if (r.n) this.log(`Auto-venda aplicada à mochila: ${r.n} ${r.n > 1 ? 'itens vendidos' : 'item vendido'} (+${U.fmt(r.gold)} ouro).`, 'gold');
+    return r;
+  },
+
+  // Venda em massa: vende itens destravados da mochila que satisfazem o filtro
+  sellWhere(pred) {
+    const st = this.state;
+    let n = 0, gold = 0;
+    st.inv = st.inv.filter(it => {
+      if (it.locked || !pred(it)) return true;
+      n++; gold += Items.sellPrice(it); return false;
+    });
+    if (n) {
+      st.gold += gold; st.stats.goldEarned += gold;
+      Sfx.play('coin');
+      UI.dirty('equip', 'top', 'gold', 'forge');
+    }
+    return { n, gold };
+  },
+  // Contagem para o menu de venda em massa
+  sellPreview(pred) {
+    let n = 0, gold = 0, up = 0;
+    for (const it of this.state.inv) if (!it.locked && pred(it)) { n++; gold += Items.sellPrice(it); if (Stats.compareItem(it) > 0.002) up++; }
+    return { n, gold, up };
+  },
+  bulkFilters() {
+    const notUp = it => Stats.compareItem(it) <= 0.002;
+    const f = RARITIES.map(R => ({ id: 'r' + R.id, label: `Todos os itens ${R.name.endsWith('m') ? R.name.slice(0, -1) + 'ns' : R.name + 's'}`, color: R.color, pred: it => it.rarity === R.id, confirm: R.id >= 3 }));
+    f.push({ id: 'junk', label: 'Tudo que não é melhoria', color: '#ece4d4', pred: it => notUp(it) && it.plus === 0 && it.rarity < 4, confirm: true });
+    f.push({ id: 'all', label: 'Toda a mochila', color: '#ff8a8a', pred: () => true, confirm: true });
+    return f;
+  },
+
+  findItem(uid) {
+    const st = this.state;
+    for (const s of SLOTS) if (st.equip[s] && st.equip[s].uid === uid) return { item: st.equip[s], where: 'equip' };
+    const it = st.inv.find(i => i.uid === uid);
+    return it ? { item: it, where: 'inv' } : null;
+  },
+
+  equip(item, fromDrop) {
+    const st = this.state;
+    if (item.slot === 'weapon' && item.cls && item.cls !== st.cls) Items.convertWeapon(item, st.cls);
+    const i = st.inv.indexOf(item);
+    if (i >= 0) st.inv.splice(i, 1);
+    const old = st.equip[item.slot];
+    st.equip[item.slot] = item;
+    item.isNew = false;
+    if (old && !fromDrop) st.inv.push(old);
+    this.recalc();
+    if (!fromDrop) Sfx.play('click');
+    UI.dirty('equip', 'forge');
+    return old;
+  },
+
+  unequip(slot) {
+    const st = this.state;
+    const it = st.equip[slot];
+    if (!it) return;
+    if (st.inv.length >= Stats.invSize(st)) { UI.notice('Mochila cheia!'); return; }
+    st.equip[slot] = null;
+    st.inv.push(it);
+    this.recalc();
+  },
+
+  sell(item) {
+    const st = this.state;
+    const i = st.inv.indexOf(item);
+    if (i < 0 || item.locked) return;
+    st.inv.splice(i, 1);
+    const p = Items.sellPrice(item);
+    st.gold += p; st.stats.goldEarned += p;
+    Sfx.play('coin');
+    this.log(`Vendeu <span class="c${item.rarity}">${U.esc(item.name)}</span> por ${U.fmt(p)} ouro.`, 'gold');
+    UI.dirty('equip', 'top', 'gold');
+  },
+
+  toggleLock(item) { item.locked = !item.locked; UI.dirty('equip', 'forge'); },
+
+  sortInv() {
+    this.state.inv.sort((a, b) => b.rarity - a.rarity || SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) || b.ilvl - a.ilvl);
+    UI.dirty('equip');
+  },
+
+  // ---------------------------------------------------------- forja
+  forge(item) {
+    const st = this.state;
+    const cost = Items.forgeCost(item);
+    if (st.gold < cost) return null;
+    st.gold -= cost;
+    const ok = Math.random() < Items.forgeChance(item);
+    if (ok) {
+      item.plus++;
+      if (item.plus > st.stats.maxForge) st.stats.maxForge = item.plus;
+      Sfx.play('forgeOk');
+      this.log(`Forja: <span class="c${item.rarity}">${U.esc(item.name)}</span> agora é <b>+${item.plus}</b>!`, 'good');
+    } else {
+      Sfx.play('forgeFail');
+      this.log(`Forja falhou em <span class="c${item.rarity}">${U.esc(item.name)}</span>. O ouro foi perdido.`, 'bad');
+    }
+    this.recalc();
+    return ok;
+  },
+
+  // ---------------------------------------------------------- treino
+  buyTraining(id, max) {
+    const st = this.state, t = TRAINING.find(x => x.id === id);
+    let n = 0;
+    for (;;) {
+      const r = st.training[id] || 0;
+      if (t.max && r >= t.max) break;
+      const c = Stats.trainCost(t, r);
+      if (st.gold < c) break;
+      st.gold -= c; st.training[id] = r + 1; n++;
+      if (!max) break;
+    }
+    if (n) { Sfx.play('buy'); this.recalc(); }
+    return n;
+  },
+
+  // ---------------------------------------------------------- talentos
+  canTalent(id) {
+    const st = this.state, sk = SKILLS[id];
+    return st.level >= sk.unlock && (st.talents[id] || 0) < sk.max && Stats.talentFree(st) > 0;
+  },
+  talentUp(id) {
+    if (!this.canTalent(id)) return;
+    this.state.talents[id] = (this.state.talents[id] || 0) + 1;
+    Sfx.play('buy');
+    this.recalc();
+  },
+  autoTalents() {
+    const st = this.state;
+    let guard = 400;
+    while (Stats.talentFree(st) > 0 && guard-- > 0) {
+      const ids = Stats.talentIds(st).filter(id => st.level >= SKILLS[id].unlock && (st.talents[id] || 0) < SKILLS[id].max);
+      if (!ids.length) break;
+      // Prioriza desbloquear habilidades novas; depois equilibra os ranks
+      let pick = ids.find(id => !(st.talents[id] || 0) && SKILLS[id].type !== 'passive') || ids.find(id => !(st.talents[id] || 0));
+      if (!pick) pick = ids.reduce((a, b) => ((st.talents[b] || 0) < (st.talents[a] || 0) ? b : a));
+      st.talents[pick] = (st.talents[pick] || 0) + 1;
+    }
+    this.recalc();
+  },
+  resetTalents() {
+    const st = this.state;
+    st.talents = { [CLASSES[st.cls].skills[0]]: 1 };
+    this.recalc();
+    if (st.settings.autoTalent) this.autoTalents();
+  },
+
+  // ---------------------------------------------------------- almas / ascensão
+  buySoul(id) {
+    const st = this.state, u = SOUL_UPGRADES.find(x => x.id === id);
+    const r = st.soulUpg[id] || 0;
+    if (u.max && r >= u.max) return;
+    const c = Stats.soulCost(u, r);
+    if (st.souls < c) return;
+    st.souls -= c; st.soulUpg[id] = r + 1;
+    Sfx.play('buy');
+    this.recalc();
+  },
+
+  // Nova jornada mantendo o progresso permanente (ascensão ou após fim de jogo)
+  newJourney(newCls, newSpecies, opts = {}) {
+    const st = this.state;
+    const gain = opts.gain || 0;
+    const keep = {
+      souls: st.souls + gain, soulUpg: st.soulUpg, stats: st.stats, ach: st.ach, settings: st.settings, created: st.created,
+      unlocks: st.unlocks, encPity: st.encPity, classStats: st.classStats, rates: { gold: 0, xp: 0 },
+    };
+    if (opts.ascension || opts.countAsc) keep.stats.ascensions++;
+    keep.stats.soulsEarned += gain;
+    const fresh = this.defaultState(newCls || st.cls, newSpecies || st.species, st.name, opts.hardcore);
+    Object.assign(fresh, keep);
+    this.state = fresh;
+    this.recalc();
+    const cap = Math.min(1 + this.stats.startZone, Math.max(1, Math.floor(st.stats.maxZone / 2)));
+    // Começar adiantado também adianta nível e equipamento; desce de zona até o herói aguentar
+    let sz = cap;
+    for (; ; sz--) {
+      fresh.zone = sz; fresh.maxZone = sz;
+      fresh.level = sz > 1 ? Math.floor(sz * HEADSTART_LVL) : 1;
+      fresh.talents = { [CLASSES[fresh.cls].skills[0]]: 1 };
+      for (const k of SLOTS) fresh.equip[k] = null;
+      this.giveStarter();
+      this.recalc();
+      if (fresh.settings.autoTalent) { this.autoTalents(); this.recalc(); }
+      if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyScale(sz)) break;
+    }
+    fresh.potions = this.stats.potionMax;
+    Sfx.play('ascend');
+    this.paused = false;
+    this.log(opts.ascension
+      ? `<b style="color:#d9b8ff">Ascensão!</b> Você recebeu <b>${U.fmt(gain)} Almas</b>. Uma nova jornada começa.`
+      : `Uma nova jornada começa${gain ? ` com <b>${U.fmt(gain)} Almas</b> da anterior` : ''}.`, 'lvl');
+    if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
+    this.enterZone(sz);
+    UI.initGame();
+    UI.banner(opts.ascension ? 'ASCENSÃO' : 'NOVA JORNADA', gain ? `+${U.fmt(gain)} Almas` : (fresh.hardcore ? 'Modo Desafio: 3 Corações' : ''), 'purple', 3);
+    this.checkUnlocks();
+    this.save();
+  },
+  ascend(newCls, newSpecies, hardcore) {
+    const gain = Stats.soulsOnAscend(this.state);
+    if (gain <= 0) return;
+    this.newJourney(newCls, newSpecies, { gain, ascension: true, hardcore });
+  },
+
+  // Modo desafio: perdeu os 3 corações
+  gameOver() {
+    const st = this.state;
+    if (st.pendingEnd) return;
+    const gain = st.maxZone >= 15 ? Stats.soulsOnAscend(st) : Math.floor(st.maxZone / 2);
+    st.pendingEnd = { gain, zone: st.maxZone, level: st.level, kills: st.stats.kills };
+    st.stats.gameOvers = (st.stats.gameOvers || 0) + 1;
+    this.paused = true;
+    this.save();
+    Sfx.play('death');
+    UI.gameOverModal();
+  },
+  finishGameOver(newCls, newSpecies, hardcore) {
+    const pe = this.state.pendingEnd;
+    if (!pe) return;
+    this.newJourney(newCls, newSpecies, { gain: pe.gain, ascension: false, countAsc: pe.zone >= 15, hardcore });
+  },
+
+  // ---------------------------------------------------------- conquistas
+  checkAchievements() {
+    const st = this.state;
+    let any = false;
+    for (const a of ACHIEVEMENTS) {
+      if (st.ach[a.id]) continue;
+      if ((st.stats[a.stat] || 0) >= a.goal) {
+        st.ach[a.id] = true; any = true;
+        const rw = Object.entries(a.reward).map(([k, v]) => Items.statLine(k, v)).join(', ');
+        this.log(`🏆 Conquista: <b style="color:var(--gold)">${a.name}</b> — ${rw}`, 'good');
+        UI.toastText(`🏆 ${a.name}`, rw, '#f2c25b');
+        Sfx.play('rare');
+      }
+    }
+    if (any) { this.recalc(); UI.dirty('ach'); }
+  },
+
+  // ---------------------------------------------------------- offline
+  offlineGains(sec, eff) {
+    const st = this.state, z = st.zone;
+    const rg = Math.max(st.rates.gold, 1.0 * zoneScale(z)), rx = Math.max(st.rates.xp, 1.5 * zoneScale(z));
+    return { gold: rg * sec * eff, xp: rx * sec * eff, items: Math.min(40, Math.floor(sec / 75 * eff)) };
+  },
+  applyGains(g) {
+    const st = this.state;
+    st.gold += Math.round(g.gold); st.stats.goldEarned += Math.round(g.gold);
+    const lv0 = st.level;
+    st.xp += g.xp;
+    while (st.xp >= Stats.needXpFor(st)) { st.xp -= Stats.needXpFor(st); st.level++; }
+    if (st.level > st.stats.maxLevel) st.stats.maxLevel = st.level;
+    let kept = 0;
+    const before = this.autoSold.n;
+    for (let i = 0; i < g.items; i++) {
+      const it = Items.generate(st.zone, { cls: st.cls, mf: this.stats.mf });
+      st.stats.itemsFound++;
+      if (it.rarity === 3) st.stats.epics++;
+      if (it.rarity === 4) st.stats.legendaries++;
+      if (it.rarity === 5) st.stats.mythics++;
+      const d = Stats.compareItem(it);
+      if (st.settings.autoEquip && d > 0.002) { const old = st.equip[it.slot]; this.equip(it, true); if (old) this.addToInv(old); }
+      else this.addToInv(it);
+      kept++;
+    }
+    const sold = this.autoSold.n - before;
+    this.recalc();
+    if (st.level > lv0 && st.settings.autoTalent) this.autoTalents();
+    return { levels: st.level - lv0, items: kept, sold };
+  },
+  offlineProgress() {
+    const st = this.state;
+    const sec = Math.min(12 * 3600, (Date.now() - st.lastSave) / 1000);
+    if (sec < 60) return;
+    const eff = 0.5 + (this.stats.offline || 0) / 100;
+    const g = this.offlineGains(sec, eff);
+    const r = this.applyGains(g);
+    this.autoSold.n = 0; this.autoSold.gold = 0;
+    UI.offlineModal(sec, eff, g, r);
+  },
+  // Só acontece se o navegador congelar a aba (ex.: computador suspenso)
+  backgroundCatchUp(sec) {
+    if (!this.state || !this.W) return;
+    sec = Math.min(sec, 12 * 3600);
+    const g = this.offlineGains(sec, 0.75);
+    const r = this.applyGains(g);
+    this.log(`Progresso enquanto a aba estava congelada (${U.fmtTime(sec)}): +${U.fmt(g.gold)} ouro, +${U.fmt(g.xp)} XP${r.levels ? `, +${r.levels} níveis` : ''}, ${r.items} itens.`, 'gold');
+  },
+
+  // ---------------------------------------------------------- log
+  log(html, cls) { UI.addLog(html, cls); },
+};

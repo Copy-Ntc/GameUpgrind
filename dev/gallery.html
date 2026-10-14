@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Galeria de Sprites</title>
+<style>
+  body { background: #1a1424; color: #ddd; font: 12px system-ui, sans-serif; margin: 12px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 10px; }
+  .c { text-align: center; background: #241c30; padding: 6px; border-radius: 6px; }
+  canvas { image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+  h2 { margin: 14px 0 6px; font-size: 14px; color: #f2c25b; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script src="../js/util.js"></script>
+<script src="../js/data.js"></script>
+<script src="../js/sprites.js"></script>
+<script>
+const S = +(new URLSearchParams(location.search).get('s') || 4);
+const groups = {
+  'Heróis': Object.keys(HERO_PALS).map(k => [CLASSES[k].sprite, HERO_PALS[k], CLASSES[k].name]),
+  'Inimigos': Object.entries(ENEMIES).map(([k, e]) => [e.sprite, e.pal, e.name]),
+  'Senhores': Object.entries(LORDS).map(([k, e]) => [e.sprite, e.pal, e.name]),
+  'Objetos': [['chest', CHEST_TIERS[2].pal, 'baú'], ['chest_open', Object.assign({ k: '#1a1010', y: '#ffd04a' }, CHEST_TIERS[3].pal), 'aberto'], ['shrine', { a: '#8a8a9a', b: '#5a5a6a', g: '#ff4a3a', w: '#fff' }, 'santuário'], ['crown', { g: '#ffd04a', r: '#ff3a5a' }, 'coroa']],
+  'Itens': Object.keys(SPR).filter(k => k.startsWith('i_')).map(k => [k, { m: '#9aa3ad', d: '#5a626d', l: '#e0e8f0', h: '#6b4628', g: '#e8b33a', r: '#b874ff', w: '#f4f0ff', k: '#1b1424', y: '#ffd04a', a: '#7a3ad8', b: '#b874ff' }, k.slice(2)]),
+  'Decoração': Object.keys(DECOR_PALS).map(k => ['d_' + k, DECOR_PALS[k], k]),
+  'Ícones': Object.keys(SPR).filter(k => k.startsWith('sk_')).map(k => [k, { a: '#ffe0b0', w: '#ffffff' }, k.slice(3)]),
+};
+let h = '';
+for (const [g, list] of Object.entries(groups)) {
+  h += `<h2>${g}</h2><div class="grid">`;
+  list.forEach((x, i) => { h += `<div class="c"><canvas id="c_${g}_${i}"></canvas>${x[2]}</div>`; });
+  h += '</div>';
+}
+document.getElementById('out').innerHTML = h;
+for (const [g, list] of Object.entries(groups)) list.forEach((x, i) => {
+  const s = Sprites.get(x[0], x[1]);
+  const c = document.getElementById(`c_${g}_${i}`);
+  const sc = g === 'Decoração' || g === 'Ícones' ? S * 1.5 : S;
+  c.width = s.sw * sc; c.height = s.sh * sc;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(s.c, 0, 0, c.width, c.height);
+});
+</script>
+</body>
+</html>
