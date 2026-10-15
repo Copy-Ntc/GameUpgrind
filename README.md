@@ -51,7 +51,7 @@ Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24
 - **Mestiçagem (10 ascensões):** combina duas espécies dominadas. A segunda só soma 50% dos atributos dela (sem os poderes) e dá +10% de Dano e Vida. Cada nível pede 25% mais XP.
 - **Multiclasse por fusão de armas (14 ascensões):** na Forja, sua arma se funde com a arma de outra classe dominada (ex.: espada + arco = "Espada-Arco Fundida", com sprite próprio de armas cruzadas). Enquanto a arma fundida estiver equipada, você é multiclasse: 4+2 habilidades ativas, as passivas das duas classes, +15% de Dano e Vida e 60% do inato da segunda. Cada nível pede 40% mais XP. Aprender cada fusão custa 30 Fragmentos uma vez; depois, só ouro. A fusão volta sozinha na arma inicial das próximas jornadas.
 - **Armas Ancestrais:** cada classe tem uma arma exclusiva (ex.: a Adaga dos Deuses do Ladino), obtida uma única vez no **Cofre Ancestral**, que aparece jogando com a classe a partir da zona 30. Ela acompanha a classe em todas as jornadas e é despertada de Comum até Mítica com **Fragmentos Ancestrais** (caem dos Senhores de bioma, às vezes de chefes e Mímicos) e recordes cada vez maiores com a classe. Na Épica e na Mítica ganha poderes lendários.
-- **Armas exclusivas (raridade arco-íris):** só saem do raro **Baú Arco-Íris** (zona 10+), que tem 35% de chance de trazer uma delas. Ficam travadas, acompanham você em todas as jornadas e crescem com a zona recorde. Foram pedidas pelos amigos do autor, e cada uma mostra quem a criou:
+- **Armas exclusivas (raridade arco-íris):** só saem do raro **Baú Arco-Íris** (zona 10+), que aparece em 2% das zonas e tem 22% de chance de trazer uma delas. Ficam travadas, acompanham você em todas as jornadas e crescem com a zona recorde. Foram pedidas pelos amigos do autor, e cada uma mostra quem a criou:
   - **Dagon** (adaga de fogo, criada por *PIRADO DA CABEÇA*): todo golpe incendeia o alvo, e críticos explodem em chamas.
   - **Espinho Pesado** (martelão, criado por *superpenis*, inspirado no Dead Cells): a cada 4 ataques racha o chão em chamas, com dano em área e atordoamento.
   - **JesusSalva** (cruz, criada por *Wendeu Delicia*): vai na **arma secundária** e solta fogo azul ao redor, queimando quem se aproxima.
@@ -61,10 +61,10 @@ Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24
 - **8 biomas** que se alternam a cada 5 zonas: Floresta, Cavernas, Deserto, Pântano, Gelo, Vulcão, Cripta e Abismo. Cada um tem inimigos, decoração, iluminação, trilha sonora e um Senhor próprio.
 - **Saque:** 6 raridades (Comum → Mítico) mais a Exclusiva, afixos aleatórios, nomes com concordância de gênero, poderes lendários, armaduras por tipo de classe (placas, couro, pele, tecido, monge), baús de 4 tiers, o Baú Arco-Íris e Mímicos.
 - **Venda em massa:** vender por raridade, **Selecionar p/ vender** (marque os itens um a um), clique direito para venda rápida e venda automática configurável.
-- **Compras em quantidade:** Treino e Altar compram ×1, ×5, ×10, ×25 ou o máximo de uma vez.
-- **Automação (aba Ascensão):** auto-ascender após 15 minutos sem recorde ou ao chegar numa zona escolhida, que também recomeça sozinho depois do Fim de Jogo. Há ainda a troca automática para o modo Farmar ao chegar na zona X.
+- **Compras em quantidade:** Treino e Altar compram ×1, ×5, ×10, ×25 ou ×50 de uma vez.
+- **Automação (aba Ascensão):** troca automática para o modo Farmar ao chegar na zona escolhida.
 - **Novo herói:** escolhido no menu, com qualquer classe e espécie liberada. Quem tem o Atalho Astral pode marcar **Começar da zona 1**. As armas exclusivas guardadas e a última fusão usada com a classe vêm junto.
-- **Progressão por jornada:** níveis e talentos, Treino com ouro, Forja (+1, +2… com chance de falha a partir de +5), conquistas com bônus permanentes.
+- **Progressão por jornada:** níveis e talentos, Treino com ouro, Forja (+1, +2… com chance de falha a partir de +5), 62 conquistas com bônus permanentes, incluindo metas de fim de jogo (zona 250, 1 milhão de inimigos, todas as classes e espécies, dominar todas as classes).
 - **Música:** 10 faixas geradas na hora (título, uma por bioma e uma de chefe), com volume próprio e opção de desligar.
 - **Roda em segundo plano:** a simulação continua com ALT+TAB ou com a aba minimizada. Ao fechar o jogo e voltar, o herói recebe ouro, XP e itens pelo tempo fora (50% de eficiência, aumentável no Altar). Um slot fechado pelo botão de sair não ganha progresso offline.
 

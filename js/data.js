@@ -107,8 +107,8 @@ const POWERS = {
 };
 
 const RAINBOW_ZONE = 10;
-const RAINBOW_CHANCE = 0.025;
-const EXCL_CHANCE = 0.35;
+const RAINBOW_CHANCE = 0.02;
+const EXCL_CHANCE = 0.22;
 const EXCLUSIVES = {
   dagon: {
     name: 'Dagon', bname: 'Adaga', g: 'f', slot: 'weapon', sprite: 'i_dagon', by: 'PIRADO DA CABEÇA',
@@ -288,6 +288,44 @@ const ACHIEVEMENTS = [
   { id: 'asc5', name: 'Ciclo Eterno', desc: 'Ascenda 5 vezes', stat: 'ascensions', goal: 5, reward: { dmgPct: 5 } },
   { id: 'death10', name: 'Persistente', desc: 'Seja derrotado 10 vezes', stat: 'deaths', goal: 10, reward: { hpPct: 3 } },
   { id: 'shrine20', name: 'Devoto', desc: 'Ative 20 santuários', stat: 'shrines', goal: 20, reward: { xpPct: 5 } },
+  { id: 'zone100', name: 'Centenário', desc: 'Alcance a zona 100', stat: 'maxZone', goal: 100, reward: { dmgPct: 10 } },
+  { id: 'zone150', name: 'Coração das Trevas', desc: 'Alcance a zona 150', stat: 'maxZone', goal: 150, reward: { hpPct: 10 } },
+  { id: 'zone200', name: 'Além do Limite', desc: 'Alcance a zona 200', stat: 'maxZone', goal: 200, reward: { dmgPct: 15 } },
+  { id: 'zone250', name: 'OverLevel', desc: 'Alcance a zona 250', stat: 'maxZone', goal: 250, reward: { dmgPct: 20 } },
+  { id: 'lvl300', name: 'Avatar', desc: 'Alcance o nível 300', stat: 'maxLevel', goal: 300, reward: { xpPct: 10 } },
+  { id: 'lvl450', name: 'Transcendente', desc: 'Alcance o nível 450', stat: 'maxLevel', goal: 450, reward: { xpPct: 15 } },
+  { id: 'asc10', name: 'Roda do Destino', desc: 'Ascenda 10 vezes', stat: 'ascensions', goal: 10, reward: { dmgPct: 5 } },
+  { id: 'asc25', name: 'Eterno Retorno', desc: 'Ascenda 25 vezes', stat: 'ascensions', goal: 25, reward: { hpPct: 8 } },
+  { id: 'asc50', name: 'Além da Morte', desc: 'Ascenda 50 vezes', stat: 'ascensions', goal: 50, reward: { dmgPct: 10 } },
+  { id: 'kill250k', name: 'Apocalipse', desc: 'Derrote 250.000 inimigos', stat: 'kills', goal: 250000, reward: { dmgPct: 8 } },
+  { id: 'kill1m', name: 'Fim das Eras', desc: 'Derrote 1.000.000 de inimigos', stat: 'kills', goal: 1000000, reward: { dmgPct: 12 } },
+  { id: 'boss5k', name: 'Rei dos Reis', desc: 'Derrote 5.000 chefes', stat: 'bosses', goal: 5000, reward: { bossDmg: 20 } },
+  { id: 'lord250', name: 'Domador de Senhores', desc: 'Derrote 250 Senhores de bioma', stat: 'lordsKilled', goal: 250, reward: { bossDmg: 10 } },
+  { id: 'lord1k', name: 'Senhor dos Senhores', desc: 'Derrote 1.000 Senhores de bioma', stat: 'lordsKilled', goal: 1000, reward: { bossDmg: 15 } },
+  { id: 'hit21', name: 'Golpe Devastador', desc: 'Cause 1 sextilhão de dano num só golpe', stat: 'highestHit', goal: 1e21, reward: { dmgPct: 5 } },
+  { id: 'hit25', name: 'Fúria Cósmica', desc: 'Cause 10 septilhões de dano num só golpe', stat: 'highestHit', goal: 1e25, reward: { dmgPct: 10 } },
+  { id: 'chest25k', name: 'Rei dos Baús', desc: 'Abra 25.000 baús', stat: 'chests', goal: 25000, reward: { goldPct: 15 } },
+  { id: 'mimic1k', name: 'Caçador de Mímicos', desc: 'Derrote 1.000 Mímicos', stat: 'mimics', goal: 1000, reward: { mf: 5 } },
+  { id: 'leg5k', name: 'Arsenal Lendário', desc: 'Encontre 5.000 itens Lendários', stat: 'legendaries', goal: 5000, reward: { mf: 10 } },
+  { id: 'myth1k', name: 'Panteão', desc: 'Encontre 1.000 itens Míticos', stat: 'mythics', goal: 1000, reward: { mf: 12 } },
+  { id: 'excl1', name: 'Toque do Arco-Íris', desc: 'Tenha uma arma exclusiva', val: st => achExclusives(st), goal: 1, reward: { mf: 5 } },
+  { id: 'exclAll', name: 'Coleção Arco-Íris', desc: 'Tenha todas as armas exclusivas', val: st => achExclusives(st), get goal() { return Object.keys(EXCLUSIVES).length; }, reward: { dmgPct: 10 } },
+  { id: 'allCls', name: 'Todas as Classes', desc: 'Desbloqueie todas as classes', val: () => Game.sharedUnlocks().classes.length, get goal() { return CLASS_ORDER.length; }, reward: { xpPct: 10 } },
+  { id: 'allSp', name: 'Todas as Espécies', desc: 'Desbloqueie todas as espécies', val: () => Game.sharedUnlocks().species.length, get goal() { return SPECIES_ORDER.length; }, reward: { hpPct: 10 } },
+  { id: 'master8', name: 'Mestre de Armas', desc: 'Domine 8 classes (zona 50 numa jornada iniciada com cada uma)', val: st => CLASS_ORDER.filter(c => Stats.mastered(st, c)).length, goal: 8, reward: { dmgPct: 8 } },
+  { id: 'masterAll', name: 'Grão-Mestre', desc: 'Domine todas as classes', val: st => CLASS_ORDER.filter(c => Stats.mastered(st, c)).length, get goal() { return CLASS_ORDER.length; }, reward: { dmgPct: 15 } },
+  { id: 'relic8', name: 'Arsenal Ancestral', desc: 'Encontre 8 Armas Ancestrais', val: st => Object.keys(st.relics || {}).length, goal: 8, reward: { defPct: 8 } },
+  { id: 'relicMyth', name: 'Lendas Despertas', desc: 'Desperte 5 Armas Ancestrais até Mítica', val: st => Object.values(st.relics || {}).filter(r => r.r >= 5).length, goal: 5, reward: { dmgPct: 12 } },
+  { id: 'fusion5', name: 'Alquimista de Guerra', desc: 'Aprenda 5 fusões de armas', val: st => Object.keys(st.fusions || {}).length, goal: 5, reward: { xpPct: 8 } },
+  { id: 'recruit25', name: 'Libertador', desc: 'Resgate 25 prisioneiros', stat: 'recruits', goal: 25, reward: { hpPct: 5 } },
+  { id: 'shrine5k', name: 'Peregrino', desc: 'Ative 5.000 santuários', stat: 'shrines', goal: 5000, reward: { xpPct: 8 } },
+  { id: 'time24', name: 'Dedicação', desc: 'Jogue por 24 horas', stat: 'playTime', goal: 24 * 3600, time: true, reward: { goldPct: 10 } },
+  { id: 'time100', name: 'Vida de Aventureiro', desc: 'Jogue por 100 horas', stat: 'playTime', goal: 100 * 3600, time: true, reward: { xpPct: 10 } },
 ];
+function achExclusives(st) {
+  const ids = new Set();
+  for (const it of [...(st.vault || []), ...Object.values(st.equip || {}), ...(st.inv || [])]) if (it && it.excl) ids.add(it.excl);
+  return ids.size;
+}
 
 const HERO_NAMES = ['Aldric', 'Bryndis', 'Caelum', 'Darius', 'Elara', 'Fenrir', 'Gwendal', 'Hakon', 'Isolde', 'Jorund', 'Kaelen', 'Lyra', 'Morwen', 'Nyx', 'Orin', 'Perseu', 'Ragnar', 'Seraphine', 'Thalia', 'Ulric', 'Valen', 'Wren', 'Ysolde', 'Zephyr', 'Tupã', 'Iara', 'Jaci', 'Rudá', 'Ceci', 'Ubirajara'];

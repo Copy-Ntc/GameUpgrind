@@ -52,8 +52,7 @@ const Ticker = {
 const HEADSTART_LVL = 2;
 const HEADSTART_RAR = 2;
 const HEADSTART_POW = 120;
-const AUTO_ASC_STALL = 15 * 60;
-const AUTO_RESTART = 8;
+const QTY_STEPS = [1, 5, 10, 25, 50];
 const DEFAULT_CLASSES = () => CLASS_ORDER.filter(id => CLASSES[id].unlock.t === 'default');
 const DEFAULT_SPECIES = () => SPECIES_ORDER.filter(id => SPECIES[id].unlock.t === 'default');
 
@@ -84,7 +83,7 @@ const Game = {
       settings: {
         sound: true, volume: 0.5, music: true, musicVol: 0.45, musicTrack: 'auto', bgSfx: false,
         autoSell: 2, autoEquip: true, autoTalent: true, dmgNumbers: true, shake: true, exploreAll: true, speed: 1,
-        buyQty: 1, autoAsc: 0, autoAscZone: 100, autoFarmZone: 0,
+        buyQty: 1, autoFarmZone: 0,
       },
       rates: { gold: 0, xp: 0 },
       lastSave: Date.now(), created: Date.now(),
@@ -97,7 +96,6 @@ const Game = {
     const P = this.profile;
     const fresh = this.attach(this.defaultState(cls, species, name, hardcore));
     this.state = fresh;
-    this.recordT = 0;
     this.recalc();
     const cap = opts.fromStart ? 1 : Math.min(1 + this.stats.startZone, Math.max(1, Math.floor((P.stats.maxZone || 1) / 2)));
     let sz = cap;
@@ -424,7 +422,6 @@ const Game = {
     if (this.paused || !this.W) return;
     let sim = dt * this.speed;
     st.stats.playTime += dt;
-    this.recordT = (this.recordT || 0) + sim;
     while (sim > 1e-6 && !this.transition) {
       const step = Math.min(sim, 1 / 30);
       World.update(this.W, step);
@@ -444,29 +441,8 @@ const Game = {
     this.saveT += dt;
     if (this.saveT > 15) { this.saveT = 0; this.save(); }
     Online.tick(dt);
-    this.autoAscendCheck(dt);
     this.achT += dt;
     if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
-  },
-
-  autoAscendCheck(dt) {
-    const st = this.state, s = st.settings;
-    if (!s.autoAsc || !this.running || UI.titleOpen()) { this.restartT = 0; return; }
-    if (st.pendingEnd) {
-      this.restartT = (this.restartT || 0) + dt;
-      if (this.restartT >= AUTO_RESTART) {
-        this.restartT = 0;
-        UI.closeModal();
-        this.finishGameOver(st.cls, st.species, st.hardcore);
-      }
-      return;
-    }
-    if (this.paused || this.transition || st.maxZone < 15) return;
-    const stalled = s.autoAsc === 1 && (this.recordT || 0) > AUTO_ASC_STALL;
-    const reached = s.autoAsc === 2 && st.maxZone >= Math.max(s.autoAscZone || 0, (st.startZone || 1) + 5);
-    if (!stalled && !reached) return;
-    this.log(`<b>Auto-ascensão</b>: ${stalled ? '15 minutos sem novo recorde' : `zona ${st.maxZone} alcançada`}.`, 'lvl');
-    this.ascend(st.cls, st.species, st.hardcore);
   },
 
   classStat(key, v) {
@@ -484,7 +460,7 @@ const Game = {
     const st = this.state;
     z = Math.max(1, z);
     st.zone = z;
-    if (z > st.maxZone) { st.maxZone = z; this.recordT = 0; }
+    if (z > st.maxZone) st.maxZone = z;
     if (z > st.stats.maxZone) { st.stats.maxZone = z; Online.scoreDirty = true; }
     this.classStat('best', z);
     for (const it of [...EQUIP_SLOTS.map(k => st.equip[k]), ...st.inv]) if (it && it.excl) Items.retune(it, st.maxZone);
@@ -1017,6 +993,7 @@ const Game = {
     return ok;
   },
 
+  buyQty() { const q = this.state.settings.buyQty; return QTY_STEPS.includes(q) ? q : 1; },
   buyTraining(id, n = 1) {
     const st = this.state, t = TRAINING.find(x => x.id === id);
     const want = n === true || n === Infinity ? Infinity : Math.max(1, +n || 1);
@@ -1146,12 +1123,13 @@ const Game = {
     this.finishRun(pe.gain, pe.zone >= 15, 'Fim de jogo:', newCls, newSpecies, hardcore, fromStart);
   },
 
+  achValue(a, st = this.state) { return a.val ? a.val(st) : st.stats[a.stat] || 0; },
   checkAchievements() {
     const st = this.state;
     let any = false;
     for (const a of ACHIEVEMENTS) {
       if (st.ach[a.id]) continue;
-      if ((st.stats[a.stat] || 0) >= a.goal) {
+      if (this.achValue(a, st) >= a.goal) {
         st.ach[a.id] = true; any = true;
         const rw = Object.entries(a.reward).map(([k, v]) => Items.statLine(k, v)).join(', ');
         this.log(`🏆 Conquista: <b style="color:var(--gold)">${a.name}</b>. Recompensa: ${rw}`, 'good');

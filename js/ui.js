@@ -20,15 +20,11 @@ const UI = {
   titleOpen() { const t = this.$('title-screen'); return !!t && !t.classList.contains('hidden'); },
 
   qtyBar() {
-    const q = Game.state.settings.buyQty || 1;
-    return `<div class="qty-bar"><span>Comprar</span>${[1, 5, 10, 25, 0].map(n => `<button data-act="qty" data-id="${n}" class="${q === n ? 'on' : ''}">${n ? '×' + n : 'Máx'}</button>`).join('')}</div>`;
+    const q = Game.buyQty();
+    return `<div class="qty-bar"><span>Comprar</span>${QTY_STEPS.map(n => `<button data-act="qty" data-id="${n}" class="${q === n ? 'on' : ''}">×${n}</button>`).join('')}</div>`;
   },
   qtyInfo(costFn, rank, max, money) {
-    const q = Game.state.settings.buyQty || 1;
-    if (!q) {
-      const b = Stats.bulk(costFn, rank, max, Infinity, money);
-      return b.n ? { n: b.n, cost: b.cost, can: true, first: costFn(rank) } : { n: 1, cost: costFn(rank), can: false, first: costFn(rank) };
-    }
+    const q = Game.buyQty();
     const b = Stats.bulk(costFn, rank, max, q, money);
     return { n: b.n, cost: b.cost, can: b.n > 0 && money >= b.cost, first: b.cost };
   },
@@ -49,7 +45,7 @@ const UI = {
     if (!un.classes.includes(this.selCls)) this.selCls = un.classes[0];
     if (!un.species.includes(this.selSp)) this.selSp = 'human';
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
-    h += `<div class="ts-logo"><img class="ts-icon" src="img/icon-192.png" alt=""><h1>OverLevelGame</h1><p>Crônicas do Abismo</p></div>`;
+    h += `<div class="ts-logo"><img class="ts-icon" src="img/icon-192.png" alt=""><h1>OverLevelGame</h1></div>`;
     h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte, até quando você não está olhando.</div>`;
     if (Online.enabled) {
       const name = Online.profile ? U.esc(Online.profile.name) : '';
@@ -631,9 +627,6 @@ const UI = {
       <div class="hint" style="margin-top:10px">Ascender termina esta jornada: as Almas vão para o seu perfil, o slot fica livre e você escolhe o próximo herói no menu. Almas, Altar, conquistas, Armas Ancestrais e liberações nunca se perdem.</div></div>`;
     const s = st.settings;
     h += `<div class="sec"><div class="sec-h"><h3>Automação</h3></div>
-      <div class="set-row"><div><div class="l">Auto-ascender</div><div class="d">Ascende sozinho com a mesma classe e espécie e, no modo de corações, recomeça sozinho ${AUTO_RESTART}s depois do Fim de Jogo.</div></div>
-        <select class="sel" data-set="autoAsc"><option value="0" ${!s.autoAsc ? 'selected' : ''}>Desligado</option><option value="1" ${s.autoAsc === 1 ? 'selected' : ''}>Após 15 min sem recorde</option><option value="2" ${s.autoAsc === 2 ? 'selected' : ''}>Ao chegar na zona…</option></select></div>
-      ${s.autoAsc === 2 ? `<div class="set-row"><div><div class="l">Zona para auto-ascender</div></div><input class="num" type="number" min="15" max="9999" data-set="autoAscZone" value="${s.autoAscZone || 100}"></div>` : ''}
       <div class="set-row"><div><div class="l">Farmar automaticamente na zona</div><div class="d">Ao chegar nessa zona, troca para o modo Farmar (uma vez por jornada). 0 = desligado.</div></div><input class="num" type="number" min="0" max="9999" data-set="autoFarmZone" value="${s.autoFarmZone || 0}"></div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Altar das Almas</h3></div>${this.qtyBar()}`;
     for (const u of SOUL_UPGRADES) {
@@ -654,10 +647,10 @@ const UI = {
     let h = `<div class="sec"><div class="sec-h"><h3>Conquistas</h3><span class="sub">${done}/${ACHIEVEMENTS.length}</span></div>`;
     const list = [...ACHIEVEMENTS].sort((a, b) => (!!st.ach[a.id]) - (!!st.ach[b.id]));
     for (const a of list) {
-      const v = st.stats[a.stat] || 0, ok = !!st.ach[a.id];
+      const v = Game.achValue(a, st), ok = !!st.ach[a.id], f = a.time ? x => U.fmtTime(x) : U.fmt;
       const pct = Math.min(1, v / a.goal);
       const rw = Object.entries(a.reward).map(([k, x]) => Items.statLine(k, x)).join(', ');
-      h += `<div class="ach${ok ? ' done' : ''}"><div class="medal">${ok ? '★' : '☆'}</div><div><div class="nm">${a.name}</div><div class="ds">${a.desc}</div>${ok ? '' : `<div class="meter"><div style="width:${pct * 100}%"></div></div>`}</div><div class="rw">${rw}<br><span style="color:var(--muted);font-weight:400">${ok ? 'Concluída' : `${U.fmt(Math.min(v, a.goal))}/${U.fmt(a.goal)}`}</span></div></div>`;
+      h += `<div class="ach${ok ? ' done' : ''}"><div class="medal">${ok ? '★' : '☆'}</div><div><div class="nm">${a.name}</div><div class="ds">${a.desc}</div>${ok ? '' : `<div class="meter"><div style="width:${pct * 100}%"></div></div>`}</div><div class="rw">${rw}<br><span style="color:var(--muted);font-weight:400">${ok ? 'Concluída' : `${f(Math.min(v, a.goal))}/${f(a.goal)}`}</span></div></div>`;
     }
     h += '</div>';
     const s = st.stats;
@@ -705,7 +698,7 @@ const UI = {
       case 'talent': Game.talentUp(id); this.renderTab(false); break;
       case 'resetTalents': this.confirm('Redistribuir talentos', 'Todos os pontos serão devolvidos para você distribuir novamente.', 'Redistribuir', () => { Game.resetTalents(); this.renderTab(false); }); break;
       case 'qty': Game.state.settings.buyQty = +id; Sfx.play('click'); this.renderTab(false); break;
-      case 'train': Game.buyTraining(id, Game.state.settings.buyQty || true); this.renderTab(false); break;
+      case 'train': Game.buyTraining(id, Game.buyQty()); this.renderTab(false); break;
       case 'fuse': {
         const w = Game.state.equip.weapon;
         this.confirm('Fundir arma', `Fundir <b class="c${w.rarity}">${U.esc(w.name)}</b> com a arma de <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Enquanto ela estiver equipada você será <b>${CLASSES[Game.state.cls].name} / ${CLASSES[id].name}</b>.`, 'Fundir', () => { if (Game.fuseWeapon(id)) this.notice('Armas fundidas! Agora você é multiclasse.', 'var(--green)'); this.renderTab(false); }, 'purple');
@@ -718,7 +711,7 @@ const UI = {
         if (item) { const ok = Game.forge(item); this.renderTab(false); this.notice(ok ? `Sucesso! Agora +${item.plus}` : 'A forja falhou…', ok ? 'var(--green)' : 'var(--red)'); }
         break;
       }
-      case 'soul': Game.buySoul(id, Game.state.settings.buyQty || true); this.renderTab(false); break;
+      case 'soul': Game.buySoul(id, Game.buyQty()); this.renderTab(false); break;
       case 'ascend': {
         const gain = Stats.soulsOnAscend(Game.state);
         this.confirm('Ascender', `Você receberá <b style="color:#d9b8ff">${U.fmt(gain)} Almas</b> e esta jornada termina: o slot fica livre e você volta ao menu para criar o próximo herói, com qualquer classe e espécie liberada. Almas, Altar, conquistas, Armas Ancestrais e liberações continuam no seu perfil, e as armas exclusivas vão com o próximo herói.`, 'Ascender', () => Game.ascend(), 'purple');
@@ -1164,8 +1157,7 @@ const UI = {
         <div><span>Nível</span><b style="color:#c9a0ff">${pe.level}</b></div>
         <div><span>Almas obtidas</span><b style="color:#d9b8ff">+${U.fmt(pe.gain)}</b></div>
       </div>
-      <p class="hint" style="margin-top:10px">A jornada terminou e o slot fica livre. Almas, Altar, conquistas e liberações continuam no seu perfil.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''}</p>
-      ${st.settings.autoAsc ? `<p class="hint" style="color:var(--gold)">Auto-ascender ligado: recomeçando sozinho com ${CLASSES[st.cls].name} ${SPECIES[st.species].name} em ${AUTO_RESTART} segundos…</p>` : ''}`,
+      <p class="hint" style="margin-top:10px">A jornada terminou e o slot fica livre. Almas, Altar, conquistas e liberações continuam no seu perfil.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''}</p>`,
       [{ label: 'Voltar ao menu', cls: 'gold', fn: () => Game.finishGameOver() }], { locked: true });
   },
 
