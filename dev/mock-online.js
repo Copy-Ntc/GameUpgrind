@@ -71,6 +71,7 @@
       }
       if (op === 'upsert') {
         if (payload.user_id !== uid) return err('new row violates row-level security policy');
+        if (table === 'saves' && payload.slot === 0 && window.MockOnline.oldSchema) return err('new row for relation "saves" violates check constraint "saves_slot_check"');
         const i = T.findIndex(r => r.user_id === payload.user_id && r.slot === payload.slot);
         if (i >= 0) T[i] = clone(payload); else T.push(clone(payload));
         return { data: null, error: null };
@@ -110,7 +111,7 @@
   }
 
   window.MockOnline = {
-    db,
+    db, oldSchema: false, // oldSchema: simula o banco antes de online/atualizacao-perfil.sql
     // Liga o modo online usando este servidor falso
     start() {
       window.supabase = { createClient() { return { auth, from, rpc }; } };

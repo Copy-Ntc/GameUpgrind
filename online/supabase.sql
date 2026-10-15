@@ -19,14 +19,16 @@ create policy "cada um cria o próprio perfil" on public.profiles for insert wit
 drop policy if exists "cada um edita o próprio perfil" on public.profiles;
 create policy "cada um edita o próprio perfil" on public.profiles for update using (auth.uid() = id);
 
--- Saves na nuvem: até 3 slots por conta, só o dono enxerga
+-- Saves na nuvem: slot 0 = perfil (progresso permanente), slots 1 a 3 = jornadas. Só o dono enxerga.
 create table if not exists public.saves (
   user_id uuid not null references auth.users on delete cascade,
-  slot int not null check (slot between 1 and 3),
+  slot int not null check (slot between 0 and 3),
   data jsonb not null,
   updated_at timestamptz not null default now(),
   primary key (user_id, slot)
 );
+alter table public.saves drop constraint if exists saves_slot_check;
+alter table public.saves add constraint saves_slot_check check (slot between 0 and 3);
 alter table public.saves enable row level security;
 drop policy if exists "dono lê os saves" on public.saves;
 create policy "dono lê os saves" on public.saves for select using (auth.uid() = user_id);

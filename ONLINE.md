@@ -3,7 +3,7 @@
 O jogo funciona sem nada disso, salvando no navegador. Ao ligar o modo online, cada jogador pode:
 
 - criar uma conta (apelido, e-mail e senha);
-- guardar os 3 slots na nuvem e continuar em outro navegador ou computador;
+- guardar o **perfil** (Almas, Altar, liberações, Armas Ancestrais…) e os 3 slots de jornada na nuvem, e continuar em outro navegador ou computador. Ao entrar na conta tudo volta; ao sair, o navegador fica limpo para a próxima pessoa;
 - aparecer no **placar** (zona recorde, maior golpe, tempo de jogo e nível).
 
 O servidor é o [Supabase](https://supabase.com), que tem plano gratuito e funciona direto com o site do GitHub Pages.
@@ -43,6 +43,10 @@ O servidor é o [Supabase](https://supabase.com), que tem plano gratuito e funci
    ```
 
 7. **Publique.** Faça commit e push. Em 1 ou 2 minutos o GitHub Pages atualiza, e a tela inicial passa a mostrar **Entrar / Criar conta** e **🏆 Placar**.
+
+## Atualização: perfil na nuvem
+
+Se o seu projeto foi criado antes desta versão, rode uma vez o arquivo [`online/atualizacao-perfil.sql`](online/atualizacao-perfil.sql) no **SQL Editor** do Supabase (*New query* → colar → **Run**). Ele libera o "slot 0" da tabela `saves`, onde fica o perfil. Antes disso, o jogo avisa na tela inicial e o perfil continua salvo só no navegador. Os slots de jornada já sincronizam normalmente.
 
 ## Perguntas comuns
 

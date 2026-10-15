@@ -560,3 +560,10 @@ input.num { width: 76px; background: #0e0b14; border: 1px solid var(--line2); bo
 .fuse-cur { border-color: #6f3fb0; margin-top: 8px; }
 .ts-zero { background: #1c1a2c; border-color: #3c3466; margin-top: 8px; }
 .ts-zero b { color: #c9a0ff !important; }
+
+/* Resumo do perfil no menu */
+.ts-profile { max-width: 1040px; margin: 0 auto 14px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; font-size: 13px; color: #cfc4de; }
+.ts-profile b { color: var(--text); font-family: var(--pixel); }
+.ts-profile .tp-souls { display: inline-flex; align-items: center; gap: 5px; }
+.ts-profile .tp-souls img { width: 18px; height: 18px; image-rendering: pixelated; }
+.ts-profile .tp-souls b { color: #d9b8ff; }

@@ -16,7 +16,12 @@ Depois acesse `http://localhost:5173`. O Live Server do VS Code também funciona
 
 **Atalhos:** `P` pausa · `1`–`4` mudam a velocidade (1x, 2x, 3x, 5x) · roda do mouse sobre o mapa aproxima/afasta · `Esc` fecha janelas.
 
-O progresso é salvo automaticamente no navegador (localStorage), em até **3 slots** independentes. O botão de sair (canto superior direito) salva e volta para a tela de slots sem apagar nada. Use **Configurações → Exportar** para fazer backup.
+O progresso é salvo automaticamente no navegador (localStorage) em duas partes:
+
+- **Perfil:** o que fica para sempre. Guarda Almas, Altar, conquistas, recordes, classes e espécies liberadas, Armas Ancestrais, Fragmentos, fusões aprendidas e armas exclusivas guardadas. Vale para todos os slots.
+- **3 slots de jornada:** cada slot é um herói em andamento. Ao **ascender** ou no **Fim de Jogo**, a jornada termina, as Almas vão para o perfil e o slot fica livre. Você volta ao menu para criar o próximo herói com qualquer classe e espécie liberada.
+
+O botão de sair (canto superior direito) volta ao menu sem apagar nada. **Configurações → Exportar** faz backup do perfil e dos 3 slots.
 
 Abra o jogo no Chrome, Edge ou Firefox. Navegadores internos de aplicativos (WhatsApp, Discord, Instagram) e abas anônimas apagam o progresso ao fechar; o jogo avisa quando detecta isso.
 
@@ -58,7 +63,7 @@ Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24
 - **Venda em massa:** vender por raridade, **Selecionar p/ vender** (marque os itens um a um), clique direito para venda rápida e venda automática configurável.
 - **Compras em quantidade:** Treino e Altar compram ×1, ×5, ×10, ×25 ou o máximo de uma vez.
 - **Automação (aba Ascensão):** auto-ascender após 15 minutos sem recorde ou ao chegar numa zona escolhida, que também recomeça sozinho depois do Fim de Jogo. Há ainda a troca automática para o modo Farmar ao chegar na zona X.
-- **Tela de ascensão:** dá para voltar ao menu de slots sem ascender e para começar a nova jornada da zona 1, ignorando o Atalho Astral.
+- **Novo herói:** escolhido no menu, com qualquer classe e espécie liberada. Quem tem o Atalho Astral pode marcar **Começar da zona 1**. As armas exclusivas guardadas e a última fusão usada com a classe vêm junto.
 - **Progressão por jornada:** níveis e talentos, Treino com ouro, Forja (+1, +2… com chance de falha a partir de +5), conquistas com bônus permanentes.
 - **Música:** 10 faixas geradas na hora (título, uma por bioma e uma de chefe), com volume próprio e opção de desligar.
 - **Roda em segundo plano:** a simulação continua com ALT+TAB ou com a aba minimizada. Ao fechar o jogo e voltar, o herói recebe ouro, XP e itens pelo tempo fora (50% de eficiência, aumentável no Altar). Um slot fechado pelo botão de sair não ganha progresso offline.

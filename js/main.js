@@ -6,6 +6,7 @@
   Render.init();
   Store.test();
   Game.migrateLegacySave();
+  Game.loadProfile();
   UI.showTitle('new');
   Online.init(); // conta, save na nuvem e placar (só se js/online-config.js estiver preenchido)
   // Desbloqueia o áudio no primeiro gesto

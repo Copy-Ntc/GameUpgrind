@@ -14,8 +14,11 @@ const BOARD_COLS = [
   ['level', 'Nível'],
 ];
 
+const PROFILE_SLOT = 0;          // na tabela saves, o slot 0 guarda o perfil (progresso permanente)
+const PROFILE_SQL_HINT = 'Para guardar o perfil na nuvem, rode o arquivo online/atualizacao-perfil.sql no SQL Editor do Supabase (veja ONLINE.md). Enquanto isso, o perfil fica salvo neste navegador.';
+
 const Online = {
-  enabled: false, ready: false, sb: null, user: null, profile: null, error: '',
+  enabled: false, ready: false, sb: null, user: null, profile: null, error: '', profileBlocked: false,
   dirty: new Set(), pushT: 0, scoreT: 0, scoreDirty: false, busy: false, lastPush: 0, recovering: false,
 
   configured() { return typeof ONLINE_CONFIG !== 'undefined' && !!ONLINE_CONFIG.url && !!ONLINE_CONFIG.key; },
@@ -128,7 +131,8 @@ const Online = {
     const uid = this.user.id;
     // os heróis desta conta continuam na nuvem; tira as cópias locais para a próxima conta
     for (let n = 1; n <= SLOT_COUNT; n++) { const sv = Game.peekSave(n); if (sv && sv.owner === uid) Game.deleteSlotLocal(n); }
-    Store.del(UNLOCK_KEY); // as liberações desta conta voltam junto com os slots ao entrar de novo
+    // o perfil da conta também sai deste navegador (volta inteiro ao entrar de novo)
+    Game.setProfile(Game.defaultProfile());
     if (!Game.running) { Game.state = null; Game.W = null; }
     try { await this.sb.auth.signOut(); } catch (e) { /* ok */ }
     this.user = null; this.profile = null;
@@ -169,13 +173,38 @@ const Online = {
     return { slots: out, upload, lost };
   },
 
+  // Decide qual perfil vale ao entrar na conta
+  hasProgress(p) { return !!p && ((p.stats.ascensions || 0) > 0 || (p.souls || 0) > 0 || (p.stats.playTime || 0) > 600); },
+  pickProfile(localP, cloudP, legacy, uid) {
+    const mine = localP && (!localP.owner || localP.owner === uid) ? localP : null;
+    if (cloudP && cloudP.stats) {
+      if (mine && mine.pid === cloudP.pid) return (mine.lastSave || 0) > (cloudP.lastSave || 0) ? { p: mine, upload: true } : { p: cloudP, upload: false };
+      if (mine && !mine.owner && this.hasProgress(mine)) return { p: cloudP, upload: false, backup: mine };
+      return { p: cloudP, upload: false };
+    }
+    // conta ainda sem perfil na nuvem: junta este navegador com os saves antigos da conta
+    return { p: Game.buildProfile([mine, ...legacy]), upload: true };
+  },
+
   async syncSlots() {
     if (!this.user) return;
     const uid = this.user.id;
     const { data, error } = await this.sb.from('saves').select('slot, data').eq('user_id', uid);
     if (error) throw error;
     const cloud = [null, null, null];
-    for (const r of data || []) if (r.slot >= 1 && r.slot <= 3 && r.data && r.data.cls) cloud[r.slot - 1] = r.data;
+    let cloudP = null;
+    for (const r of data || []) {
+      if (r.slot === PROFILE_SLOT) cloudP = r.data;
+      else if (r.slot >= 1 && r.slot <= 3 && r.data && r.data.cls) cloud[r.slot - 1] = r.data;
+    }
+    const pick = this.pickProfile(Game.profile, cloudP, cloud.filter(x => x && x.stats), uid);
+    if (pick.backup) {
+      Store.set('upgrind_profile_backup_' + pick.backup.pid, JSON.stringify(pick.backup));
+      UI.notice('Esta conta já tinha um perfil na nuvem e ele foi carregado. O progresso que estava neste navegador sem conta ficou guardado como cópia.', 'var(--gold)');
+    }
+    pick.p.owner = uid;
+    Game.setProfile(pick.p);
+    if (pick.upload) this.dirty.add(PROFILE_SLOT);
     const local = [1, 2, 3].map(n => Game.peekSave(n));
     const backups = Game.listBackups();
     const m = this.merge(local, cloud, uid, backups.map(b => b.data));
@@ -185,7 +214,17 @@ const Online = {
     }
     for (const o of m.lost) Game.addBackup(o);
     if (m.lost.length) UI.notice(`${m.lost.length} herói(s) não couberam nos 3 slots e ficaram guardados neste navegador. Libere um slot e entre de novo para recuperar.`, 'var(--gold)');
-    for (const i of m.upload) await this.upload(i + 1, m.slots[i]);
+    for (const i of m.upload) await this.upload(i + 1, Game.runPart(m.slots[i]));
+    if (this.dirty.has(PROFILE_SLOT)) { this.dirty.delete(PROFILE_SLOT); await this.uploadProfile(); }
+  },
+  // O perfil vai no slot 0; se o banco ainda não aceita o slot 0, avisa e segue salvando no navegador
+  async uploadProfile() {
+    if (this.profileBlocked || !Game.profile) return;
+    try { await this.upload(PROFILE_SLOT, Game.profile); }
+    catch (e) {
+      if (/check constraint|saves_slot_check|violates/i.test(String(e && e.message))) { this.profileBlocked = true; this.error = PROFILE_SQL_HINT; return; }
+      throw e;
+    }
   },
 
   async upload(n, data) {
@@ -209,13 +248,15 @@ const Online = {
     this.busy = true;
     try {
       for (const n of [...this.dirty]) {
-        const data = n === Game.slot && Game.state ? Game.state : Game.peekSave(n);
         this.dirty.delete(n);
+        if (n === PROFILE_SLOT) { try { await this.uploadProfile(); } catch (e) { this.dirty.add(n); throw e; } continue; }
+        const data = n === Game.slot && Game.state ? Game.runPart(Game.state) : Game.peekSave(n);
+        if (!data) continue;
         try { await this.upload(n, data); } catch (e) { this.dirty.add(n); throw e; }
       }
       this.lastPush = Date.now();
       if (this.scoreDirty) await this.submitScore();
-      this.error = '';
+      this.error = this.profileBlocked ? PROFILE_SQL_HINT : '';
     } catch (e) {
       console.warn('[online]', e);
       this.error = this.errText(e);
@@ -231,28 +272,19 @@ const Online = {
   },
 
   // ---------------------------------------------------------- placar
-  // Melhores marcas somando os slots da conta (o servidor só guarda se for recorde)
-  scoreFrom(saves) {
-    if (!saves.length) return null;
-    let best = saves[0], hit = 0, time = 0, lvl = 0, asc = 0;
-    for (const s of saves) {
-      if ((s.stats.maxZone || 0) > (best.stats.maxZone || 0)) best = s;
-      hit = Math.max(hit, s.stats.highestHit || 0);
-      time += s.stats.playTime || 0;
-      lvl = Math.max(lvl, s.stats.maxLevel || s.level || 0);
-      asc = Math.max(asc, s.stats.ascensions || 0);
-    }
+  // As marcas são do perfil (todas as jornadas); o herói mostrado é o atual ou o último jogado
+  scoreFrom(P, hero) {
+    if (!P || !P.stats) return null;
+    const s = P.stats, h = hero || P.lastHero || { name: '', cls: '', species: '' };
     return {
-      p_hero: best.name, p_cls: Game.className(best), p_species: Game.speciesName(best),
-      p_zone: best.stats.maxZone || 0, p_hit: hit, p_time: Math.floor(time), p_level: lvl, p_asc: asc,
+      p_hero: h.name || '', p_cls: h.cls || '', p_species: h.species || '',
+      p_zone: s.maxZone || 0, p_hit: s.highestHit || 0, p_time: Math.floor(s.playTime || 0), p_level: s.maxLevel || 0, p_asc: s.ascensions || 0,
     };
   },
   async submitScore() {
     if (!this.loggedIn) return;
-    const uid = this.user.id;
-    const saves = [1, 2, 3].map(n => (n === Game.slot && Game.state && Game.running ? Game.state : Game.peekSave(n)))
-      .filter(s => s && (!s.owner || s.owner === uid));
-    const p = this.scoreFrom(saves);
+    const hero = Game.state && Game.running ? { name: Game.state.name, cls: Game.className(), species: Game.speciesName() } : null;
+    const p = this.scoreFrom(Game.profile, hero);
     this.scoreDirty = false;
     if (!p) return;
     const { error } = await this.sb.rpc('submit_score', p);

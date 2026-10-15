@@ -7,7 +7,12 @@ const SAVE_KEY = 'upgrind_save_v1';           // save antigo (único) — migrad
 const SLOT_KEY = n => 'upgrind_slot_' + n;
 const SLOT_COUNT = 3;
 const BACKUP_PREFIX = 'upgrind_backup_';
-const UNLOCK_KEY = 'upgrind_unlocks';   // classes/espécies liberadas, compartilhadas entre os slots
+const UNLOCK_KEY = 'upgrind_unlocks';   // (antigo) liberações compartilhadas — migradas para o perfil
+const PROFILE_KEY = 'upgrind_profile';  // perfil: progresso permanente, compartilhado por todos os slots
+// O que pertence ao perfil (fica para sempre); o resto do estado é da jornada (o slot)
+const META_KEYS = ['souls', 'soulUpg', 'stats', 'ach', 'settings', 'unlocks', 'encPity', 'classStats', 'speciesStats',
+  'relics', 'shards', 'relicPity', 'fusions', 'vault', 'fusionPref'];
+const META_SET = new Set(META_KEYS);
 
 // Armazenamento do navegador com reserva em memória: abas anônimas e navegadores
 // de aplicativos (WhatsApp, Discord, Instagram…) podem bloquear ou apagar o localStorage.
@@ -78,7 +83,7 @@ const Game = {
       runCls: cls, runSp: species, relics: {}, shards: 0, relicPity: 0, parked: false,
       talents: { [CLASSES[cls].skills[0]]: 1 },
       equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null, offhand: null },
-      fusions: {}, autoFarmed: false, startZone: 1,
+      fusions: {}, autoFarmed: false, startZone: 1, vault: [], fusionPref: {},
       inv: [], training: {}, soulUpg: {},
       zone: 1, maxZone: 1, mode: 'advance', retreatLeft: 0, deathsInZone: 0, potions: 3,
       unlocks: { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() }, encPity: 0,
@@ -98,13 +103,41 @@ const Game = {
     };
   },
 
-  newGame(cls, species, name, hardcore) {
-    const un = this.sharedUnlocks();
-    this.state = this.defaultState(cls, species, name, hardcore);
-    this.state.unlocks = un;
-    this.giveStarter();
+  // Cria a jornada de um herói novo no slot atual, usando o progresso do perfil
+  newGame(cls, species, name, hardcore, opts = {}) {
+    if (!this.profile) this.profile = this.defaultProfile();
+    const P = this.profile;
+    const fresh = this.attach(this.defaultState(cls, species, name, hardcore));
+    this.state = fresh;
+    this.recordT = 0;
     this.recalc();
-    this.state.potions = this.stats.potionMax;
+    // Atalho Astral: começa adiantado, com nível e equipamento, na zona mais alta que o herói aguenta
+    const cap = opts.fromStart ? 1 : Math.min(1 + this.stats.startZone, Math.max(1, Math.floor((P.stats.maxZone || 1) / 2)));
+    let sz = cap;
+    for (; ; sz--) {
+      fresh.zone = sz; fresh.maxZone = sz;
+      fresh.level = sz > 1 ? Math.floor(sz * HEADSTART_LVL) : 1;
+      fresh.talents = { [CLASSES[fresh.cls].skills[0]]: 1 };
+      for (const k of EQUIP_SLOTS) fresh.equip[k] = null;
+      this.giveStarter();
+      this.recalc();
+      if (fresh.settings.autoTalent) { this.autoTalents(); this.recalc(); }
+      if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyPowScale(sz)) break;
+    }
+    fresh.startZone = sz;
+    // A última fusão usada com essa classe volta de graça na arma inicial
+    const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
+    if (pref && pref !== cls && nw && !nw.excl && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
+    // As armas exclusivas guardadas no perfil vão com o novo herói (equipadas se forem melhores)
+    for (const it of P.vault.splice(0)) {
+      Items.retune(it, sz);
+      const cur = fresh.equip[it.slot];
+      if (!cur || Stats.compareItem(it, fresh) > 0) { fresh.equip[it.slot] = it; if (cur) fresh.inv.push(cur); this.recalc(); }
+      else fresh.inv.push(it);
+    }
+    this.recalc();
+    fresh.potions = this.stats.potionMax;
+    if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
     this.save();
   },
 
@@ -159,19 +192,102 @@ const Game = {
     }
     return { classes: CLASS_ORDER.filter(id => c.has(id)), species: SPECIES_ORDER.filter(id => sp.has(id)) };
   },
-  sharedUnlocks() {
-    let saved = null;
-    try { saved = JSON.parse(Store.get(UNLOCK_KEY)); } catch (e) { /* sem registro */ }
-    const slots = [];
-    for (let n = 1; n <= SLOT_COUNT; n++) { const sv = this.peekSave(n); if (sv) slots.push(sv.unlocks); }
-    return this.mergeUnlocks(saved, ...slots, this.state && this.state.unlocks);
+  sharedUnlocks() { return this.mergeUnlocks(this.profile && this.profile.unlocks, this.state && this.state.unlocks); },
+
+  // ---------------------------------------------------------- perfil (progresso permanente)
+  profile: null,
+  defaultProfile() {
+    const d = this.defaultState('fighter', 'human', '', true);
+    const p = { v: 5, pid: Date.now() + '-' + Math.floor(Math.random() * 1e6), lastSave: 0, owner: null, lastHero: null };
+    for (const k of META_KEYS) p[k] = d[k];
+    return p;
   },
-  rememberUnlocks() { Store.set(UNLOCK_KEY, JSON.stringify(this.sharedUnlocks())); },
+  normalizeProfile(p) {
+    const d = this.defaultProfile();
+    for (const k in d) if (p[k] === undefined || p[k] === null && k !== 'owner' && k !== 'lastHero') p[k] = d[k];
+    for (const k in d.stats) if (p.stats[k] === undefined) p.stats[k] = d.stats[k];
+    for (const k in d.settings) if (p.settings[k] === undefined) p.settings[k] = d.settings[k];
+    if (!Array.isArray(p.vault)) p.vault = [];
+    p.unlocks = this.mergeUnlocks(p.unlocks);
+    return p;
+  },
+  pickMeta(s) { const o = {}; for (const k of META_KEYS) if (s[k] !== undefined) o[k] = s[k]; return o; },
+  // Junta perfis ou saves antigos (de quando cada slot tinha tudo) num perfil só, sem perder liberações
+  buildProfile(sources) {
+    const list = sources.filter(x => x && x.stats);
+    if (!list.length) return this.defaultProfile();
+    const key = x => [x.stats.ascensions || 0, x.stats.soulsEarned || 0, x.stats.playTime || 0];
+    const primary = list.slice().sort((a, b) => { const x = key(a), y = key(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i]; return 0; })[0];
+    const p = JSON.parse(JSON.stringify(this.pickMeta(primary)));
+    Object.assign(p, {
+      v: 5, pid: primary.pid || 'legado-' + (primary.created || 0), lastSave: primary.lastSave || 0, owner: primary.owner || null,
+      lastHero: primary.lastHero || (primary.name ? { name: primary.name, cls: CLASSES[primary.cls] ? CLASSES[primary.cls].name : '', species: SPECIES[primary.species] ? SPECIES[primary.species].name : '' } : null),
+    });
+    p.ach = p.ach || {}; p.relics = p.relics || {}; p.fusions = p.fusions || {}; p.classStats = p.classStats || {}; p.speciesStats = p.speciesStats || {}; p.vault = p.vault || [];
+    for (const x of list) {
+      if (x === primary) continue;
+      p.unlocks = this.mergeUnlocks(p.unlocks, x.unlocks);
+      for (const k in x.ach || {}) if (x.ach[k]) p.ach[k] = true;
+      for (const k in x.stats) if (typeof x.stats[k] === 'number') p.stats[k] = Math.max(p.stats[k] || 0, x.stats[k]);
+      for (const c in x.relics || {}) if (!p.relics[c] || p.relics[c].r < x.relics[c].r) p.relics[c] = { r: x.relics[c].r };
+      for (const k in x.fusions || {}) p.fusions[k] = true;
+      for (const map of ['classStats', 'speciesStats']) for (const id in x[map] || {}) {
+        const a = p[map][id] || (p[map][id] = {});
+        for (const k in x[map][id]) a[k] = Math.max(a[k] || 0, x[map][id][k] || 0);
+      }
+      for (const it of x.vault || []) if (!p.vault.some(v => v.uid === it.uid)) p.vault.push(it);
+    }
+    return this.normalizeProfile(p);
+  },
+  // Carrega o perfil do navegador; na primeira vez, monta a partir dos saves antigos
+  loadProfile() {
+    let p = null;
+    try { p = JSON.parse(Store.get(PROFILE_KEY)); } catch (e) { /* sem perfil */ }
+    if (!p || !p.stats) {
+      const legacy = [];
+      for (let n = 1; n <= SLOT_COUNT; n++) { const sv = this.peekSave(n); if (sv && sv.stats) legacy.push(sv); }
+      p = this.buildProfile(legacy);
+      let un = null;
+      try { un = JSON.parse(Store.get(UNLOCK_KEY)); } catch (e) { /* sem registro */ }
+      p.unlocks = this.mergeUnlocks(p.unlocks, un);
+    }
+    Store.del(UNLOCK_KEY);
+    this.setProfile(p);
+    return this.profile;
+  },
+  setProfile(p) {
+    this.profile = this.normalizeProfile(p);
+    Store.set(PROFILE_KEY, JSON.stringify(this.profile));
+  },
+  saveProfile() {
+    const P = this.profile;
+    if (!P) return;
+    P.lastSave = Date.now();
+    if (Online.loggedIn) P.owner = Online.user.id;
+    Store.set(PROFILE_KEY, JSON.stringify(P));
+    Online.onSave(0);
+  },
+  // O estado em jogo usa os mesmos objetos do perfil; números (Almas, Fragmentos…) são copiados de volta
+  attach(run) { for (const k of META_KEYS) run[k] = this.profile[k]; return run; },
+  syncProfileFromState() {
+    const st = this.state;
+    if (!st || !this.profile) return;
+    for (const k of META_KEYS) this.profile[k] = st[k];
+    this.profile.lastHero = { name: st.name, cls: this.className(st), species: this.speciesName(st) };
+  },
+  runPart(st) { const o = {}; for (const k in st) if (!META_SET.has(k)) o[k] = st[k]; o.v = 5; return o; },
   peekSave(n = this.slot) { try { const s = JSON.parse(Store.get(SLOT_KEY(n))); return s && s.cls ? s : null; } catch (e) { return null; } },
   freeSlot() { for (let n = 1; n <= SLOT_COUNT; n++) if (!this.peekSave(n)) return n; return 0; },
   writeSlot(n, data) { Store.set(SLOT_KEY(n), JSON.stringify(data)); },
   deleteSlotLocal(n) { Store.del(SLOT_KEY(n)); },
-  deleteSlot(n) { this.deleteSlotLocal(n); Online.deleteCloud(n); },
+  // Apagar um slot encerra a jornada sem Almas; as armas exclusivas voltam para o perfil
+  deleteSlot(n) {
+    const sv = this.peekSave(n);
+    const items = sv ? [...EQUIP_SLOTS.map(k => sv.equip && sv.equip[k]), ...(sv.inv || [])].filter(it => it && it.excl) : [];
+    if (items.length && this.profile) { for (const it of items) if (!this.profile.vault.some(v => v.uid === it.uid)) this.profile.vault.push(it); this.saveProfile(); }
+    this.deleteSlotLocal(n);
+    Online.deleteCloud(n);
+  },
   // Heróis que não couberam nos slots ao sincronizar com a nuvem
   listBackups() {
     return Store.keys().filter(k => k && k.startsWith(BACKUP_PREFIX)).map(key => {
@@ -183,18 +299,20 @@ const Game = {
 
   save() {
     if (!this.state) return;
-    this.state.lastSave = Date.now();
-    if (Online.loggedIn) this.state.owner = Online.user.id;
-    Store.set(SLOT_KEY(this.slot), JSON.stringify(this.state));
+    const st = this.state;
+    st.lastSave = Date.now();
+    if (Online.loggedIn) st.owner = Online.user.id;
+    this.syncProfileFromState();
+    this.saveProfile();
+    Store.set(SLOT_KEY(this.slot), JSON.stringify(this.runPart(st)));
     Online.onSave(this.slot);
   },
   load(n = this.slot) {
     const s = this.peekSave(n);
     if (!s) return false;
-    const un = this.sharedUnlocks();
+    if (!this.profile) this.loadProfile();
     this.slot = n;
-    this.state = this.migrate(s);
-    this.state.unlocks = this.mergeUnlocks(this.state.unlocks, un);
+    this.state = this.migrate(this.attach(s));
     this.recalc();
     return true;
   },
@@ -211,20 +329,31 @@ const Game = {
     UI.closeModal();
     UI.showTitle('new');
   },
+  // Backup: perfil + os 3 slots
   exportSave() {
     this.save();
-    return btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
+    const slots = [1, 2, 3].map(n => this.peekSave(n));
+    return btoa(unescape(encodeURIComponent(JSON.stringify({ v: 5, profile: this.profile, slots }))));
   },
   importSave(str) {
     const s = JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
-    if (!s || !s.cls) throw new Error('inválido');
-    this.state = this.migrate(s);
-    this.save();
+    if (s && s.profile && Array.isArray(s.slots)) {
+      s.profile.owner = null;
+      this.setProfile(s.profile);
+      s.slots.forEach((run, i) => { if (run && run.cls) { run.owner = null; this.writeSlot(i + 1, run); } else this.deleteSlotLocal(i + 1); });
+    } else if (s && s.cls) { // save antigo (um slot com tudo dentro)
+      s.owner = null;
+      this.setProfile(this.buildProfile([this.profile, s]));
+      this.writeSlot(this.freeSlot() || 1, s);
+    } else throw new Error('inválido');
   },
   hardReset() {
+    this.save();
     this.deleteSlot(this.slot);
+    this.running = false; this.paused = false; this.transition = null;
     this.state = null;
-    location.reload();
+    UI.closeModal();
+    UI.showTitle('new');
   },
 
   // ---------------------------------------------------------- atributos
@@ -470,7 +599,6 @@ const Game = {
     const list = st.unlocks[this.unlockKey(kind)];
     if (list.includes(id)) return false;
     list.push(id);
-    this.rememberUnlocks();
     const def = kind === 'class' ? CLASSES[id] : SPECIES[id];
     const R = HERO_RARITY[def.rarity];
     const tag = kind === 'class' ? 'Nova Classe' : 'Nova Espécie';
@@ -1017,67 +1145,53 @@ const Game = {
     return k;
   },
 
-  // Nova jornada mantendo o progresso permanente (ascensão ou após fim de jogo)
-  newJourney(newCls, newSpecies, opts = {}) {
-    const st = this.state;
-    const gain = opts.gain || 0;
-    const keep = {
-      souls: st.souls + gain, soulUpg: st.soulUpg, stats: st.stats, ach: st.ach, settings: st.settings, created: st.created,
-      unlocks: st.unlocks, encPity: st.encPity, classStats: st.classStats, speciesStats: st.speciesStats, rates: { gold: 0, xp: 0 },
-      relics: st.relics, shards: st.shards, relicPity: st.relicPity, fusions: st.fusions || {},
-    };
-    if (opts.ascension || opts.countAsc) keep.stats.ascensions++;
-    keep.stats.soulsEarned += gain;
-    const fresh = this.defaultState(newCls || st.cls, newSpecies || st.species, st.name, opts.hardcore);
-    Object.assign(fresh, keep);
-    this.state = fresh;
-    // Mestiçagem continua na nova jornada enquanto for válida
-    if (st.species2 && this.canMultiSpecies(st.species2)) fresh.species2 = st.species2;
-    this.recalc();
-    const cap = opts.fromStart ? 1 : Math.min(1 + this.stats.startZone, Math.max(1, Math.floor(st.stats.maxZone / 2)));
-    // Começar adiantado também adianta nível e equipamento; desce de zona até o herói aguentar
-    let sz = cap;
-    for (; ; sz--) {
-      fresh.zone = sz; fresh.maxZone = sz;
-      fresh.level = sz > 1 ? Math.floor(sz * HEADSTART_LVL) : 1;
-      fresh.talents = { [CLASSES[fresh.cls].skills[0]]: 1 };
-      for (const k of EQUIP_SLOTS) fresh.equip[k] = null;
-      this.giveStarter();
-      this.recalc();
-      if (fresh.settings.autoTalent) { this.autoTalents(); this.recalc(); }
-      if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyPowScale(sz)) break;
-    }
-    fresh.startZone = sz;
-    // Armas exclusivas acompanham você (ajustadas ao novo começo)
-    const oldEq = st.equip;
-    for (const it of [...EQUIP_SLOTS.map(k => oldEq[k]), ...st.inv]) {
-      if (!it || !it.excl) continue;
-      Items.retune(it, sz);
-      if (oldEq[it.slot] === it) fresh.equip[it.slot] = it; else fresh.inv.push(it);
-    }
-    // A fusão da arma anterior é refeita de graça na arma inicial (se ainda for válida)
-    const prevFuse = oldEq.weapon && oldEq.weapon.fusion;
-    const nw = fresh.equip.weapon;
-    if (prevFuse && nw && !nw.excl && fresh.fusions[this.fusionKey(fresh.cls, prevFuse)] && prevFuse !== fresh.cls) Items.fuse(nw, prevFuse);
-    this.recalc();
-    fresh.potions = this.stats.potionMax;
-    this.recordT = 0;
-    Sfx.play('ascend');
-    this.paused = false;
-    this.log(opts.ascension
-      ? `<b style="color:#d9b8ff">Ascensão!</b> Você recebeu <b>${U.fmt(gain)} Almas</b>. Uma nova jornada começa.`
-      : `Uma nova jornada começa${gain ? ` com <b>${U.fmt(gain)} Almas</b> da anterior` : ''}.`, 'lvl');
-    if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
-    this.enterZone(sz);
-    UI.initGame();
-    UI.banner(opts.ascension ? 'ASCENSÃO' : 'NOVA JORNADA', gain ? `+${U.fmt(gain)} Almas` : (fresh.hardcore ? '3 Corações' : 'Modo Relaxado'), 'purple', 3);
+  // Encerra a jornada: Almas e recordes ficam no perfil, as armas exclusivas vão para o cofre
+  // do perfil (o próximo herói recebe) e o slot fica livre.
+  endRun(gain, countAsc) {
+    const st = this.state, n = this.slot;
+    if (!st) return null;
+    const info = { cls: st.cls, species: st.species, name: st.name, hardcore: st.hardcore, slot: n };
+    for (const it of [...EQUIP_SLOTS.map(k => st.equip[k]), ...st.inv]) if (it && it.excl) { it.isNew = false; st.vault.push(it); }
+    const w = st.equip.weapon;
+    if (w && w.fusion && st.fusions[this.fusionKey(st.cls, w.fusion)]) st.fusionPref[st.cls] = w.fusion;
+    st.souls += gain;
+    st.stats.soulsEarned += gain;
+    if (countAsc) st.stats.ascensions++;
     this.checkUnlocks();
-    this.save();
+    this.syncProfileFromState();
+    this.saveProfile();
+    this.deleteSlotLocal(n);
+    Online.deleteCloud(n);
+    Online.scoreDirty = true;
+    Online.flush();
+    this.running = false; this.paused = false; this.transition = null;
+    this.state = null;
+    return info;
+  },
+  // Depois de ascender ou do Fim de Jogo: volta ao menu de slots para escolher o próximo herói.
+  // Com newCls (auto-ascensão e simuladores), recomeça na hora no mesmo slot.
+  finishRun(gain, countAsc, label, newCls, newSpecies, hardcore, fromStart) {
+    const wasRunning = this.running;
+    const info = this.endRun(gain, countAsc);
+    if (!info) return;
+    Sfx.play('ascend');
+    if (newCls) {
+      this.slot = info.slot;
+      this.newGame(newCls, newSpecies || info.species, info.name, hardcore === undefined ? info.hardcore : hardcore, { fromStart });
+      this.log(`<b style="color:#d9b8ff">${label}</b> Você recebeu <b>${U.fmt(gain)} Almas</b>. Uma nova jornada começa.`, 'lvl');
+      if (wasRunning) this.start(); else this.enterZone(this.state.zone, true);
+      UI.banner(label.toUpperCase(), `+${U.fmt(gain)} Almas`, 'purple', 3);
+      return;
+    }
+    UI.closeModal();
+    UI.selSlot = info.slot;
+    UI.showTitle('new');
+    UI.notice(`${label} +${U.fmt(gain)} Almas. Escolha o próximo herói!`, '#d9b8ff');
   },
   ascend(newCls, newSpecies, hardcore, fromStart) {
     const gain = Stats.soulsOnAscend(this.state);
     if (gain <= 0) return;
-    this.newJourney(newCls, newSpecies, { gain, ascension: true, hardcore, fromStart });
+    this.finishRun(gain, true, 'Ascensão!', newCls, newSpecies, hardcore, fromStart);
   },
 
   // Modo desafio: perdeu os 3 corações
@@ -1095,9 +1209,9 @@ const Game = {
     UI.gameOverModal();
   },
   finishGameOver(newCls, newSpecies, hardcore, fromStart) {
-    const pe = this.state.pendingEnd;
+    const pe = this.state && this.state.pendingEnd;
     if (!pe) return;
-    this.newJourney(newCls, newSpecies, { gain: pe.gain, ascension: false, countAsc: pe.zone >= 15, hardcore, fromStart });
+    this.finishRun(pe.gain, pe.zone >= 15, 'Fim de jogo:', newCls, newSpecies, hardcore, fromStart);
   },
 
   // ---------------------------------------------------------- conquistas

@@ -42,61 +42,55 @@ const UI = {
   // ==========================================================
   // Tela de título
   // ==========================================================
-  titleUnlocks() {
-    if ((this.titleMode === 'ascend' || this.titleMode === 'gameover') && Game.state) return Game.state.unlocks;
-    return Game.sharedUnlocks();
-  },
+  titleUnlocks() { return Game.sharedUnlocks(); },
 
   rarityTag(r) { const R = HERO_RARITY[r]; return `<span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${R.name}</span>`; },
 
-  showTitle(mode = 'new') {
-    this.titleMode = mode;
+  // Menu principal: perfil, slots de jornada e criação de herói
+  showTitle() {
+    this.titleMode = 'new';
     const el = this.$('title-screen');
     el.classList.remove('hidden');
-    const over = mode === 'gameover';
-    const asc = mode === 'ascend' || over;
-    const slots = mode === 'new' ? [1, 2, 3].map(n => Game.peekSave(n)) : null;
-    if (slots && (!this.selSlot || slots[this.selSlot - 1])) this.selSlot = Game.freeSlot();
+    const P = Game.profile || Game.loadProfile();
+    const slots = [1, 2, 3].map(n => Game.peekSave(n));
+    if (!this.selSlot || slots[this.selSlot - 1]) this.selSlot = Game.freeSlot();
     const un = this.titleUnlocks();
-    if (!un.classes.includes(this.selCls)) this.selCls = asc ? Game.state.cls : un.classes[0];
-    if (!un.species.includes(this.selSp)) this.selSp = asc ? Game.state.species : 'human';
+    if (!un.classes.includes(this.selCls)) this.selCls = un.classes[0];
+    if (!un.species.includes(this.selSp)) this.selSp = 'human';
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
-    h += `<div class="ts-logo"><h1>UPGRIND</h1><p>${over ? 'Fim de Jogo' : asc ? 'Ascensão' : 'Crônicas do Abismo'}</p></div>`;
-    h += over
-      ? `<div class="ts-tag">Seus três corações se foram. Almas, Altar, conquistas, Armas Ancestrais e desbloqueios permanecem — escolha como recomeçar.</div>`
-      : asc
-      ? `<div class="ts-tag">Sua alma renasce mais forte. Escolha classe e espécie para a nova jornada — Almas, Altar, conquistas, Armas Ancestrais e desbloqueios permanecem.</div>`
-      : `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
-    if (slots && Online.enabled) {
+    h += `<div class="ts-logo"><h1>UPGRIND</h1><p>Crônicas do Abismo</p></div>`;
+    h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
+    if (Online.enabled) {
       const name = Online.profile ? U.esc(Online.profile.name) : '';
       h += `<div class="ts-account">${!Online.ready ? '<span>Conectando ao servidor…</span>'
-        : Online.loggedIn ? `<span>👤 <b>${name}</b> · ☁ seus slots ficam salvos na nuvem</span><button class="btn small" id="ts-board">🏆 Placar</button><button class="btn small ghost" id="ts-logout">Sair da conta</button>`
+        : Online.loggedIn ? `<span>👤 <b>${name}</b> · ☁ perfil e slots salvos na nuvem</span><button class="btn small" id="ts-board">🏆 Placar</button><button class="btn small ghost" id="ts-logout">Sair da conta</button>`
         : `<span>Entre com uma conta para salvar na nuvem e aparecer no placar.</span><button class="btn small gold" id="ts-login">Entrar / Criar conta</button><button class="btn small" id="ts-board">🏆 Placar</button>`}</div>`;
       if (Online.error) h += `<div class="ts-warn">${U.esc(Online.error)}</div>`;
     }
-    if (slots && !Store.ok) h += `<div class="ts-warn">⚠ Este navegador está bloqueando o salvamento (aba anônima ou navegador de aplicativo, como o do WhatsApp/Discord/Instagram). O progresso se perde ao fechar. Abra o jogo no Chrome, Edge ou Firefox${Online.enabled ? ' ou entre com uma conta para salvar na nuvem' : ''}.</div>`;
-    if (slots) {
-      h += '<div class="ts-slots">';
-      slots.forEach((sv, i) => {
-        const n = i + 1;
-        if (sv) {
-          const cl = CLASSES[sv.cls] ? sv.cls : 'fighter', spId = SPECIES[sv.species] ? sv.species : 'human';
-          const c = CLASSES[cl], sp = SPECIES[spId];
-          h += `<div class="ts-slot full"><div class="sl-n">Slot ${n}</div><img src="${Sprites.classUrl(cl, spId, 3)}" alt="">
-            <div class="info"><b>${U.esc(sv.name)}${sv.hardcore ? ` <span class="sl-h">${'❤'.repeat(Math.max(0, sv.hearts))}</span>` : ''}</b>
-            <span>${c.name}${sv.cls2 && CLASSES[sv.cls2] ? ' / ' + CLASSES[sv.cls2].name : ''} · ${sp.name}${sv.species2 && SPECIES[sv.species2] ? ' / ' + SPECIES[sv.species2].name : ''}</span>
-            <span>Nível ${sv.level} · Zona ${sv.zone} · Recorde ${sv.stats.maxZone}${sv.stats.ascensions ? ` · ${sv.stats.ascensions} ${sv.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span>
-            <span class="sl-t">${sv.lastSave ? 'Salvo em ' + new Date(sv.lastSave).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}${sv.owner && Online.loggedIn && sv.owner === Online.user.id ? ' · ☁' : ''}</span></div>
-            <div class="sl-btns"><button class="btn gold" data-cont="${n}">Continuar</button><button class="btn small danger" data-del="${n}">Apagar</button></div></div>`;
-        } else {
-          h += `<div class="ts-slot empty${this.selSlot === n ? ' sel' : ''}" data-newslot="${n}"><div class="sl-n">Slot ${n}</div><div class="sl-empty">Vazio</div><div class="hint">${this.selSlot === n ? 'O novo herói será criado aqui ↓' : 'Clique para criar um herói aqui'}</div></div>`;
-        }
-      });
-      h += '</div>';
-    }
-    const full = slots && !this.selSlot;
+    if (!Store.ok) h += `<div class="ts-warn">⚠ Este navegador está bloqueando o salvamento (aba anônima ou navegador de aplicativo, como o do WhatsApp/Discord/Instagram). O progresso se perde ao fechar. Abra o jogo no Chrome, Edge ou Firefox${Online.enabled ? ' ou entre com uma conta para salvar na nuvem' : ''}.</div>`;
+    // Perfil: o que fica para sempre, em todas as jornadas
+    const soulImg = `<img src="${Sprites.soulUrl()}" alt="">`;
+    h += `<div class="ts-profile"><span class="tp-souls">${soulImg}<b>${U.fmt(P.souls)}</b> Almas</span><span><b>${P.stats.ascensions || 0}</b> ${(P.stats.ascensions || 0) === 1 ? 'ascensão' : 'ascensões'}</span><span>Recorde: <b>zona ${P.stats.maxZone || 1}</b></span><span><b>${un.classes.length}</b>/${CLASS_ORDER.length} classes · <b>${un.species.length}</b>/${SPECIES_ORDER.length} espécies</span>${P.vault.length ? `<span class="c6">🌈 ${P.vault.length} arma${P.vault.length > 1 ? 's' : ''} exclusiva${P.vault.length > 1 ? 's' : ''} para o próximo herói</span>` : ''}</div>`;
+    h += '<div class="ts-slots">';
+    slots.forEach((sv, i) => {
+      const n = i + 1;
+      if (sv) {
+        const cl = CLASSES[sv.cls] ? sv.cls : 'fighter', spId = SPECIES[sv.species] ? sv.species : 'human';
+        const c = CLASSES[cl], sp = SPECIES[spId];
+        h += `<div class="ts-slot full"><div class="sl-n">Slot ${n}${sv.pendingEnd ? ' · <span style="color:#ff8a9a">Fim de jogo</span>' : ''}</div><img src="${Sprites.classUrl(cl, spId, 3)}" alt="">
+          <div class="info"><b>${U.esc(sv.name)}${sv.hardcore ? ` <span class="sl-h">${'❤'.repeat(Math.max(0, sv.hearts))}</span>` : ''}</b>
+          <span>${c.name}${sv.cls2 && CLASSES[sv.cls2] ? ' / ' + CLASSES[sv.cls2].name : ''} · ${sp.name}${sv.species2 && SPECIES[sv.species2] ? ' / ' + SPECIES[sv.species2].name : ''}</span>
+          <span>Nível ${sv.level} · Zona ${sv.zone} · Melhor desta jornada: ${sv.maxZone || sv.zone}</span>
+          <span class="sl-t">${sv.lastSave ? 'Salvo em ' + new Date(sv.lastSave).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}${sv.owner && Online.loggedIn && sv.owner === Online.user.id ? ' · ☁' : ''}</span></div>
+          <div class="sl-btns"><button class="btn gold" data-cont="${n}">Continuar</button><button class="btn small danger" data-del="${n}">Apagar</button></div></div>`;
+      } else {
+        h += `<div class="ts-slot empty${this.selSlot === n ? ' sel' : ''}" data-newslot="${n}"><div class="sl-n">Slot ${n}</div><div class="sl-empty">Vazio</div><div class="hint">${this.selSlot === n ? 'O novo herói será criado aqui ↓' : 'Clique para criar um herói aqui'}</div></div>`;
+      }
+    });
+    h += '</div>';
+    const full = !this.selSlot;
     h += '<div class="ts-grid"><div class="ts-left">';
-    h += `<div class="ts-h">${slots ? (full ? 'Slots cheios — ' : `Novo herói no slot ${this.selSlot} — `) : ''}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
+    h += `<div class="ts-h">${full ? 'Slots cheios — ' : `Novo herói no slot ${this.selSlot} — `}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
     for (const id of CLASS_ORDER) {
       const c = CLASSES[id], lk = !un.classes.includes(id), R = HERO_RARITY[c.rarity];
       h += `<div class="pick${lk ? ' locked' : ''}${id === this.selCls ? ' sel' : ''}" data-pick="class" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.classUrl(id, 'human', 3)}" alt=""><div class="pn">${c.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
@@ -107,16 +101,13 @@ const UI = {
       h += `<div class="pick${lk ? ' locked' : ''}${id === this.selSp ? ' sel' : ''}" data-pick="species" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.speciesUrl(id, 3)}" alt=""><div class="pn">${sp.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
     }
     h += '</div></div><div class="ts-right"><div class="ts-detail" id="ts-detail"></div>';
-    const nm = asc ? Game.state.name : U.pick(HERO_NAMES);
-    h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(nm)}" ${asc ? 'disabled' : ''} placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório" ${asc ? 'disabled' : ''}>Sortear</button></div>`;
-    const relaxOn = Game.state && asc ? !Game.state.hardcore : false;
-    h += `<label class="ts-hc"><input type="checkbox" id="ts-relax" ${relaxOn ? 'checked' : ''}><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
-    if (asc) h += `<label class="ts-hc ts-zero"><input type="checkbox" id="ts-zero"><div><b>Começar da zona 1</b><span>Ignora o Atalho Astral e começa a nova jornada do início.</span></div></label>`;
-    h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>${over ? 'Recomeçar' : asc ? 'Renascer' : 'Começar Jornada'}</button>${asc && !over ? '<button class="btn ghost" id="ts-cancel">Cancelar</button>' : ''}</div>`;
-    if (asc) h += `<div class="ts-start"><button class="btn small ghost" id="ts-menu">⟵ Voltar ao menu (slots)</button></div><div class="hint" style="text-align:center;margin-top:-4px">${over ? 'O Fim de Jogo fica esperando neste slot até você escolher a próxima jornada.' : 'Sai sem ascender: a jornada atual continua salva no slot.'}</div>`;
-    if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Apague um para criar outro herói.</div>';
+    h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(U.pick(HERO_NAMES))}" placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório">Sortear</button></div>`;
+    h += `<label class="ts-hc"><input type="checkbox" id="ts-relax"><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
+    if ((P.soulUpg.head || 0) > 0) h += `<label class="ts-hc ts-zero"><input type="checkbox" id="ts-zero"><div><b>Começar da zona 1</b><span>Ignora o Atalho Astral e começa a jornada do início.</span></div></label>`;
+    h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>Começar Jornada</button></div>`;
+    if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Continue um deles, ascenda ou apague um para criar outro herói.</div>';
     h += '</div></div>';
-    h += '<div class="ts-foot">Classes e espécies liberadas valem para todos os slots. As bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
+    h += '<div class="ts-foot">Almas, Altar, conquistas, Armas Ancestrais e as classes e espécies liberadas são do seu perfil e valem para todos os slots. Cada slot é uma jornada: ao ascender ou no Fim de Jogo ela termina, as Almas vão para o perfil e o slot fica livre para o próximo herói.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente</div></div>';
     el.innerHTML = h;
 
     el.querySelectorAll('[data-pick]').forEach(card => card.addEventListener('click', () => {
@@ -132,29 +123,25 @@ const UI = {
     });
     el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
       const n = +b.dataset.del, sv = Game.peekSave(n);
-      this.confirm('Apagar slot', `Apagar <b>${U.esc(sv ? sv.name : '')}</b> (slot ${n})? Todo o progresso desse slot — Almas, desbloqueios e Armas Ancestrais — será perdido para sempre.`, 'Apagar', () => { Game.deleteSlot(n); this.selSlot = n; this.showTitle('new'); }, 'danger');
+      this.confirm('Apagar slot', `Apagar a jornada de <b>${U.esc(sv ? sv.name : '')}</b> (slot ${n})? Ela termina sem render Almas. O perfil (Almas, Altar, liberações e Armas Ancestrais) continua, e as armas exclusivas voltam para o próximo herói.`, 'Apagar', () => { Game.deleteSlot(n); this.selSlot = n; this.showTitle(); }, 'danger');
     });
-    el.querySelectorAll('[data-newslot]').forEach(b => b.onclick = () => { Sfx.init(); Sfx.play('click'); this.selSlot = +b.dataset.newslot; this.showTitle('new'); });
+    el.querySelectorAll('[data-newslot]').forEach(b => b.onclick = () => { Sfx.init(); Sfx.play('click'); this.selSlot = +b.dataset.newslot; this.showTitle(); });
     if (this.$('ts-login')) this.$('ts-login').onclick = () => { Sfx.init(); this.loginModal('in'); };
     if (this.$('ts-board')) this.$('ts-board').onclick = () => { Sfx.init(); this.boardModal(); };
-    if (this.$('ts-logout')) this.$('ts-logout').onclick = () => this.confirm('Sair da conta', 'Seus heróis continuam guardados na nuvem e voltam quando você entrar de novo. As cópias deste navegador serão removidas.', 'Sair da conta', async () => { await Online.signOut(); this.showTitle('new'); });
+    if (this.$('ts-logout')) this.$('ts-logout').onclick = () => this.confirm('Sair da conta', 'Seu perfil e seus heróis continuam guardados na nuvem e voltam quando você entrar de novo. As cópias deste navegador serão removidas.', 'Sair da conta', async () => { await Online.signOut(); this.showTitle(); });
     const dice = this.$('ts-dice');
     if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
-    if (this.$('ts-cancel')) this.$('ts-cancel').onclick = () => { this.hideTitle(); Game.paused = false; Music.zone(Game.W ? Game.W.biome.id : 'title'); };
-    if (this.$('ts-menu')) this.$('ts-menu').onclick = () => { Sfx.init(); Game.exitToMenu(); };
     this.$('ts-go').onclick = () => {
       Sfx.init();
       const un2 = this.titleUnlocks();
       if (!un2.classes.includes(this.selCls) || !un2.species.includes(this.selSp)) { this.notice('Essa combinação ainda está bloqueada.', 'var(--red)'); return; }
+      if (!this.selSlot) { this.notice('Os 3 slots estão ocupados. Apague um para começar outro herói.', 'var(--red)'); return; }
       const hc = !(this.$('ts-relax') && this.$('ts-relax').checked);
       const zero = !!(this.$('ts-zero') && this.$('ts-zero').checked);
-      if (over) { this.hideTitle(); Game.finishGameOver(this.selCls, this.selSp, hc, zero); return; }
-      if (asc) { this.hideTitle(); Game.paused = false; Game.ascend(this.selCls, this.selSp, hc, zero); return; }
-      if (!this.selSlot) { this.notice('Os 3 slots estão ocupados. Apague um para começar outro herói.', 'var(--red)'); return; }
       const name = (this.$('ts-name').value || '').trim() || U.pick(HERO_NAMES);
       this.hideTitle();
       Game.slot = this.selSlot;
-      Game.newGame(this.selCls, this.selSp, name, hc);
+      Game.newGame(this.selCls, this.selSp, name, hc, { fromStart: zero });
       Game.start();
     };
     this.renderTitleDetail();
@@ -675,7 +662,7 @@ const UI = {
     let h = `<div class="asc-hero"><div style="font:600 13px var(--pixel);color:var(--muted)">ALMAS</div><div class="souls-big">${soul}${U.fmt(st.souls)}</div>
       <div style="margin:8px 0 12px;font-size:12px;color:#cfc4de">${st.maxZone >= 15 ? `Ascender agora concede <b style="color:#d9b8ff">+${U.fmt(gain)} Almas</b> (zona recorde desta jornada: ${st.maxZone}).` : `Alcance a <b>zona 15</b> para poder ascender. (Atual: ${st.maxZone})`}</div>
       <button class="btn purple" data-act="ascend" ${gain > 0 ? '' : 'disabled'}>Ascender</button>
-      <div class="hint" style="margin-top:10px">Ascender reinicia nível, ouro, itens, treino e talentos, mas mantém Almas, o Altar e conquistas. Você pode trocar de classe.</div></div>`;
+      <div class="hint" style="margin-top:10px">Ascender termina esta jornada: as Almas vão para o seu perfil, o slot fica livre e você escolhe o próximo herói no menu. Almas, Altar, conquistas, Armas Ancestrais e liberações nunca se perdem.</div></div>`;
     const s = st.settings;
     h += `<div class="sec"><div class="sec-h"><h3>Automação</h3></div>
       <div class="set-row"><div><div class="l">Auto-ascender</div><div class="d">Ascende sozinho com a mesma classe e espécie e, no modo de corações, recomeça sozinho ${AUTO_RESTART}s depois do Fim de Jogo.</div></div>
@@ -768,7 +755,7 @@ const UI = {
       case 'soul': Game.buySoul(id, Game.state.settings.buyQty || true); this.renderTab(false); break;
       case 'ascend': {
         const gain = Stats.soulsOnAscend(Game.state);
-        this.confirm('Ascender', `Você receberá <b style="color:#d9b8ff">${U.fmt(gain)} Almas</b>. Nível, ouro, itens, treino e talentos serão reiniciados. Escolha classe e espécie da próxima jornada a seguir.`, 'Continuar', () => { Game.paused = true; this.showTitle('ascend'); }, 'purple');
+        this.confirm('Ascender', `Você receberá <b style="color:#d9b8ff">${U.fmt(gain)} Almas</b> e esta jornada termina: o slot fica livre e você volta ao menu para criar o próximo herói, com qualquer classe e espécie liberada. Almas, Altar, conquistas, Armas Ancestrais e liberações continuam no seu perfil, e as armas exclusivas vão com o próximo herói.`, 'Ascender', () => Game.ascend(), 'purple');
         break;
       }
       case 'useClass':
@@ -1193,7 +1180,7 @@ const UI = {
         const code = Game.exportSave();
         this.modal('Exportar progresso', `<p class="hint">Copie e guarde este código:</p><textarea readonly onclick="this.select()">${code}</textarea>`, [{ label: 'Copiar', cls: 'gold', fn: () => { navigator.clipboard && navigator.clipboard.writeText(code); this.notice('Código copiado!'); } }]);
       } else if (x.dataset.x === 'import') {
-        this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O progresso atual será substituído.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
+        this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O perfil e os 3 slots deste navegador serão substituídos.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
           try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
         } }]);
       } else if (x.dataset.x === 'sync') {
@@ -1218,9 +1205,9 @@ const UI = {
         <div><span>Nível</span><b style="color:#c9a0ff">${pe.level}</b></div>
         <div><span>Almas obtidas</span><b style="color:#d9b8ff">+${U.fmt(pe.gain)}</b></div>
       </div>
-      <p class="hint" style="margin-top:10px">Suas Almas, o Altar, conquistas e desbloqueios continuam.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''} Escolha a próxima jornada.</p>
+      <p class="hint" style="margin-top:10px">A jornada terminou e o slot fica livre. Almas, Altar, conquistas e liberações continuam no seu perfil.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''}</p>
       ${st.settings.autoAsc ? `<p class="hint" style="color:var(--gold)">Auto-ascender ligado: recomeçando sozinho com ${CLASSES[st.cls].name} ${SPECIES[st.species].name} em ${AUTO_RESTART} segundos…</p>` : ''}`,
-      [{ label: 'Escolher nova jornada', cls: 'gold', fn: () => this.showTitle('gameover') }], { locked: true });
+      [{ label: 'Voltar ao menu', cls: 'gold', fn: () => Game.finishGameOver() }], { locked: true });
   },
 
   offlineModal(sec, eff, g, r) {
