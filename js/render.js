@@ -271,6 +271,19 @@ const Render = {
     for (const c of W.chests) {
       if (c.gone || !onScreen(c.x, c.y) || !explored(c.x, c.y)) continue;
       const T = CHEST_TIERS[c.tier];
+      if (T.rainbow && !c.opened) {
+        // brilho arco-íris girando atrás do baú
+        const cx = (c.x + 0.5) * TS, cy = (c.y + 0.6) * TS;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.45 + 0.15 * Math.sin(this.time * 3);
+        const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, TS * 1.4);
+        gr.addColorStop(0, `hsl(${(this.time * 120) % 360}, 100%, 65%)`);
+        gr.addColorStop(0.5, `hsla(${(this.time * 120 + 120) % 360}, 100%, 60%, .5)`);
+        gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr; ctx.fillRect(cx - TS * 1.4, cy - TS * 1.4, TS * 2.8, TS * 2.8);
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        if (visible(c.x, c.y) && Math.random() < 0.35) World.part(W, c.x + U.rand(0.1, 0.9), c.y + U.rand(0.2, 0.8), 0, -0.8, `hsl(${Math.floor(Math.random() * 360)}, 100%, 65%)`, 0.9, 1.5, 0);
+      }
       const spr = Sprites.get(c.opened ? 'chest_open' : 'chest', Object.assign({ k: '#1a1010', y: '#ffd04a' }, T.pal));
       let shx = 0;
       if (c.shaking && !c.opened) shx = Math.round(Math.sin(this.time * 50) * u);

@@ -187,9 +187,12 @@ function unlockText(u) {
 }
 // Zona recorde (começando a jornada com ela) que torna a classe/espécie "dominada"
 const MASTERY_ZONE = 50;
-// Ascensões necessárias para multiclasse e para mestiçagem (duas espécies)
-const MULTI_ASC = 10;
-const MULTI_SP_ASC = 14;
+// Ascensões necessárias: mestiçagem (duas espécies, só atributos) vem antes da multiclasse,
+// que é mais forte e exige fundir as armas das duas classes na Forja
+const MULTI_SP_ASC = 10;
+const MULTI_ASC = 14;
+const FUSION_SHARDS = 30;      // Fragmentos para aprender cada fusão (par de classes) na primeira vez
+const FUSION_GOLD = 6;         // custo em ouro de cada fusão = 6× o custo de forja da arma
 
 // ------------------------------------------------------------
 // Maestria: talentos infinitos para os pontos que sobram (nível 60+)

@@ -57,6 +57,8 @@ const Ticker = {
 const HEADSTART_LVL = 2;
 const HEADSTART_RAR = 2;
 const HEADSTART_POW = 120;
+const AUTO_ASC_STALL = 15 * 60;   // auto-ascensão "ao travar": tempo de jogo sem recorde de zona
+const AUTO_RESTART = 8;           // segundos até recomeçar sozinho após o Fim de Jogo (com auto-ascensão)
 const DEFAULT_CLASSES = () => CLASS_ORDER.filter(id => CLASSES[id].unlock.t === 'default');
 const DEFAULT_SPECIES = () => SPECIES_ORDER.filter(id => SPECIES[id].unlock.t === 'default');
 
@@ -74,7 +76,8 @@ const Game = {
       hardcore: !!hardcore, hearts: 3, pendingEnd: null, classStats: {}, speciesStats: {},
       runCls: cls, runSp: species, relics: {}, shards: 0, relicPity: 0, parked: false,
       talents: { [CLASSES[cls].skills[0]]: 1 },
-      equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null },
+      equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null, offhand: null },
+      fusions: {}, autoFarmed: false, startZone: 1,
       inv: [], training: {}, soulUpg: {},
       zone: 1, maxZone: 1, mode: 'advance', retreatLeft: 0, deathsInZone: 0, potions: 3,
       unlocks: { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() }, encPity: 0,
@@ -87,6 +90,7 @@ const Game = {
       settings: {
         sound: true, volume: 0.5, music: true, musicVol: 0.45, musicTrack: 'auto', bgSfx: false,
         autoSell: 2, autoEquip: true, autoTalent: true, dmgNumbers: true, shake: true, exploreAll: true, speed: 1,
+        buyQty: 1, autoAsc: 0, autoAscZone: 100, autoFarmZone: 0,
       },
       rates: { gold: 0, xp: 0 },
       lastSave: Date.now(), created: Date.now(),
@@ -118,7 +122,7 @@ const Game = {
     for (const k in d) if (s[k] === undefined) s[k] = d[k];
     for (const k in d.stats) if (s.stats[k] === undefined) s.stats[k] = d.stats[k];
     for (const k in d.settings) if (s.settings[k] === undefined) s.settings[k] = d.settings[k];
-    for (const k of SLOTS) if (s.equip[k] === undefined) s.equip[k] = null;
+    for (const k of EQUIP_SLOTS) if (s.equip[k] === undefined) s.equip[k] = null;
     if (!SPECIES[s.species]) s.species = 'human';
     for (const id of DEFAULT_CLASSES()) if (!s.unlocks.classes.includes(id)) s.unlocks.classes.push(id);
     for (const id of DEFAULT_SPECIES()) if (!s.unlocks.species.includes(id)) s.unlocks.species.push(id);
@@ -129,8 +133,8 @@ const Game = {
     if (s.v < 4) { s.runCls = s.cls; s.runSp = s.species; s.v = 4; }
     if (!s.classStats[s.cls]) s.classStats[s.cls] = { best: s.maxZone || 1, kills: 0, bosses: 0 };
     // Armas antigas sem classe registrada pertencem à classe atual
-    const all = [...SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
-    for (const it of all) if (it.slot === 'weapon' && !it.cls) it.cls = s.cls;
+    const all = [...EQUIP_SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
+    for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
     return s;
   },
 
@@ -203,6 +207,8 @@ const Game = {
   recalc() {
     const st = this.state;
     const W = this.W;
+    const c2 = Stats.fusionCls2(st);
+    if ((c2 || null) !== (st.cls2 || null)) this.setCls2(c2);
     const ratio = W && W.hero && W.hero.maxHp ? W.hero.hp / W.hero.maxHp : 1;
     this.stats = Stats.compute(st);
     this.power = Stats.power(this.stats, st.zone);
@@ -212,6 +218,26 @@ const Game = {
     }
     if (st.potions > this.stats.potionMax) st.potions = this.stats.potionMax;
     UI.dirty('top', 'equip', 'talents', 'train', 'forge', 'asc', 'hall');
+    if (this.cls2Changed) {
+      this.cls2Changed = false;
+      if (st.settings.autoTalent) this.autoTalents();
+      UI.buildSkillbar && this.running && UI.buildSkillbar();
+    }
+  },
+  // Liga/desliga a classe secundária (devolve os pontos gastos nos talentos da classe que saiu)
+  setCls2(c2) {
+    const st = this.state, old = st.cls2;
+    if (old && CLASSES[old]) {
+      const keep = new Set([...CLASSES[st.cls].skills, ...CLASSES[st.cls].passives]);
+      for (const id of [...CLASSES[old].skills, ...CLASSES[old].passives]) if (!keep.has(id)) delete st.talents[id];
+    }
+    st.cls2 = c2 || null;
+    this.cls2Changed = true;
+    if (!this.running) return;
+    if (c2) {
+      UI.banner(this.className(), 'Multiclasse', 'purple', 2.4);
+      this.log(`Multiclasse: <b>${this.className()}</b> — habilidades das duas classes e +${MULTI_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
+    } else if (old) this.log(`Multiclasse desfeita: a arma fundida não está mais equipada.`, '');
   },
 
   // ---------------------------------------------------------- início e loop
@@ -278,6 +304,7 @@ const Game = {
     if (this.paused || !this.W) return;
     let sim = dt * this.speed;
     st.stats.playTime += dt;
+    this.recordT = (this.recordT || 0) + sim;
     while (sim > 1e-6 && !this.transition) {
       const step = Math.min(sim, 1 / 30);
       World.update(this.W, step);
@@ -297,8 +324,31 @@ const Game = {
     this.saveT += dt;
     if (this.saveT > 15) { this.saveT = 0; this.save(); }
     Online.tick(dt);
+    this.autoAscendCheck(dt);
     this.achT += dt;
     if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
+  },
+
+  // Auto-ascensão (opção dos jogadores): ascende sozinho ao travar ou ao chegar numa zona,
+  // e recomeça sozinho após o Fim de Jogo, sempre com a mesma classe e espécie
+  autoAscendCheck(dt) {
+    const st = this.state, s = st.settings;
+    if (!s.autoAsc || !this.running || UI.titleOpen()) { this.restartT = 0; return; }
+    if (st.pendingEnd) {
+      this.restartT = (this.restartT || 0) + dt;
+      if (this.restartT >= AUTO_RESTART) {
+        this.restartT = 0;
+        UI.closeModal();
+        this.finishGameOver(st.cls, st.species, st.hardcore);
+      }
+      return;
+    }
+    if (this.paused || this.transition || st.maxZone < 15) return;
+    const stalled = s.autoAsc === 1 && (this.recordT || 0) > AUTO_ASC_STALL;
+    const reached = s.autoAsc === 2 && st.maxZone >= Math.max(s.autoAscZone || 0, (st.startZone || 1) + 5);
+    if (!stalled && !reached) return;
+    this.log(`<b>Auto-ascensão</b>: ${stalled ? '15 minutos sem novo recorde' : `zona ${st.maxZone} alcançada`}.`, 'lvl');
+    this.ascend(st.cls, st.species, st.hardcore);
   },
 
   // Registra feitos (best = zona recorde, kills, bosses) da classe e da espécie com que a jornada
@@ -319,9 +369,10 @@ const Game = {
     const st = this.state;
     z = Math.max(1, z);
     st.zone = z;
-    if (z > st.maxZone) st.maxZone = z;
+    if (z > st.maxZone) { st.maxZone = z; this.recordT = 0; }
     if (z > st.stats.maxZone) { st.stats.maxZone = z; Online.scoreDirty = true; }
     this.classStat('best', z);
+    for (const it of [...EQUIP_SLOTS.map(k => st.equip[k]), ...st.inv]) if (it && it.excl) Items.retune(it, st.maxZone);
     st.deathsInZone = 0;
     this.recalc();
     this.W = World.create(z);
@@ -333,6 +384,16 @@ const Game = {
     const sub = b.name + (cyc ? ` — Ciclo ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][cyc] || cyc + 1}` : '');
     UI.banner(`Zona ${z}`, sub + (this.W.isLord ? ' · Covil do Senhor' : ''), this.W.isLord ? 'purple' : '', 2.4);
     this.log(`Entrando na <b>Zona ${z}</b> — ${sub}.`, '');
+    if (this.W.chests.some(c => c.tier === 4)) {
+      this.log('🌈 <b class="c6">Um Baú Arco-Íris está escondido nesta zona!</b> Ele pode guardar uma arma exclusiva.', 'loot');
+      UI.toastText('🌈 Baú Arco-Íris nesta zona!', 'Pode conter uma arma exclusiva', '#ff7ae0');
+    }
+    const af = st.settings.autoFarmZone;
+    if (af > 0 && !st.autoFarmed && st.mode === 'advance' && z >= af) {
+      st.autoFarmed = true; st.mode = 'farm'; st.retreatLeft = 0;
+      this.log(`Chegou na zona ${af}: modo <b>Farmar</b> ativado automaticamente.`, '');
+      UI.banner('MODO FARMAR', `Zona ${af} alcançada`, '', 2.2);
+    }
     Music.zone(b.id);
     UI.dirty('top', 'zone');
   },
@@ -440,7 +501,6 @@ const Game = {
     if (!this.isUnlocked('class', id) || st.cls === id) return;
     st.cls = id;
     st.runCls = null; // recordes desta jornada deixam de contar para a classe
-    if (st.cls2 === id || (st.cls2 && !Stats.mastered(st, id))) st.cls2 = null;
     st.talents = { [CLASSES[id].skills[0]]: 1 };
     if (st.equip.weapon) Items.convertWeapon(st.equip.weapon, id);
     for (const it of st.inv) if (it.slot === 'weapon') Items.convertWeapon(it, id);
@@ -454,25 +514,44 @@ const Game = {
     Sfx.play('ascend');
     this.save();
   },
-  // Multiclasse: exige ascensões e as duas classes dominadas
-  canMulticlass(id) {
-    const st = this.state;
-    return Stats.multiclassOpen(st) && id !== st.cls && this.isUnlocked('class', id) && Stats.mastered(st, st.cls) && Stats.mastered(st, id);
+  // Multiclasse por fusão: a arma equipada ganha a forma da arma de outra classe dominada.
+  // Enquanto a arma fundida estiver equipada, o herói é multiclasse.
+  fusionKey(a, b) { return [a, b].sort().join('+'); },
+  fusionCost(w) { return Items.forgeCost(w) * FUSION_GOLD; },
+  fuseBlock(partner) {
+    const st = this.state, w = st.equip.weapon;
+    if (!Stats.multiclassOpen(st)) return `Liberada após ${MULTI_ASC} ascensões (você tem ${st.stats.ascensions})`;
+    if (!Stats.mastered(st, st.cls)) return `Domine ${CLASSES[st.cls].name}: zona ${MASTERY_ZONE} numa jornada iniciada com ela`;
+    if (!w) return 'Equipe uma arma';
+    if (w.excl) return 'Armas exclusivas não podem ser fundidas';
+    if (!partner || partner === st.cls) return 'Escolha outra classe';
+    if (!this.isUnlocked('class', partner) || !Stats.mastered(st, partner)) return `Domine ${CLASSES[partner].name} primeiro`;
+    if (w.fusion === partner) return 'Sua arma já está fundida com essa classe';
+    if (!st.fusions[this.fusionKey(st.cls, partner)] && st.shards < FUSION_SHARDS) return `Aprender esta fusão custa ${FUSION_SHARDS} Fragmentos (você tem ${Math.floor(st.shards)})`;
+    const cost = this.fusionCost(w);
+    if (st.gold < cost) return `Custa ${U.fmt(cost)} de ouro`;
+    return '';
   },
-  setMulticlass(id) {
-    const st = this.state;
-    if (id && !this.canMulticlass(id)) return;
-    st.cls2 = id || null;
-    st.talents = { [CLASSES[st.cls].skills[0]]: 1 };
+  canMulticlass(id) { return !this.fuseBlock(id); },
+  fuseWeapon(partner) {
+    const st = this.state, w = st.equip.weapon;
+    if (this.fuseBlock(partner)) return false;
+    const key = this.fusionKey(st.cls, partner);
+    if (!st.fusions[key]) { st.shards -= FUSION_SHARDS; st.fusions[key] = true; }
+    st.gold -= this.fusionCost(w);
+    Items.fuse(w, partner);
+    Sfx.play('legendary');
     this.recalc();
-    if (st.settings.autoTalent) this.autoTalents();
-    this.refreshHero(true);
-    UI.initGame();
-    if (id) {
-      UI.banner(`${CLASSES[st.cls].name} / ${CLASSES[id].name}`, 'Multiclasse', 'purple', 2.4);
-      this.log(`Multiclasse: <b>${CLASSES[st.cls].name} / ${CLASSES[id].name}</b> — +${MULTI_SYNERGY}% de Dano e Vida, habilidades das duas classes, mas ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
-    } else this.log('Multiclasse removida.', '');
-    Sfx.play('ascend');
+    UI.dirty('equip', 'forge', 'hall', 'talents');
+    this.save();
+    return true;
+  },
+  unfuseWeapon() {
+    const w = this.state.equip.weapon;
+    if (!w || !w.fusion) return;
+    Items.unfuse(w);
+    this.recalc();
+    UI.dirty('equip', 'forge', 'hall', 'talents');
     this.save();
   },
   className(st = this.state) { return CLASSES[st.cls].name + (st.cls2 ? ' / ' + CLASSES[st.cls2].name : ''); },
@@ -492,7 +571,7 @@ const Game = {
     UI.initGame();
     if (id) {
       UI.banner(this.speciesName(), 'Mestiçagem', 'purple', 2.4);
-      this.log(`Mestiçagem: <b>${this.speciesName()}</b> — 50% dos traços da segunda espécie, os poderes das duas e +${MULTI_SP_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
+      this.log(`Mestiçagem: <b>${this.speciesName()}</b> — 50% dos atributos da segunda espécie e +${MULTI_SP_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
     } else this.log('Mestiçagem removida.', '');
     Sfx.play('ascend');
     this.save();
@@ -672,7 +751,12 @@ const Game = {
         World.text(W, x + 0.5, y - 0.6, RARITIES[item.rarity].name.toUpperCase() + '!', col, 13, 1.6, -0.8, true);
       }
     }
-    if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
+    if (item.rarity >= 6) {
+      item.locked = true;
+      Sfx.play('legendary'); setTimeout(() => Sfx.play('ascend'), 400);
+      UI.banner(item.name, `ARMA EXCLUSIVA! Criada por ${EXCLUSIVES[item.excl].by}`, 'purple', 4);
+      this.log(`🌈 <b class="c6">${U.esc(item.name)}</b> — arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
+    } else if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
     else if (item.rarity === 4) { Sfx.play('legendary'); UI.banner(item.name, 'Item Lendário encontrado!', '', 2.2); }
     else if (item.rarity === 3) Sfx.play('epic');
     else if (item.rarity === 2) Sfx.play('rare');
@@ -768,7 +852,7 @@ const Game = {
 
   findItem(uid) {
     const st = this.state;
-    for (const s of SLOTS) if (st.equip[s] && st.equip[s].uid === uid) return { item: st.equip[s], where: 'equip' };
+    for (const s of EQUIP_SLOTS) if (st.equip[s] && st.equip[s].uid === uid) return { item: st.equip[s], where: 'equip' };
     const it = st.inv.find(i => i.uid === uid);
     return it ? { item: it, where: 'inv' } : null;
   },
@@ -838,19 +922,20 @@ const Game = {
   },
 
   // ---------------------------------------------------------- treino
-  buyTraining(id, max) {
+  // n: quantidade (true = o máximo possível). Compra o que der, até n níveis.
+  buyTraining(id, n = 1) {
     const st = this.state, t = TRAINING.find(x => x.id === id);
-    let n = 0;
-    for (;;) {
+    const want = n === true || n === Infinity ? Infinity : Math.max(1, +n || 1);
+    let k = 0;
+    while (k < want) {
       const r = st.training[id] || 0;
       if (t.max && r >= t.max) break;
       const c = Stats.trainCost(t, r);
       if (st.gold < c) break;
-      st.gold -= c; st.training[id] = r + 1; n++;
-      if (!max) break;
+      st.gold -= c; st.training[id] = r + 1; k++;
     }
-    if (n) { Sfx.play('buy'); this.recalc(); }
-    return n;
+    if (k) { Sfx.play('buy'); this.recalc(); }
+    return k;
   },
 
   // ---------------------------------------------------------- talentos
@@ -892,15 +977,19 @@ const Game = {
   },
 
   // ---------------------------------------------------------- almas / ascensão
-  buySoul(id) {
+  buySoul(id, n = 1) {
     const st = this.state, u = SOUL_UPGRADES.find(x => x.id === id);
-    const r = st.soulUpg[id] || 0;
-    if (u.max && r >= u.max) return;
-    const c = Stats.soulCost(u, r);
-    if (st.souls < c) return;
-    st.souls -= c; st.soulUpg[id] = r + 1;
-    Sfx.play('buy');
-    this.recalc();
+    const want = n === true || n === Infinity ? Infinity : Math.max(1, +n || 1);
+    let k = 0;
+    while (k < want) {
+      const r = st.soulUpg[id] || 0;
+      if (u.max && r >= u.max) break;
+      const c = Stats.soulCost(u, r);
+      if (st.souls < c) break;
+      st.souls -= c; st.soulUpg[id] = r + 1; k++;
+    }
+    if (k) { Sfx.play('buy'); this.recalc(); }
+    return k;
   },
 
   // Nova jornada mantendo o progresso permanente (ascensão ou após fim de jogo)
@@ -910,31 +999,44 @@ const Game = {
     const keep = {
       souls: st.souls + gain, soulUpg: st.soulUpg, stats: st.stats, ach: st.ach, settings: st.settings, created: st.created,
       unlocks: st.unlocks, encPity: st.encPity, classStats: st.classStats, speciesStats: st.speciesStats, rates: { gold: 0, xp: 0 },
-      relics: st.relics, shards: st.shards, relicPity: st.relicPity,
+      relics: st.relics, shards: st.shards, relicPity: st.relicPity, fusions: st.fusions || {},
     };
     if (opts.ascension || opts.countAsc) keep.stats.ascensions++;
     keep.stats.soulsEarned += gain;
     const fresh = this.defaultState(newCls || st.cls, newSpecies || st.species, st.name, opts.hardcore);
     Object.assign(fresh, keep);
     this.state = fresh;
-    // Multiclasse e mestiçagem continuam na nova jornada enquanto forem válidas
-    if (st.cls2 && this.canMulticlass(st.cls2)) fresh.cls2 = st.cls2;
+    // Mestiçagem continua na nova jornada enquanto for válida
     if (st.species2 && this.canMultiSpecies(st.species2)) fresh.species2 = st.species2;
     this.recalc();
-    const cap = Math.min(1 + this.stats.startZone, Math.max(1, Math.floor(st.stats.maxZone / 2)));
+    const cap = opts.fromStart ? 1 : Math.min(1 + this.stats.startZone, Math.max(1, Math.floor(st.stats.maxZone / 2)));
     // Começar adiantado também adianta nível e equipamento; desce de zona até o herói aguentar
     let sz = cap;
     for (; ; sz--) {
       fresh.zone = sz; fresh.maxZone = sz;
       fresh.level = sz > 1 ? Math.floor(sz * HEADSTART_LVL) : 1;
       fresh.talents = { [CLASSES[fresh.cls].skills[0]]: 1 };
-      for (const k of SLOTS) fresh.equip[k] = null;
+      for (const k of EQUIP_SLOTS) fresh.equip[k] = null;
       this.giveStarter();
       this.recalc();
       if (fresh.settings.autoTalent) { this.autoTalents(); this.recalc(); }
       if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyPowScale(sz)) break;
     }
+    fresh.startZone = sz;
+    // Armas exclusivas acompanham você (ajustadas ao novo começo)
+    const oldEq = st.equip;
+    for (const it of [...EQUIP_SLOTS.map(k => oldEq[k]), ...st.inv]) {
+      if (!it || !it.excl) continue;
+      Items.retune(it, sz);
+      if (oldEq[it.slot] === it) fresh.equip[it.slot] = it; else fresh.inv.push(it);
+    }
+    // A fusão da arma anterior é refeita de graça na arma inicial (se ainda for válida)
+    const prevFuse = oldEq.weapon && oldEq.weapon.fusion;
+    const nw = fresh.equip.weapon;
+    if (prevFuse && nw && !nw.excl && fresh.fusions[this.fusionKey(fresh.cls, prevFuse)] && prevFuse !== fresh.cls) Items.fuse(nw, prevFuse);
+    this.recalc();
     fresh.potions = this.stats.potionMax;
+    this.recordT = 0;
     Sfx.play('ascend');
     this.paused = false;
     this.log(opts.ascension
@@ -947,10 +1049,10 @@ const Game = {
     this.checkUnlocks();
     this.save();
   },
-  ascend(newCls, newSpecies, hardcore) {
+  ascend(newCls, newSpecies, hardcore, fromStart) {
     const gain = Stats.soulsOnAscend(this.state);
     if (gain <= 0) return;
-    this.newJourney(newCls, newSpecies, { gain, ascension: true, hardcore });
+    this.newJourney(newCls, newSpecies, { gain, ascension: true, hardcore, fromStart });
   },
 
   // Modo desafio: perdeu os 3 corações
@@ -967,10 +1069,10 @@ const Game = {
     Sfx.play('death');
     UI.gameOverModal();
   },
-  finishGameOver(newCls, newSpecies, hardcore) {
+  finishGameOver(newCls, newSpecies, hardcore, fromStart) {
     const pe = this.state.pendingEnd;
     if (!pe) return;
-    this.newJourney(newCls, newSpecies, { gain: pe.gain, ascension: false, countAsc: pe.zone >= 15, hardcore });
+    this.newJourney(newCls, newSpecies, { gain: pe.gain, ascension: false, countAsc: pe.zone >= 15, hardcore, fromStart });
   },
 
   // ---------------------------------------------------------- conquistas

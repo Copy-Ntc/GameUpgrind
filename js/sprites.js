@@ -1054,7 +1054,43 @@ const SPR = {
   ln(g, 5, 10, 12, 3, 'w');
   px(g, 13, 2, 'l'); px(g, 2, 13, 'l');
   SPR.i_bow = rows(g);
+
+  // Dagon (exclusiva): adaga de lâmina longa envolta em chamas
+  g = G();
+  ln(g, 7, 8, 13, 2, 'm'); ln(g, 8, 9, 14, 3, 'd'); ln(g, 7, 9, 13, 3, 'l'); px(g, 14, 2, 'l'); px(g, 14, 1, 'w');
+  ln(g, 4, 7, 8, 11, 'g'); ln(g, 5, 10, 2, 13, 'h'); px(g, 1, 14, 'r'); px(g, 6, 9, 'r');
+  for (const [x, y, c] of [[11, 1, 'y'], [9, 3, 'r'], [12, 0, 'r'], [8, 5, 'y'], [6, 6, 'r'], [10, 2, 'y'], [15, 4, 'y'], [13, 6, 'r'], [7, 4, 'r']]) px(g, x, y, c);
+  SPR.i_dagon = rows(g);
+
+  // Espinho Pesado (exclusiva): martelão de cabeça cravejada, rachando o chão em chamas
+  g = G();
+  ln(g, 1, 14, 8, 7, 'h'); px(g, 3, 12, 'k'); px(g, 5, 10, 'k'); px(g, 0, 15, 'g');
+  ln(g, 6, 3, 11, 8, 'd'); ln(g, 7, 2, 12, 7, 'm'); ln(g, 8, 1, 13, 6, 'm'); ln(g, 9, 0, 14, 5, 'l');
+  ln(g, 7, 3, 11, 7, 'd'); ln(g, 8, 2, 12, 6, 'm'); ln(g, 9, 1, 13, 5, 'l');
+  for (const [x, y] of [[11, 0], [13, 2], [15, 4], [15, 6], [10, 0]]) px(g, x, y, 'w');
+  for (const [x, y, c] of [[5, 3, 'r'], [5, 5, 'y'], [7, 6, 'r'], [9, 9, 'y'], [11, 10, 'r'], [4, 1, 'y'], [12, 9, 'y']]) px(g, x, y, c);
+  SPR.i_spike = rows(g);
 })();
+
+// JesusSalva (exclusiva, arma secundária): cruz dourada envolta em fogo azul
+SPR.i_jesus = [
+  '.......f........',
+  '......fcf.......',
+  '.......lm.......',
+  '.......lm.......',
+  '.f.....lm.....f.',
+  'fclllllrrmmmmmcf',
+  '.cdddddrrdddddc.',
+  '.f.....lm.....f.',
+  '.......lm.......',
+  '.......lm.......',
+  '.......lm.......',
+  '.......lm.......',
+  '.......lm.......',
+  '......dlmd......',
+  '.....f.dd.f.....',
+  '......fcf.......',
+];
 
 // ============================================================
 // Renderização e cache
@@ -1070,6 +1106,7 @@ const Sprites = {
     const key = name + '|' + (opts.key || JSON.stringify(pal)) + (opts.noOutline ? '|n' : '');
     let s = this.cache.get(key);
     if (s) return s;
+    if (!SPR[name] && name.startsWith('fu_')) { const [a, b] = name.slice(3).split('__'); this.fusionSprite(a, b); }
     const rows = SPR[name];
     if (!rows) { console.warn('Sprite ausente:', name); return this.get('slime', { a: '#f0f', b: '#a0a', w: '#fff', e: '#000' }); }
     const h = rows.length, w = Math.max(...rows.map(r => r.length));
@@ -1137,7 +1174,22 @@ const Sprites = {
 
   heroPal(cls) { return HERO_PALS[cls]; },
 
+  // Duas armas cruzadas: a da classe principal na frente, a da outra classe espelhada atrás
+  fusionSprite(a, b) {
+    const name = 'fu_' + a + '__' + b;
+    if (!SPR[name] && SPR[a] && SPR[b]) {
+      const A = SPR[a], B = SPR[b];
+      SPR[name] = A.map((row, y) => row.split('').map((c, x) => {
+        if (c !== '.' && c !== ' ') return c;
+        const brow = B[y] || '';
+        const m = brow[brow.length - 1 - x];
+        return m && m !== ' ' ? m : '.';
+      }).join(''));
+    }
+    return name;
+  },
   itemPal(item) {
+    if (item.excl && EXCLUSIVES[item.excl]) return EXCLUSIVES[item.excl].pal;
     const base = item.matColor || '#aaaaaa';
     return {
       m: base, d: U.shade(base, -0.38), l: U.shade(base, 0.5),
@@ -1146,7 +1198,7 @@ const Sprites = {
   },
   itemUrl(item) {
     const pal = this.itemPal(item);
-    const key = item.sprite + '|' + item.matColor + '|' + item.rarity;
+    const key = item.sprite + '|' + item.matColor + '|' + item.rarity + '|' + (item.excl || '');
     return this.url(item.sprite, pal, 2, { key });
   },
   potionUrl() { return this.url('i_potion', { h: '#8a5a2a', w: '#cfe8ff', r: '#ff3a4a', l: '#ffa0a8' }, 2); },

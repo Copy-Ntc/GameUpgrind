@@ -11,10 +11,12 @@ const RARITIES = [
   { id: 3, name: 'Épico', color: '#b874ff', mult: 1.85, affixes: 3, weight: 12, sell: 12 },
   { id: 4, name: 'Lendário', color: '#ff9a2e', mult: 2.35, affixes: 4, weight: 0.8, sell: 30, minZone: 4 },
   { id: 5, name: 'Mítico', color: '#ff4d6d', mult: 3.1, affixes: 5, weight: 0.08, sell: 80, minZone: 12 },
+  { id: 6, name: 'Exclusivo', color: '#ff7ae0', mult: 4.0, affixes: 0, weight: 0, sell: 200, excl: true }, // só no Baú Arco-Íris
 ];
 // Formas femininas/plurais dos nomes de raridade (concordância)
 const RARITY_ADJ = [
   ['Comum', 'Comum'], ['Incomum', 'Incomum'], ['Raro', 'Rara'], ['Épico', 'Épica'], ['Lendário', 'Lendária'], ['Mítico', 'Mítica'],
+  ['Exclusivo', 'Exclusiva'],
 ];
 
 // Materiais por tier (1 tier a cada 5 zonas)
@@ -32,7 +34,9 @@ const MATERIALS = {
 };
 
 const SLOTS = ['weapon', 'helm', 'chest', 'gloves', 'boots', 'ring', 'amulet'];
-const SLOT_NAMES = { weapon: 'Arma', helm: 'Cabeça', chest: 'Peito', gloves: 'Mãos', boots: 'Pés', ring: 'Anel', amulet: 'Amuleto' };
+const SLOT_NAMES = { weapon: 'Arma', helm: 'Cabeça', chest: 'Peito', gloves: 'Mãos', boots: 'Pés', ring: 'Anel', amulet: 'Amuleto', offhand: 'Secundária' };
+// Espaços de equipamento: os 7 normais + a arma secundária (só armas exclusivas usam)
+const EQUIP_SLOTS = [...SLOTS, 'offhand'];
 const SLOT_WEIGHTS = { weapon: 20, helm: 14, chest: 14, gloves: 13, boots: 13, ring: 13, amulet: 13 };
 
 // Atributo principal por slot (multiplicado pela escala de zona e raridade)
@@ -108,6 +112,38 @@ const POWERS = {
   thorns: { name: 'Espinhos', desc: 'Reflete 35% do dano recebido ao atacante.' },
   greed: { name: 'Ganância do Dragão', desc: '+25% de Sorte e baús concedem o dobro de ouro.' },
   swift: { name: 'Passos do Vento', desc: '+20% de Vel. de Movimento e +10% de Vel. de Ataque.' },
+  // Poderes das armas exclusivas (nunca aparecem em itens comuns)
+  dagon: { name: 'Chama de Dagon', desc: 'Todo golpe incendeia o alvo (40% do Dano por segundo, 3s). Críticos explodem em chamas, causando 100% do Dano aos inimigos próximos.', excl: true },
+  spike: { name: 'Terra Partida', desc: 'A cada 4 ataques, golpeia o chão: 220% do Dano em área, atordoa por 0,6s e deixa as rachaduras em chamas (50% do Dano por segundo, 3s).', excl: true },
+  bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
+};
+
+// ------------------------------------------------------------
+// Armas exclusivas (raridade Exclusiva, arco-íris): só saem do Baú Arco-Íris,
+// ficam travadas, acompanham você entre jornadas e crescem com a zona recorde.
+// ------------------------------------------------------------
+const RAINBOW_ZONE = 10;       // zona mínima para o Baú Arco-Íris aparecer
+const RAINBOW_CHANCE = 0.025;  // chance por zona de surgir um Baú Arco-Íris
+const EXCL_CHANCE = 0.35;      // chance do Baú Arco-Íris trazer uma arma exclusiva
+const EXCLUSIVES = {
+  dagon: {
+    name: 'Dagon', bname: 'Adaga', g: 'f', slot: 'weapon', sprite: 'i_dagon', by: 'PIRADO DA CABEÇA',
+    pal: { m: '#ff7a2a', d: '#b8360e', l: '#ffe08a', h: '#3a1a10', g: '#ffd04a', r: '#ff2a5a', w: '#fff6d0', k: '#1b1424', y: '#ffd04a' },
+    bmult: 1.0, main: { atkSpd: 20 }, affixes: { crit: 12, critDmg: 50, dmgPct: 35, atkSpd: 15 }, powers: ['dagon'],
+    lore: 'Forjada no coração de um vulcão, nunca para de queimar.',
+  },
+  spike: {
+    name: 'Espinho Pesado', bname: 'Martelão', g: 'm', slot: 'weapon', sprite: 'i_spike', by: 'superpenis',
+    pal: { m: '#5a9ad8', d: '#2a4a7a', l: '#bfe4ff', h: '#2a2a35', g: '#9aa3ad', r: '#ff5a2a', w: '#ffffff', k: '#6a6a7a', y: '#ffd04a' },
+    bmult: 1.5, main: { atkSpd: -20 }, affixes: { dmgPct: 45, hpPct: 25, bossDmg: 40, critDmg: 30 }, powers: ['spike'],
+    lore: 'Pesado demais para qualquer um — menos para quem já perdeu o medo.',
+  },
+  jesus: {
+    name: 'JesusSalva', bname: 'Cruz', g: 'f', slot: 'offhand', sprite: 'i_jesus', by: 'Wendeu Delicia',
+    pal: { m: '#f2c25b', d: '#a8701a', l: '#fff2b0', r: '#5ac8ff', f: '#3a8aff', c: '#bff4ff', w: '#ffffff' },
+    main: { hp: 14, def: 3.5 }, affixes: { hpPct: 25, dr: 10, regenPct: 0.5, dmgPct: 20 }, powers: ['bluefire'],
+    lore: 'Arma secundária: queima com fogo azul quem ousa chegar perto.',
+  },
 };
 
 const LEGEND_NAMES = {
@@ -208,6 +244,7 @@ const CHEST_TIERS = [
   { id: 1, name: 'Baú de Ferro', pal: { a: '#6a7080', b: '#3a3e4a', g: '#d8e0e8', w: '#9aa0b0' }, minR: 1, items: [1, 2], gold: 2, w: 28 },
   { id: 2, name: 'Baú Dourado', pal: { a: '#d8a020', b: '#8a5a10', g: '#fff0a0', w: '#ffd060' }, minR: 2, items: [2, 2], gold: 4, w: 10 },
   { id: 3, name: 'Baú de Cristal', pal: { a: '#8a4ad8', b: '#4a2a8a', g: '#ffb0ff', w: '#c08aff' }, minR: 3, items: [2, 3], gold: 8, w: 2 },
+  { id: 4, name: 'Baú Arco-Íris', pal: { a: '#ff5ad8', b: '#4a1a6a', g: '#7affff', w: '#ffe07a' }, minR: 5, items: [1, 1], gold: 25, w: 0, rainbow: true },
 ];
 
 // Santuários (buffs temporários)

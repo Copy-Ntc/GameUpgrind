@@ -184,7 +184,8 @@ const World = {
     for (const c of W.chests) {
       if (!c.seen && !c.opened && W.vis[c.y * W.w + c.x]) {
         c.seen = true;
-        if (c.tier >= 2) Game.log(`Você avistou um <span class="c${c.tier + 1}">${CHEST_TIERS[c.tier].name}</span>!`, 'loot');
+        if (c.tier === 4) { Game.log('🌈 Você avistou o <b class="c6">Baú Arco-Íris</b>!', 'loot'); UI.banner('BAÚ ARCO-ÍRIS', 'Pode conter uma arma exclusiva', 'purple', 2.4); }
+        else if (c.tier >= 2) Game.log(`Você avistou um <span class="c${c.tier + 1}">${CHEST_TIERS[c.tier].name}</span>!`, 'loot');
       }
     }
     for (const s of W.shrines) {
@@ -391,6 +392,20 @@ const World = {
         if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.2, color: '#fff2a0', life: 0.35 });
       }
     }
+    // Fogo Azul Sagrado (JesusSalva, arma secundária exclusiva)
+    if (S.powers.has('bluefire')) {
+      hero.blueT = (hero.blueT || 0) - dt;
+      if (Math.random() < dt * 14) {
+        const a = Math.random() * Math.PI * 2, r = U.rand(0.6, 2.3);
+        this.part(W, hero.rx + 0.5 + Math.cos(a) * r, hero.ry + 0.5 + Math.sin(a) * r, 0, -0.9, Math.random() < 0.4 ? '#bff4ff' : '#3a8aff', 0.6, 2, 0);
+      }
+      if (hero.blueT <= 0) {
+        hero.blueT = 0.6;
+        const near = this.enemiesNear(W, hero.rx, hero.ry, 2.5);
+        for (const e of near) this.damage(W, e, S.atk * 0.45 * (1 - e.armor), { color: '#5ac8ff', dot: true });
+        if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.5, color: '#5ac8ff', life: 0.4 });
+      }
+    }
     // Estrela Cadente (Elfo Astral)
     if (S.flags.has('starfall')) {
       hero.starT = (hero.starT === undefined ? 4 : hero.starT) - dt;
@@ -593,6 +608,10 @@ const World = {
     hero.face = tgt.x > hero.x ? 1 : tgt.x < hero.x ? -1 : hero.face;
     const cls = CLASSES[hero.cls];
     const twice = S.flags.has('extraArms') && Math.random() < 0.3;
+    if (S.powers.has('spike')) {
+      hero.spikeN = (hero.spikeN || 0) + 1;
+      if (hero.spikeN >= 4) { hero.spikeN = 0; this.spikeSlam(W, tgt); }
+    }
     if (cls.ranged) {
       const spd = cls.proj === 'arrow' || cls.proj === 'bullet' ? 13 : 10;
       this.shoot(W, hero, tgt, cls.proj, (t) => this.heroHit(W, t, 1), { speed: spd });
@@ -605,6 +624,22 @@ const World = {
       this.fx(W, 'slash', tgt.rx + 0.5, tgt.ry + 0.5, { life: 0.18, color: '#ffffff', ang: Math.atan2(tgt.y - hero.y, tgt.x - hero.x) });
       Sfx.play('swing', 90);
     }
+  },
+
+  // Terra Partida (Espinho Pesado): o chão racha em chamas ao redor do alvo
+  spikeSlam(W, tgt) {
+    const S = Game.stats, cx = tgt.rx, cy = tgt.ry;
+    for (const e of this.enemiesNear(W, cx, cy, 2.2)) {
+      this.heroHit(W, e, 2.2, { noProc: true, color: '#ffb84a' });
+      if (!e.dead) { e.effects.stun = Math.max(e.effects.stun || 0, 0.6); e.dots.push({ dps: S.atk * 0.5, t: 3, color: '#ff7a2a' }); }
+    }
+    this.fx(W, 'ring', cx + 0.5, cy + 0.5, { r: 2.2, color: '#ff9a3a', life: 0.5 });
+    this.fx(W, 'ring', cx + 0.5, cy + 0.5, { r: 1.2, color: '#6a4a2a', life: 0.6 });
+    this.burst(W, cx + 0.5, cy + 0.6, '#6a4a2a', 18, 4);
+    for (let i = 0; i < 14; i++) this.part(W, cx + 0.5 + U.rand(-1.8, 1.8), cy + 0.6 + U.rand(-1.2, 1.2), U.rand(-0.5, 0.5), U.rand(-3, -1), Math.random() < 0.5 ? '#ff7a2a' : '#ffd04a', 0.9, 2.5, 6);
+    this.text(W, cx + 0.5, cy - 0.6, 'Terra Partida!', '#ffb84a', 12, 1, -1, true);
+    if (Game.state.settings.shake) W.shake = Math.max(W.shake, 0.35);
+    Sfx.play('boom', 120);
   },
 
   heroHit(W, t, mult, o = {}) {
@@ -630,6 +665,18 @@ const World = {
       if (S.powers.has('thunder') && Math.random() < 0.12) this.chain(W, t, 1.5, 2, { proc: true });
       if (S.powers.has('frost') && Math.random() < 0.15 && !t.dead) { t.effects.freeze = 1.2; this.text(W, t.rx + 0.5, t.ry - 0.3, 'Congelado', '#9ad8ff', 10); }
       if (S.flags.has('burnHit') && Math.random() < 0.15 && !t.dead) t.dots.push({ dps: S.atk * 0.5, t: 3, color: '#ff9a3a' });
+      if (S.powers.has('dagon')) {
+        if (!t.dead) {
+          const d = t.dots.find(x => x.dagon);
+          if (d) d.t = 3; else t.dots.push({ dps: S.atk * 0.4, t: 3, color: '#ff7a2a', dagon: true });
+        }
+        if (crit) {
+          const cx = t.rx, cy = t.ry;
+          for (const e of this.enemiesNear(W, cx, cy, 1.6)) if (e !== t) this.heroHit(W, e, 1, { noProc: true, noCrit: true, color: '#ff7a2a' });
+          this.fx(W, 'ring', cx + 0.5, cy + 0.5, { r: 1.6, color: '#ff5a2a', life: 0.35 });
+          for (let i = 0; i < 8; i++) this.part(W, cx + 0.5, cy + 0.5, U.rand(-2, 2), U.rand(-3, -0.5), Math.random() < 0.5 ? '#ff7a2a' : '#ffe08a', 0.7, 2, 5);
+        }
+      }
       if (S.flags.has('surge') && Math.random() < 0.1) {
         const cx = t.rx, cy = t.ry;
         for (const e of this.enemiesNear(W, cx, cy, 1.5)) this.heroHit(W, e, 1.5, { noProc: true, color: '#ff8ad8' });
@@ -1385,6 +1432,7 @@ const World = {
       return;
     }
     st.stats.chests++;
+    if (c.tier === 4) { this.openRainbowChest(W, c); return; }
     const T = CHEST_TIERS[c.tier];
     const z = W.z;
     let gold = 15 * zoneScale(z) * T.gold * U.rand(0.8, 1.2);
@@ -1397,6 +1445,25 @@ const World = {
     this.burst(W, c.x + 0.5, c.y + 0.5, T.pal.g, 16, 3.5);
     for (let i = 0; i < 8; i++) this.part(W, c.x + 0.5, c.y + 0.5, U.rand(-1.5, 1.5), U.rand(-4, -2), '#ffd04a', 0.9, 2, 9);
     Game.log(`Você abriu um <span class="c${Math.min(5, c.tier + (c.tier ? 1 : 0))}">${T.name}</span> (+${U.fmt(got)} ouro).`, 'gold');
+  },
+
+  // Baú Arco-Íris: muito ouro, um item Mítico, Fragmentos e a chance de uma arma exclusiva
+  openRainbowChest(W, c) {
+    const st = Game.state, S = Game.stats, z = W.z, T = CHEST_TIERS[4];
+    const got = Game.gainGold(15 * zoneScale(z) * T.gold * U.rand(0.9, 1.1));
+    Game.gainShards(2, c.x, c.y);
+    if (Math.random() < EXCL_CHANCE) {
+      const ids = Object.keys(EXCLUSIVES);
+      Game.dropItem(Items.makeExclusive(U.pick(ids), st.maxZone), c.x, c.y);
+    } else {
+      Game.dropItem(Items.generate(z + 1, { cls: st.cls, rarity: 5, mf: S.mf }), c.x, c.y);
+      Game.log('O Baú Arco-Íris trouxe um item <b class="c5">Mítico</b>. A arma exclusiva fica para a próxima!', 'loot');
+    }
+    const cols = ['#ff5a5a', '#ffb84a', '#ffe95a', '#5aff8a', '#5ac8ff', '#b874ff', '#ff7ae0'];
+    for (let i = 0; i < 40; i++) this.part(W, c.x + 0.5, c.y + 0.5, U.rand(-3, 3), U.rand(-5, -1), cols[i % cols.length], 1.2, 2.5, 8);
+    this.fx(W, 'ring', c.x + 0.5, c.y + 0.5, { r: 3, color: '#ff7ae0', life: 1 });
+    Sfx.play('legendary');
+    Game.log(`Você abriu o <b class="c6">Baú Arco-Íris</b> (+${U.fmt(got)} ouro).`, 'gold');
   },
 
   freeRecruit(W, R) {

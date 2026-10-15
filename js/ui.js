@@ -20,6 +20,23 @@ const UI = {
   selecting: false, picked: new Set(),
 
   $(id) { return document.getElementById(id); },
+  titleOpen() { const t = this.$('title-screen'); return !!t && !t.classList.contains('hidden'); },
+
+  // Quantidade de compra (Treino e Altar): 1, 5, 10, 25 ou máximo
+  qtyBar() {
+    const q = Game.state.settings.buyQty || 1;
+    return `<div class="qty-bar"><span>Comprar</span>${[1, 5, 10, 25, 0].map(n => `<button data-act="qty" data-id="${n}" class="${q === n ? 'on' : ''}">${n ? '×' + n : 'Máx'}</button>`).join('')}</div>`;
+  },
+  // { n: níveis, cost: custo total, can: dá para comprar } para a quantidade escolhida
+  qtyInfo(costFn, rank, max, money) {
+    const q = Game.state.settings.buyQty || 1;
+    if (!q) {
+      const b = Stats.bulk(costFn, rank, max, Infinity, money);
+      return b.n ? { n: b.n, cost: b.cost, can: true, first: costFn(rank) } : { n: 1, cost: costFn(rank), can: false, first: costFn(rank) };
+    }
+    const b = Stats.bulk(costFn, rank, max, q, money);
+    return { n: b.n, cost: b.cost, can: b.n > 0 && money >= b.cost, first: b.cost };
+  },
   dirty(...k) { for (const x of k) this.dirt.add(x); },
 
   // ==========================================================
@@ -94,7 +111,9 @@ const UI = {
     h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(nm)}" ${asc ? 'disabled' : ''} placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório" ${asc ? 'disabled' : ''}>Sortear</button></div>`;
     const relaxOn = Game.state && asc ? !Game.state.hardcore : false;
     h += `<label class="ts-hc"><input type="checkbox" id="ts-relax" ${relaxOn ? 'checked' : ''}><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
+    if (asc) h += `<label class="ts-hc ts-zero"><input type="checkbox" id="ts-zero"><div><b>Começar da zona 1</b><span>Ignora o Atalho Astral e começa a nova jornada do início.</span></div></label>`;
     h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>${over ? 'Recomeçar' : asc ? 'Renascer' : 'Começar Jornada'}</button>${asc && !over ? '<button class="btn ghost" id="ts-cancel">Cancelar</button>' : ''}</div>`;
+    if (asc) h += `<div class="ts-start"><button class="btn small ghost" id="ts-menu">⟵ Voltar ao menu (slots)</button></div><div class="hint" style="text-align:center;margin-top:-4px">${over ? 'O Fim de Jogo fica esperando neste slot até você escolher a próxima jornada.' : 'Sai sem ascender: a jornada atual continua salva no slot.'}</div>`;
     if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Apague um para criar outro herói.</div>';
     h += '</div></div>';
     h += '<div class="ts-foot">Classes e espécies bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
@@ -122,13 +141,15 @@ const UI = {
     const dice = this.$('ts-dice');
     if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
     if (this.$('ts-cancel')) this.$('ts-cancel').onclick = () => { this.hideTitle(); Game.paused = false; Music.zone(Game.W ? Game.W.biome.id : 'title'); };
+    if (this.$('ts-menu')) this.$('ts-menu').onclick = () => { Sfx.init(); Game.exitToMenu(); };
     this.$('ts-go').onclick = () => {
       Sfx.init();
       const un2 = this.titleUnlocks();
       if (!un2.classes.includes(this.selCls) || !un2.species.includes(this.selSp)) { this.notice('Essa combinação ainda está bloqueada.', 'var(--red)'); return; }
       const hc = !(this.$('ts-relax') && this.$('ts-relax').checked);
-      if (over) { this.hideTitle(); Game.finishGameOver(this.selCls, this.selSp, hc); return; }
-      if (asc) { this.hideTitle(); Game.paused = false; Game.ascend(this.selCls, this.selSp, hc); return; }
+      const zero = !!(this.$('ts-zero') && this.$('ts-zero').checked);
+      if (over) { this.hideTitle(); Game.finishGameOver(this.selCls, this.selSp, hc, zero); return; }
+      if (asc) { this.hideTitle(); Game.paused = false; Game.ascend(this.selCls, this.selSp, hc, zero); return; }
       if (!this.selSlot) { this.notice('Os 3 slots estão ocupados. Apague um para começar outro herói.', 'var(--red)'); return; }
       const name = (this.$('ts-name').value || '').trim() || U.pick(HERO_NAMES);
       this.hideTitle();
@@ -472,9 +493,9 @@ const UI = {
   tab_equip() {
     const st = Game.state, S = Game.stats;
     let h = `<div class="sec"><div class="sec-h"><h3>Equipamento</h3><span class="sub">Poder <b style="color:#ffd9a0">${U.fmt(Game.power)}</b></span></div><div class="equip-grid" style="grid-template-columns:1fr 1fr">`;
-    for (const s of SLOTS) {
+    for (const s of EQUIP_SLOTS) {
       const it = st.equip[s];
-      h += `<div class="eslot${it ? '' : ' empty'}">${this.itemHtml(it)}<div class="info"><div class="lbl">${SLOT_NAMES[s]}</div><div class="nm ${it ? 'c' + it.rarity : ''}">${it ? U.esc(it.name) + (it.plus ? ` +${it.plus}` : '') : 'Vazio'}</div></div></div>`;
+      h += `<div class="eslot${it ? '' : ' empty'}">${this.itemHtml(it)}<div class="info"><div class="lbl">${SLOT_NAMES[s]}</div><div class="nm ${it ? 'c' + it.rarity : ''}">${it ? U.esc(it.name) + (it.plus ? ` +${it.plus}` : '') : s === 'offhand' ? 'Vazio · só armas exclusivas' : 'Vazio'}</div></div></div>`;
     }
     h += '</div>' + this.relicCard(st.cls, true) + '</div>';
     // Atributos
@@ -500,7 +521,7 @@ const UI = {
     const sel = this.selecting;
     h += `<div class="sec"><div class="sec-h"><h3>Mochila</h3><span class="sub">${st.inv.length}/${cap}</span></div>`;
     h += `<div class="inv-tools"><button class="btn small" data-act="bulkMenu" data-keepmenu>Vender ▾</button>
-      <button class="btn small${sel ? ' gold' : ''}" data-act="selectMode">${sel ? 'Concluir seleção' : 'Selecionar'}</button>
+      <button class="btn small${sel ? ' gold' : ''}" data-act="selectMode">${sel ? 'Concluir seleção' : 'Selecionar p/ vender'}</button>
       <button class="btn small" data-act="sortInv">Ordenar</button>
       <select class="sel" data-set="autoSell" title="Vende automaticamente itens até essa raridade que não sejam melhorias (nunca vende itens travados ou forjados)">
         ${['Auto-venda: desligada', 'Auto-venda: Comuns', 'Auto-venda: até Incomuns', 'Auto-venda: até Raros', 'Auto-venda: até Épicos', 'Auto-venda: até Lendários'].map((t, i) => `<option value="${i}" ${st.settings.autoSell === i ? 'selected' : ''}>${t}</option>`).join('')}
@@ -581,17 +602,16 @@ const UI = {
   tab_train() {
     const st = Game.state;
     const gold = `<img src="${Sprites.goldUrl()}" alt="">`;
-    let h = `<div class="sec"><div class="sec-h"><h3>Campo de Treinamento</h3><span class="sub" style="display:flex;align-items:center;gap:5px;font:600 13px var(--pixel);color:var(--gold)"><img src="${Sprites.goldUrl()}" alt="" style="width:16px;height:16px;image-rendering:pixelated"><span id="train-gold">${U.fmt(st.gold)}</span></span></div><div class="hint">Melhorias permanentes compradas com ouro. São reiniciadas na Ascensão.</div>`;
+    let h = `<div class="sec"><div class="sec-h"><h3>Campo de Treinamento</h3><span class="sub" style="display:flex;align-items:center;gap:5px;font:600 13px var(--pixel);color:var(--gold)"><img src="${Sprites.goldUrl()}" alt="" style="width:16px;height:16px;image-rendering:pixelated"><span id="train-gold">${U.fmt(st.gold)}</span></span></div><div class="hint">Melhorias compradas com ouro. São reiniciadas na Ascensão.</div>${this.qtyBar()}`;
     for (const t of TRAINING) {
       const r = st.training[t.id] || 0;
       const maxed = t.max && r >= t.max;
-      const c = Stats.trainCost(t, r);
+      const q = this.qtyInfo(x => Stats.trainCost(t, x), r, t.max, st.gold);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(t.icon, t.color, 44)}" alt=""></div>
         <div><div class="nm">${t.name}<span class="rk">Nv ${r}${t.max ? '/' + t.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${t.desc((r + 1) * t.per, r + 1)}</span>`}</div></div>
-        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" data-cost="${c}" style="color:${st.gold >= c ? 'var(--gold)' : 'var(--red)'}">${gold}${U.fmt(c)}</div>
-        <button class="btn small gold" data-act="train" data-id="${t.id}" data-cost="${c}" ${st.gold >= c ? '' : 'disabled'}>Comprar</button>
-        <button class="btn small" data-act="trainMax" data-id="${t.id}" data-cost="${c}" ${st.gold >= c ? '' : 'disabled'}>Máx</button>`}</div></div>`;
+        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : '—'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${t.desc((r + q.n) * t.per, r + q.n)}</span>`}</div></div>
+        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" data-cost="${q.first}" style="color:${q.can ? 'var(--gold)' : 'var(--red)'}">${gold}${U.fmt(q.cost)}</div>
+        <button class="btn small gold" data-act="train" data-id="${t.id}" data-cost="${q.first}" ${q.can ? '' : 'disabled'}>Comprar${q.n > 1 ? ' ×' + q.n : ''}</button>`}</div></div>`;
     }
     return h + '</div>';
   },
@@ -601,8 +621,9 @@ const UI = {
     let h = `<div class="sec"><div class="sec-h"><h3>Forja</h3><span class="sub">Aprimore seu equipamento</span></div>
       <div class="hint">Cada nível de aprimoramento aumenta os atributos principais do item em 8%. A partir de +5 a forja pode falhar (o ouro é perdido, o item não).</div>
       <div class="forge-sel">`;
-    for (const s of SLOTS) {
+    for (const s of EQUIP_SLOTS) {
       const it = st.equip[s];
+      if (s === 'offhand' && !it) continue;
       h += `<div data-act="forgeSel" data-slot="${s}" style="cursor:pointer">${it ? this.itemHtml(it).replace('class="item', `class="item${this.forgeSel === s ? ' sel' : ''}`) : `<div class="item empty${this.forgeSel === s ? ' sel' : ''}" title="${SLOT_NAMES[s]}"></div>`}</div>`;
     }
     h += '</div>';
@@ -623,7 +644,28 @@ const UI = {
         <button class="btn gold" data-act="forge" data-cost="${cost}" ${st.gold >= cost ? '' : 'disabled'} style="min-width:160px">Forjar</button></div>`;
     }
     h += '</div>';
+    h += this.fusionSection();
     return h;
+  },
+
+  // Fusão de armas: é assim que se vira multiclasse
+  fusionSection() {
+    const st = Game.state, w = st.equip.weapon;
+    let h = `<div class="sec"><div class="sec-h"><h3>Fusão de Armas · Multiclasse</h3><span class="sub">${Math.floor(st.shards || 0)} Fragmentos</span></div>
+      <div class="hint">Funda sua arma com a arma de outra classe dominada: enquanto a arma fundida estiver equipada, você é <b>multiclasse</b> (habilidades das duas, +${MULTI_SYNERGY}% de Dano e Vida, ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível). Aprender cada fusão custa ${FUSION_SHARDS} Fragmentos uma única vez; depois, cada fusão custa só ouro. A fusão volta sozinha na arma inicial das próximas jornadas.</div>`;
+    if (!Stats.multiclassOpen(st)) return h + `<div class="card" style="font-size:12px">🔒 Liberada após <b>${MULTI_ASC} ascensões</b> (você tem ${st.stats.ascensions}).</div></div>`;
+    if (!Stats.mastered(st, st.cls)) return h + `<div class="card" style="font-size:12px">Domine <b>${CLASSES[st.cls].name}</b> primeiro: alcance a zona ${MASTERY_ZONE} numa jornada iniciada com ela.</div></div>`;
+    if (!w) return h + '<div class="card" style="font-size:12px">Equipe uma arma para fundir.</div></div>';
+    if (w.excl) return h + '<div class="card" style="font-size:12px">Armas exclusivas não podem ser fundidas. Equipe outra arma para virar multiclasse.</div></div>';
+    if (w.fusion) h += `<div class="card fuse-cur"><img src="${Sprites.itemUrl(w)}" alt=""><div><b class="c${w.rarity}">${U.esc(w.name)}</b><div class="hint" style="margin:2px 0 0">Multiclasse ativa: <b>${Game.className()}</b></div></div><button class="btn small" data-act="unfuse">Desfazer</button></div>`;
+    const opts = CLASS_ORDER.filter(c => c !== st.cls && Game.isUnlocked('class', c));
+    h += '<div class="fuse-list">';
+    for (const c of opts) {
+      const block = Game.fuseBlock(c), learned = st.fusions && st.fusions[Game.fusionKey(st.cls, c)];
+      const preview = Sprites.url(Sprites.fusionSprite(w.preFusion ? w.preFusion.sprite : w.sprite, WEAPON_BASES[c][0].sprite), Sprites.itemPal(w), 2, { key: 'fz' + c + w.uid });
+      h += `<div class="fuse-opt${Stats.mastered(st, c) ? '' : ' locked'}"><img src="${preview}" alt=""><div><b style="color:${CLASSES[c].color}">${CLASSES[c].name}</b>${learned ? ' <span class="tag">aprendida</span>' : ''}<div class="hint" style="margin:0">${block || `Custa ${U.fmt(Game.fusionCost(w))} de ouro${learned ? '' : ` + ${FUSION_SHARDS} Fragmentos`}`}</div></div><button class="btn small purple" data-act="fuse" data-id="${c}" ${block ? 'disabled' : ''}>Fundir</button></div>`;
+    }
+    return h + '</div></div>';
   },
 
   tab_asc() {
@@ -634,15 +676,21 @@ const UI = {
       <div style="margin:8px 0 12px;font-size:12px;color:#cfc4de">${st.maxZone >= 15 ? `Ascender agora concede <b style="color:#d9b8ff">+${U.fmt(gain)} Almas</b> (zona recorde desta jornada: ${st.maxZone}).` : `Alcance a <b>zona 15</b> para poder ascender. (Atual: ${st.maxZone})`}</div>
       <button class="btn purple" data-act="ascend" ${gain > 0 ? '' : 'disabled'}>Ascender</button>
       <div class="hint" style="margin-top:10px">Ascender reinicia nível, ouro, itens, treino e talentos, mas mantém Almas, o Altar e conquistas. Você pode trocar de classe.</div></div>`;
-    h += '<div class="sec"><div class="sec-h"><h3>Altar das Almas</h3></div>';
+    const s = st.settings;
+    h += `<div class="sec"><div class="sec-h"><h3>Automação</h3></div>
+      <div class="set-row"><div><div class="l">Auto-ascender</div><div class="d">Ascende sozinho com a mesma classe e espécie e, no modo de corações, recomeça sozinho ${AUTO_RESTART}s depois do Fim de Jogo.</div></div>
+        <select class="sel" data-set="autoAsc"><option value="0" ${!s.autoAsc ? 'selected' : ''}>Desligado</option><option value="1" ${s.autoAsc === 1 ? 'selected' : ''}>Após 15 min sem recorde</option><option value="2" ${s.autoAsc === 2 ? 'selected' : ''}>Ao chegar na zona…</option></select></div>
+      ${s.autoAsc === 2 ? `<div class="set-row"><div><div class="l">Zona para auto-ascender</div></div><input class="num" type="number" min="15" max="9999" data-set="autoAscZone" value="${s.autoAscZone || 100}"></div>` : ''}
+      <div class="set-row"><div><div class="l">Farmar automaticamente na zona</div><div class="d">Ao chegar nessa zona, troca para o modo Farmar (uma vez por jornada). 0 = desligado.</div></div><input class="num" type="number" min="0" max="9999" data-set="autoFarmZone" value="${s.autoFarmZone || 0}"></div></div>`;
+    h += `<div class="sec"><div class="sec-h"><h3>Altar das Almas</h3></div>${this.qtyBar()}`;
     for (const u of SOUL_UPGRADES) {
       const r = st.soulUpg[u.id] || 0;
       const maxed = u.max && r >= u.max;
-      const c = Stats.soulCost(u, r);
+      const q = this.qtyInfo(x => Stats.soulCost(u, x), r, u.max, st.souls);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(u.icon, u.color, 44)}" alt=""></div>
         <div><div class="nm">${u.name}<span class="rk">Nv ${r}${u.max ? '/' + u.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? u.desc(Stats.soulVal(u, r)) : '—'}</b>${maxed ? '' : `<br><span class="nx">Próximo: ${u.desc(Stats.soulVal(u, r + 1))}</span>`}</div></div>
-        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" style="color:${st.souls >= c ? '#d9b8ff' : 'var(--red)'}">${soul}${U.fmt(c)}</div><button class="btn small purple" data-act="soul" data-id="${u.id}" ${st.souls >= c ? '' : 'disabled'}>Comprar</button>`}</div></div>`;
+        <div class="ds">Atual: <b>${r ? u.desc(Stats.soulVal(u, r)) : '—'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${u.desc(Stats.soulVal(u, r + q.n))}</span>`}</div></div>
+        <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" style="color:${q.can ? '#d9b8ff' : 'var(--red)'}">${soul}${U.fmt(q.cost)}</div><button class="btn small purple" data-act="soul" data-id="${u.id}" ${q.can ? '' : 'disabled'}>Comprar${q.n > 1 ? ' ×' + q.n : ''}</button>`}</div></div>`;
     }
     return h + '</div>';
   },
@@ -703,15 +751,21 @@ const UI = {
       case 'sortInv': Game.sortInv(); this.renderTab(false); break;
       case 'talent': Game.talentUp(id); this.renderTab(false); break;
       case 'resetTalents': this.confirm('Redistribuir talentos', 'Todos os pontos serão devolvidos para você distribuir novamente.', 'Redistribuir', () => { Game.resetTalents(); this.renderTab(false); }); break;
-      case 'train': Game.buyTraining(id, false); this.renderTab(false); break;
-      case 'trainMax': Game.buyTraining(id, true); this.renderTab(false); break;
+      case 'qty': Game.state.settings.buyQty = +id; Sfx.play('click'); this.renderTab(false); break;
+      case 'train': Game.buyTraining(id, Game.state.settings.buyQty || true); this.renderTab(false); break;
+      case 'fuse': {
+        const w = Game.state.equip.weapon;
+        this.confirm('Fundir arma', `Fundir <b class="c${w.rarity}">${U.esc(w.name)}</b> com a arma de <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Enquanto ela estiver equipada você será <b>${CLASSES[Game.state.cls].name} / ${CLASSES[id].name}</b>.`, 'Fundir', () => { if (Game.fuseWeapon(id)) this.notice('Armas fundidas! Agora você é multiclasse.', 'var(--green)'); this.renderTab(false); }, 'purple');
+        break;
+      }
+      case 'unfuse': Game.unfuseWeapon(); this.renderTab(false); break;
       case 'forgeSel': this.forgeSel = a.dataset.slot; Sfx.play('click'); this.renderTab(false); break;
       case 'forge': {
         const item = Game.state.equip[this.forgeSel];
         if (item) { const ok = Game.forge(item); this.renderTab(false); this.notice(ok ? `Sucesso! Agora +${item.plus}` : 'A forja falhou…', ok ? 'var(--green)' : 'var(--red)'); }
         break;
       }
-      case 'soul': Game.buySoul(id); this.renderTab(false); break;
+      case 'soul': Game.buySoul(id, Game.state.settings.buyQty || true); this.renderTab(false); break;
       case 'ascend': {
         const gain = Stats.soulsOnAscend(Game.state);
         this.confirm('Ascender', `Você receberá <b style="color:#d9b8ff">${U.fmt(gain)} Almas</b>. Nível, ouro, itens, treino e talentos serão reiniciados. Escolha classe e espécie da próxima jornada a seguir.`, 'Continuar', () => { Game.paused = true; this.showTitle('ascend'); }, 'purple');
@@ -728,10 +782,7 @@ const UI = {
         if (!id) { Game.setMultiSpecies(null); this.renderTab(false); break; }
         this.confirm('Mestiçagem', `Combinar <b>${SPECIES[Game.state.species].name}</b> com <b>${SPECIES[id].name}</b>? Cada nível passa a exigir ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP.`, 'Combinar', () => { Game.setMultiSpecies(id); this.renderTab(false); }, 'purple');
         break;
-      case 'setMulti':
-        if (!id) { Game.setMulticlass(null); this.renderTab(false); break; }
-        this.confirm('Multiclasse', `Combinar <b style="color:${CLASSES[Game.state.cls].color}">${CLASSES[Game.state.cls].name}</b> com <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Os talentos serão redistribuídos e cada nível passa a exigir ${Math.round((MULTI_XP - 1) * 100)}% mais XP.`, 'Combinar', () => { Game.setMulticlass(id); this.renderTab(false); }, 'purple');
-        break;
+      case 'goForge': this.tab = 'forge'; this.$('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.tab === 'forge')); this.renderTab(true); setTimeout(() => { const f = this.$('tab-body').querySelector('.fuse-list'); if (f) f.scrollIntoView({ block: 'center' }); }, 30); break;
     }
   },
   onPanelChange(e) {
@@ -856,9 +907,7 @@ const UI = {
       const cs = (kind === 'class' ? st.classStats[id] : (st.speciesStats || {})[id]) || {};
       const isM = kind === 'class' ? Stats.mastered(st, id) : Stats.speciesMastered(st, id);
       const mastery = owned ? `<div class="hc-m${isM ? ' ok' : ''}">${isM ? (kind === 'class' ? '★ Dominada' : '★ Dominada') : `Recorde: zona ${cs.best || 0}/${MASTERY_ZONE}`}</div>` : '';
-      const multiBtn = kind === 'class'
-        ? (Game.canMulticlass(id) ? `<button class="btn small purple" data-act="setMulti" data-id="${id}">Multiclasse</button>` : '')
-        : (Game.canMultiSpecies(id) ? `<button class="btn small purple" data-act="setMultiSp" data-id="${id}">Mestiço</button>` : '');
+      const multiBtn = kind === 'class' ? '' : (Game.canMultiSpecies(id) ? `<button class="btn small purple" data-act="setMultiSp" data-id="${id}">Mestiço</button>` : '');
       if (cur) act = '<span class="hc-cur">Atual</span>' + mastery;
       else if (kind === 'class' && st.cls2 === id) act = '<span class="hc-cur" style="color:#c9a0ff">Secundária</span>' + mastery;
       else if (kind === 'species' && st.species2 === id) act = '<span class="hc-cur" style="color:#c9a0ff">Secundária</span>' + mastery;
@@ -873,9 +922,10 @@ const UI = {
       ? `🔒 Liberada após <b>${MULTI_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
       : !Stats.mastered(st, st.cls)
       ? `Domine a classe atual (zona <b>${MASTERY_ZONE}</b> numa jornada iniciada com ela) para combiná-la com outra classe dominada.`
-      : st.cls2 ? `Ativa: <b>${Game.className()}</b>.` : 'Escolha uma classe dominada abaixo (botão <b>Multiclasse</b>) para combinar com a atual.';
-    h += `<div class="sec"><div class="sec-h"><h3>Multiclasse</h3>${st.cls2 ? '<button class="btn small" data-act="setMulti" data-id="">Remover</button>' : ''}</div>
-      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas classes dominadas: habilidades das duas (4 + 2), passivas das duas, +${MULTI_SYNERGY}% de Dano e Vida e o inato da secundária a 60%. Em troca, cada nível exige ${Math.round((MULTI_XP - 1) * 100)}% mais XP.</div><div style="font-size:12px">${mHint}</div></div></div>`;
+      : st.cls2 ? `Ativa: <b>${Game.className()}</b> (pela arma fundida).` : 'Vá na <b>Forja</b> e funda sua arma com a de outra classe dominada.';
+    const learned = Object.keys(st.fusions || {});
+    h += `<div class="sec"><div class="sec-h"><h3>Multiclasse</h3><button class="btn small purple" data-act="goForge">Fusão na Forja</button></div>
+      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">A multiclasse vem da <b>fusão de armas</b>: na Forja, sua arma se funde com a arma de outra classe dominada (ex.: espada + arco). Equipada, ela dá as habilidades das duas classes (4 + 2), as passivas das duas, +${MULTI_SYNERGY}% de Dano e Vida e o inato da secundária a 60%. Em troca, cada nível exige ${Math.round((MULTI_XP - 1) * 100)}% mais XP.</div><div style="font-size:12px">${mHint}</div>${learned.length ? `<div class="hint" style="margin:6px 0 0">Fusões aprendidas: ${learned.map(k => k.split('+').map(c => CLASSES[c] ? CLASSES[c].name : c).join(' + ')).join(' · ')}</div>` : ''}</div></div>`;
     // Mestiçagem
     const spOpen = Stats.multiSpeciesOpen(st);
     const sHint = !spOpen
@@ -884,7 +934,7 @@ const UI = {
       ? `Domine a espécie atual (zona <b>${MASTERY_ZONE}</b> numa jornada iniciada com ela) para combiná-la com outra espécie dominada.`
       : st.species2 ? `Ativa: <b>${Game.speciesName()}</b>.` : 'Escolha uma espécie dominada abaixo (botão <b>Mestiço</b>) para combinar com a atual.';
     h += `<div class="sec"><div class="sec-h"><h3>Mestiçagem</h3>${st.species2 ? '<button class="btn small" data-act="setMultiSp" data-id="">Remover</button>' : ''}</div>
-      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas espécies dominadas: os traços da segunda a ${Math.round(MULTI_SP_SHARE * 100)}%, os poderes das duas, a raridade mais alta e +${MULTI_SP_SYNERGY}% de Dano e Vida. Em troca, cada nível exige ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP (acumula com a multiclasse).</div><div style="font-size:12px">${sHint}</div></div></div>`;
+      <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas espécies dominadas: a segunda soma ${Math.round(MULTI_SP_SHARE * 100)}% dos atributos dela (sem os poderes), vale a raridade mais alta e dá +${MULTI_SP_SYNERGY}% de Dano e Vida. Em troca, cada nível exige ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP (acumula com a multiclasse).</div><div style="font-size:12px">${sHint}</div></div></div>`;
     // Armas Ancestrais
     const nr = Object.keys(st.relics || {}).length;
     h += `<div class="sec"><div class="sec-h"><h3>Armas Ancestrais</h3><span class="sub">${nr}/${CLASS_ORDER.length} · <b style="color:var(--gold)">${Math.floor(st.shards || 0)}</b> Fragmentos</span></div>
@@ -1168,7 +1218,8 @@ const UI = {
         <div><span>Nível</span><b style="color:#c9a0ff">${pe.level}</b></div>
         <div><span>Almas obtidas</span><b style="color:#d9b8ff">+${U.fmt(pe.gain)}</b></div>
       </div>
-      <p class="hint" style="margin-top:10px">Suas Almas, o Altar, conquistas e desbloqueios continuam.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''} Escolha a próxima jornada.</p>`,
+      <p class="hint" style="margin-top:10px">Suas Almas, o Altar, conquistas e desbloqueios continuam.${pe.zone >= 15 ? ' Esta jornada <b>conta como uma ascensão</b>.' : ''} Escolha a próxima jornada.</p>
+      ${st.settings.autoAsc ? `<p class="hint" style="color:var(--gold)">Auto-ascender ligado: recomeçando sozinho com ${CLASSES[st.cls].name} ${SPECIES[st.species].name} em ${AUTO_RESTART} segundos…</p>` : ''}`,
       [{ label: 'Escolher nova jornada', cls: 'gold', fn: () => this.showTitle('gameover') }], { locked: true });
   },
 

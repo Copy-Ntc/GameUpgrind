@@ -15,15 +15,23 @@ const Stats = {
   needXpFor(st, L = st.level) { return Math.floor(this.needXp(L) * (st.cls2 ? MULTI_XP : 1) * (st.species2 ? MULTI_SP_XP : 1)); },
   growth(L) { return Math.pow(1.04, L - 1); },
 
+  // Multiclasse vem da arma fundida equipada: devolve a classe secundária ou null
+  fusionCls2(st, eq = st.equip) {
+    const w = eq && eq.weapon;
+    if (!w || !w.fusion || w.fusion === st.cls || !CLASSES[w.fusion]) return null;
+    if (!this.multiclassOpen(st) || !this.mastered(st, st.cls) || !this.mastered(st, w.fusion)) return null;
+    return w.fusion;
+  },
+
   // Habilidades ativas disponíveis (classe principal + 2 primeiras da secundária)
-  activeIds(st) {
+  activeIds(st, c2 = st.cls2) {
     const ids = [...CLASSES[st.cls].skills];
-    if (st.cls2 && CLASSES[st.cls2]) ids.push(...CLASSES[st.cls2].skills.slice(0, 2));
+    if (c2 && CLASSES[c2]) ids.push(...CLASSES[c2].skills.slice(0, 2));
     return ids;
   },
-  passiveIds(st) {
+  passiveIds(st, c2 = st.cls2) {
     const ids = [...CLASSES[st.cls].passives];
-    if (st.cls2 && CLASSES[st.cls2]) ids.push(...CLASSES[st.cls2].passives);
+    if (c2 && CLASSES[c2]) ids.push(...CLASSES[c2].passives);
     return ids;
   },
   talentIds(st) { return [...this.activeIds(st), ...this.passiveIds(st)]; },
@@ -47,7 +55,9 @@ const Stats = {
 
   compute(st, override) {
     const c = CLASSES[st.cls], b = c.base;
-    const c2 = st.cls2 ? CLASSES[st.cls2] : null;
+    const eq = override ? Object.assign({}, st.equip, override) : st.equip;
+    const c2id = this.fusionCls2(st, eq);
+    const c2 = c2id ? CLASSES[c2id] : null;
     const rar = Math.max(c.rarity || 0, c2 ? c2.rarity || 0 : 0);
     const g = this.growth(st.level);
     const sp = SPECIES[st.species] || SPECIES.human;
@@ -67,9 +77,8 @@ const Stats = {
     const flags = new Set(sp.flags || []);
     // Espécie (e a secundária, na mestiçagem)
     for (const k in sp.stats) s[k] = (s[k] || 0) + sp.stats[k];
-    if (sp2) {
+    if (sp2) { // a espécie secundária só soma atributos (sem poderes)
       for (const k in sp2.stats) s[k] = (s[k] || 0) + sp2.stats[k] * MULTI_SP_SHARE;
-      for (const f of sp2.flags || []) flags.add(f);
       s.dmgPct += MULTI_SP_SYNERGY; s.hpPct += MULTI_SP_SYNERGY;
     }
     // Talentos inatos (crescem com o nível)
@@ -86,8 +95,7 @@ const Stats = {
       s.dmgPct += MULTI_SYNERGY; s.hpPct += MULTI_SYNERGY;
     }
     const powers = new Set();
-    const eq = override ? Object.assign({}, st.equip, override) : st.equip;
-    for (const slot of SLOTS) {
+    for (const slot of EQUIP_SLOTS) {
       const it = eq[slot];
       if (!it) continue;
       const is = Items.stats(it);
@@ -100,9 +108,9 @@ const Stats = {
       for (const k in rel.stats) s[k] = (s[k] || 0) + rel.stats[k];
       for (const p of rel.powers) powers.add(p);
     }
-    if (c2) { const rel2 = this.relicInfo(st, st.cls2); if (rel2) s.dmgPct += rel2.stats.dmgPct * 0.5; }
+    if (c2) { const rel2 = this.relicInfo(st, c2id); if (rel2) s.dmgPct += rel2.stats.dmgPct * 0.5; }
     for (const t of TRAINING) { const r = st.training[t.id] || 0; if (r) s[t.stat] += r * t.per; }
-    for (const id of this.passiveIds(st)) { const r = st.talents[id] || 0; if (r) s[SKILLS[id].stat] += r * SKILLS[id].per; }
+    for (const id of this.passiveIds(st, c2id)) { const r = st.talents[id] || 0; if (r) s[SKILLS[id].stat] += r * SKILLS[id].per; }
     for (const m of MAESTRIA) {
       const r = st.talents[m.id] || 0;
       if (!r) continue;
@@ -179,6 +187,17 @@ const Stats = {
 
   trainCost(t, rank) { return Math.ceil(t.base * Math.pow(t.growth, rank) * (1 + rank * 0.05)); },
   soulCost(u, rank) { return Math.ceil(u.base * Math.pow(u.growth, rank) * (1 + rank * 0.1)); },
+  // Quantos níveis comprar e quanto custam: até n níveis (Infinity = o máximo que der com o saldo)
+  bulk(costFn, rank, max, n, money) {
+    let k = 0, total = 0;
+    while (k < n && (!max || rank + k < max)) {
+      const c = costFn(rank + k);
+      if (n === Infinity && total + c > money) break;
+      total += c; k++;
+      if (k > 5000) break;
+    }
+    return { n: k, cost: total };
+  },
   soulsOnAscend(st) {
     if (st.maxZone < 15) return 0;
     const sp = Game.stats ? Game.stats.soulPct : 0;

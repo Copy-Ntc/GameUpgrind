@@ -173,6 +173,13 @@ const MapGen = {
       const p = randIn(U.pick(chestRooms), 30, true);
       if (p) placeChest(p[0], p[1], false);
     }
+    // Baú Arco-Íris (raro): pode trazer uma arma exclusiva
+    if (z >= RAINBOW_ZONE && Math.random() < RAINBOW_CHANCE) {
+      for (let t = 0; t < 40; t++) {
+        const p = randIn(U.pick(chestRooms), 30, true);
+        if (p) { chests.push({ x: p[0], y: p[1], tier: 4, opened: false, mimic: false, seen: false }); take(p[0], p[1]); break; }
+      }
+    }
     // Baú garantido do chefe
     const bp = randIn(bossRoom, 40, true);
     if (bp) { chests.push({ x: bp[0], y: bp[1], tier: isLord ? 3 : 2, opened: false, mimic: false, seen: false, bossChest: true }); take(bp[0], bp[1]); }

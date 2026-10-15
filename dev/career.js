@@ -42,14 +42,14 @@ function buyStuff() {
     let best = null, bc = Infinity;
     for (const tr of TRAINING) { const r = st.training[tr.id] || 0; if (tr.max && r >= tr.max) continue; const c = Stats.trainCost(tr, r); if (c < bc) { bc = c; best = tr; } }
     if (!best || st.gold < bc) break;
-    Game.buyTraining(best.id, false);
+    Game.buyTraining(best.id, 1);
   }
   for (const s of ['weapon', 'chest', 'helm']) { const it = st.equip[s]; if (it && it.plus < 8 && st.gold > Items.forgeCost(it) * 3) Game.forge(it); }
   for (let k = 0; k < 100; k++) {
     let best = null, bc = Infinity;
     for (const u of SOUL_UPGRADES) { const r = st.soulUpg[u.id] || 0; if (u.max && r >= u.max) continue; const c = Stats.soulCost(u, r); if (c < bc) { bc = c; best = u; } }
     if (!best || st.souls < bc) break;
-    Game.buySoul(best.id);
+    Game.buySoul(best.id, 1);
   }
   for (const c of Object.keys(st.relics)) while (!Game.relicBlock(c)) Game.awakenRelic(c);
 }
@@ -63,7 +63,7 @@ function pickBest(kind) {
 // Multiclasse/mestiçagem com a melhor opção dominada
 function tryHybrid() {
   const st = Game.state;
-  if (!st.cls2) { const c = CLASS_ORDER.filter(id => Game.canMulticlass(id)).sort((a, b) => CLASSES[b].rarity - CLASSES[a].rarity)[0]; if (c) { Game.setMulticlass(c); events.push(`${fmtT(t)}  MULTICLASSE ${Game.className()}`); } }
+  if (!st.cls2) { const c = CLASS_ORDER.filter(id => !Game.fuseBlock(id)).sort((a, b) => CLASSES[b].rarity - CLASSES[a].rarity)[0]; if (c && Game.fuseWeapon(c)) events.push(`${fmtT(t)}  MULTICLASSE (fusão) ${Game.className()}`); }
   if (!st.species2) { const s = SPECIES_ORDER.filter(id => Game.canMultiSpecies(id)).sort((a, b) => SPECIES[b].rarity - SPECIES[a].rarity)[0]; if (s) { Game.setMultiSpecies(s); events.push(`${fmtT(t)}  MESTIÇAGEM ${Game.speciesName()}`); } }
 }
 

@@ -8,7 +8,7 @@ const Items = {
 
   rollRarity(z, minR = 0, mf = 0, boost = 0) {
     const luck = 1 + mf / 100 + boost;
-    const opts = RARITIES.filter(r => r.id >= minR && (!r.minZone || z >= r.minZone));
+    const opts = RARITIES.filter(r => !r.excl && r.id >= minR && (!r.minZone || z >= r.minZone));
     if (!opts.length) return minR;
     return U.weighted(opts, r => r.weight * Math.pow(luck, r.id * 0.6)).id;
   },
@@ -69,7 +69,7 @@ const Items = {
     }
 
     // Poderes lendários
-    const pkeys = Object.keys(POWERS);
+    const pkeys = Object.keys(POWERS).filter(k => !POWERS[k].excl);
     if (rarity >= 4) item.powers.push(U.pick(pkeys));
     if (rarity >= 5) { let p; do { p = U.pick(pkeys); } while (item.powers.includes(p)); item.powers.push(p); }
 
@@ -77,9 +77,52 @@ const Items = {
     return item;
   },
 
+  // Arma exclusiva (raridade Exclusiva). Os atributos são calculados para o nível ilvl.
+  makeExclusive(id, ilvl) {
+    const D = EXCLUSIVES[id], R = RARITIES[6], S = zoneScale(Math.max(1, ilvl));
+    const item = {
+      uid: U.uid(), slot: D.slot, base: id, bname: D.bname, g: D.g, sprite: D.sprite, excl: id, by: D.by,
+      mat: 'metal', tier: 0, matName: '', matColor: D.pal.m,
+      rarity: 6, ilvl: Math.max(1, Math.round(ilvl)), main: {}, affixes: [], powers: D.powers.slice(), plus: 0, locked: true, isNew: true, name: D.name,
+    };
+    if (D.slot === 'weapon') { item.main.atk = SLOT_MAIN.weapon.atk * S * R.mult * D.bmult; item.bmult = D.bmult; }
+    for (const k in D.main) item.main[k] = STAT_INFO[k].pct ? D.main[k] : D.main[k] * S * R.mult;
+    for (const k in D.affixes) item.affixes.push({ k, v: D.affixes[k], flat: false });
+    return item;
+  },
+  // Exclusivas e Armas Ancestrais crescem junto com a zona recorde da jornada
+  retune(item, ilvl) {
+    ilvl = Math.max(1, Math.round(ilvl));
+    if (!item.excl || item.ilvl === ilvl) return;
+    const k = zoneScale(ilvl) / zoneScale(item.ilvl);
+    for (const s in item.main) if (!STAT_INFO[s].pct) item.main[s] *= k;
+    item.ilvl = ilvl;
+  },
+
+  // Fusão (multiclasse): a arma ganha a forma da arma de outra classe
+  fusionName(it, partner) {
+    const b = WEAPON_BASES[partner][0];
+    const fem = it.g === 'f' || it.g === 'fp';
+    return `${it.bname.split(' ')[0]}-${b.name.split(' ')[0]} ${fem ? 'Fundida' : 'Fundido'}`;
+  },
+  fuse(it, partner) {
+    const b = WEAPON_BASES[partner][0];
+    if (!it.fusion) { it.preFusion = { sprite: it.sprite, name: it.name }; }
+    it.fusion = partner;
+    it.sprite = Sprites.fusionSprite(it.preFusion.sprite, b.sprite);
+    it.name = this.fusionName(it, partner);
+  },
+  unfuse(it) {
+    if (!it.fusion) return;
+    if (it.preFusion) { it.sprite = it.preFusion.sprite; it.name = it.preFusion.name; }
+    delete it.fusion; delete it.preFusion;
+  },
+
   // Reforja uma arma para a base de outra classe, mantendo raridade, nível, afixos e aprimoramento
   convertWeapon(it, cls) {
+    if (it.excl) return; // armas exclusivas servem para qualquer classe
     if (it.slot !== 'weapon' || it.cls === cls || !WEAPON_BASES[cls]) return;
+    this.unfuse(it);
     const old = WEAPON_INDEX[it.base];
     const oldMult = it.bmult || (old ? old.atk : 1);
     const nb = U.pick(WEAPON_BASES[cls]);
@@ -94,6 +137,7 @@ const Items = {
   },
 
   makeName(item) {
+    if (item.excl) return EXCLUSIVES[item.excl].name;
     if (item.rarity === 5) return U.pick(MYTHIC_NAMES);
     if (item.rarity === 4) return U.pick(LEGEND_NAMES[item.slot]);
     let n = item.bname;
@@ -173,6 +217,11 @@ const Items = {
     for (const p of item.powers) {
       const P = POWERS[p];
       h += `<div class="tt-pow"><b>✦ ${P.name}</b>${P.desc}</div>`;
+    }
+    if (item.fusion) h += `<div class="tt-pow"><b>⚔ Fusão com ${CLASSES[item.fusion].name}</b>Equipada, torna você multiclasse ${CLASSES[item.cls] ? CLASSES[item.cls].name : ''} / ${CLASSES[item.fusion].name} (se as duas classes estiverem dominadas).</div>`;
+    if (item.excl) {
+      const D = EXCLUSIVES[item.excl];
+      h += `<div class="tt-lore">“${D.lore}”</div><div class="tt-by">Criada por <b>${U.esc(D.by)}</b> · fica com você entre jornadas</div>`;
     }
     if (opts.compare !== false && st) {
       const cur = st.equip[item.slot];
