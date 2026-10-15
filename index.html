@@ -3,40 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- Segurança: só roda scripts deste site, do CDN da biblioteca do Supabase e do anti-robô da Cloudflare.
-     Código injetado (ex.: num save adulterado) não executa. Ao mudar de servidor online, ajuste connect-src. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self' blob:; child-src 'self' blob: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Upgrind — Crônicas do Abismo</title>
+<title>OverLevelGame</title>
+<meta name="description" content="RPG idle de fantasia em pixel art. Seu herói explora masmorras sozinho, sobe de nível, encontra armas lendárias e ascende para ficar cada vez mais forte.">
+<meta name="theme-color" content="#0b0910">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="img/icon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="OverLevelGame">
+<meta property="og:title" content="OverLevelGame">
+<meta property="og:description" content="RPG idle de fantasia em pixel art. Seu herói explora masmorras sozinho, sobe de nível, encontra armas lendárias e ascende para ficar cada vez mais forte.">
+<meta property="og:url" content="https://copy-ntc.github.io/GameUpgrind/">
+<meta property="og:image" content="https://copy-ntc.github.io/GameUpgrind/img/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Uma espada atravessando uma barra de nível, cercada por heróis em pixel art">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OverLevelGame">
+<meta name="twitter:description" content="RPG idle de fantasia em pixel art. Seu herói explora masmorras sozinho, sobe de nível, encontra armas lendárias e ascende para ficar cada vez mais forte.">
+<meta name="twitter:image" content="https://copy-ntc.github.io/GameUpgrind/img/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/silkscreen-digitos.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<!-- Tela inicial / seleção de classe -->
 <div id="title-screen" class="screen"></div>
 
-<!-- Jogo -->
 <div id="app" class="hidden">
   <header id="topbar">
-    <div class="brand">UPGRIND</div>
+    <div class="brand"><img src="img/icon-32.png" alt=""><span>OverLevelGame</span></div>
     <div class="hero-chip">
       <canvas id="portrait" width="40" height="40"></canvas>
       <div class="hero-info">
-        <div class="hero-line"><span id="hero-name" class="hero-name">—</span><span id="hero-sub" class="hero-sub">—</span></div>
+        <div class="hero-line"><span id="hero-name" class="hero-name"></span><span id="hero-sub" class="hero-sub"></span></div>
         <div class="bar xp-bar" title="Experiência"><div id="xp-fill" class="fill"></div><span id="xp-text" class="bar-text"></span></div>
       </div>
     </div>
     <div class="resources">
       <div class="res" title="Ouro"><img id="ico-gold" alt=""><span id="gold">0</span></div>
       <div class="res" title="Almas (moeda de Ascensão)"><img id="ico-soul" alt=""><span id="souls">0</span></div>
-      <div class="res power" title="Poder — estimativa de força geral do herói"><span class="pw-ico">PODER</span><span id="power">0</span></div>
+      <div class="res power" title="Poder: estimativa de força geral do herói"><span class="pw-ico">PODER</span><span id="power">0</span></div>
     </div>
     <div class="zone-ctrl">
       <button id="zone-prev" class="icon-btn" title="Zona anterior">&#9664;</button>
-      <div class="zone-label"><div id="zone-num">Zona 1</div><div id="zone-biome">—</div></div>
+      <div class="zone-label"><div id="zone-num">Zona 1</div><div id="zone-biome"></div></div>
       <button id="zone-next" class="icon-btn" title="Próxima zona (já alcançada)">&#9654;</button>
     </div>
     <div class="ctrls">

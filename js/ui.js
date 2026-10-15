@@ -1,7 +1,4 @@
 'use strict';
-// ============================================================
-// Interface: tela de título, HUD, painéis, tooltips e modais
-// ============================================================
 const ICONS = {
   pause: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>',
   play: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11a.5.5 0 0 0 .77.42l8.5-5.5a.5.5 0 0 0 0-.84l-8.5-5.5A.5.5 0 0 0 4 2.5z"/></svg>',
@@ -22,12 +19,10 @@ const UI = {
   $(id) { return document.getElementById(id); },
   titleOpen() { const t = this.$('title-screen'); return !!t && !t.classList.contains('hidden'); },
 
-  // Quantidade de compra (Treino e Altar): 1, 5, 10, 25 ou máximo
   qtyBar() {
     const q = Game.state.settings.buyQty || 1;
     return `<div class="qty-bar"><span>Comprar</span>${[1, 5, 10, 25, 0].map(n => `<button data-act="qty" data-id="${n}" class="${q === n ? 'on' : ''}">${n ? '×' + n : 'Máx'}</button>`).join('')}</div>`;
   },
-  // { n: níveis, cost: custo total, can: dá para comprar } para a quantidade escolhida
   qtyInfo(costFn, rank, max, money) {
     const q = Game.state.settings.buyQty || 1;
     if (!q) {
@@ -39,14 +34,10 @@ const UI = {
   },
   dirty(...k) { for (const x of k) this.dirt.add(x); },
 
-  // ==========================================================
-  // Tela de título
-  // ==========================================================
   titleUnlocks() { return Game.sharedUnlocks(); },
 
   rarityTag(r) { const R = HERO_RARITY[r]; return `<span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${R.name}</span>`; },
 
-  // Menu principal: perfil, slots de jornada e criação de herói
   showTitle() {
     this.titleMode = 'new';
     const el = this.$('title-screen');
@@ -58,8 +49,8 @@ const UI = {
     if (!un.classes.includes(this.selCls)) this.selCls = un.classes[0];
     if (!un.species.includes(this.selSp)) this.selSp = 'human';
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
-    h += `<div class="ts-logo"><h1>UPGRIND</h1><p>Crônicas do Abismo</p></div>`;
-    h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
+    h += `<div class="ts-logo"><img class="ts-icon" src="img/icon-192.png" alt=""><h1>OverLevelGame</h1><p>Crônicas do Abismo</p></div>`;
+    h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte, até quando você não está olhando.</div>`;
     if (Online.enabled) {
       const name = Online.profile ? U.esc(Online.profile.name) : '';
       h += `<div class="ts-account">${!Online.ready ? '<span>Conectando ao servidor…</span>'
@@ -68,7 +59,6 @@ const UI = {
       if (Online.error) h += `<div class="ts-warn">${U.esc(Online.error)}</div>`;
     }
     if (!Store.ok) h += `<div class="ts-warn">⚠ Este navegador está bloqueando o salvamento (aba anônima ou navegador de aplicativo, como o do WhatsApp/Discord/Instagram). O progresso se perde ao fechar. Abra o jogo no Chrome, Edge ou Firefox${Online.enabled ? ' ou entre com uma conta para salvar na nuvem' : ''}.</div>`;
-    // Perfil: o que fica para sempre, em todas as jornadas
     const soulImg = `<img src="${Sprites.soulUrl()}" alt="">`;
     h += `<div class="ts-profile"><span class="tp-souls">${soulImg}<b>${U.fmt(P.souls)}</b> Almas</span><span><b>${P.stats.ascensions || 0}</b> ${(P.stats.ascensions || 0) === 1 ? 'ascensão' : 'ascensões'}</span><span>Recorde: <b>zona ${P.stats.maxZone || 1}</b></span><span><b>${un.classes.length}</b>/${CLASS_ORDER.length} classes · <b>${un.species.length}</b>/${SPECIES_ORDER.length} espécies</span>${P.vault.length ? `<span class="c6">🌈 ${P.vault.length} arma${P.vault.length > 1 ? 's' : ''} exclusiva${P.vault.length > 1 ? 's' : ''} para o próximo herói</span>` : ''}</div>`;
     h += '<div class="ts-slots">';
@@ -90,7 +80,7 @@ const UI = {
     h += '</div>';
     const full = !this.selSlot;
     h += '<div class="ts-grid"><div class="ts-left">';
-    h += `<div class="ts-h">${full ? 'Slots cheios — ' : `Novo herói no slot ${this.selSlot} — `}Classe <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
+    h += `<div class="ts-h">${full ? 'Slots cheios. ' : `Novo herói no slot ${this.selSlot}. `}Classes <span>${un.classes.length}/${CLASS_ORDER.length} desbloqueadas</span></div><div class="pick-grid">`;
     for (const id of CLASS_ORDER) {
       const c = CLASSES[id], lk = !un.classes.includes(id), R = HERO_RARITY[c.rarity];
       h += `<div class="pick${lk ? ' locked' : ''}${id === this.selCls ? ' sel' : ''}" data-pick="class" data-id="${id}" style="--rc:${R.color}"><img src="${Sprites.classUrl(id, 'human', 3)}" alt=""><div class="pn">${c.name}</div>${lk ? '<div class="lk">🔒</div>' : ''}</div>`;
@@ -107,7 +97,7 @@ const UI = {
     h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>Começar Jornada</button></div>`;
     if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Continue um deles, ascenda ou apague um para criar outro herói.</div>';
     h += '</div></div>';
-    h += '<div class="ts-foot">Almas, Altar, conquistas, Armas Ancestrais e as classes e espécies liberadas são do seu perfil e valem para todos os slots. Cada slot é uma jornada: ao ascender ou no Fim de Jogo ela termina, as Almas vão para o perfil e o slot fica livre para o próximo herói.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente</div></div>';
+    h += '<div class="ts-foot">Almas, Altar, conquistas, Armas Ancestrais e as classes e espécies liberadas são do seu perfil e valem para todos os slots. Cada slot é uma jornada: ao ascender ou no Fim de Jogo ela termina, as Almas vão para o perfil e o slot fica livre para o próximo herói.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1</b> a <b>4</b> velocidade · O jogo salva automaticamente</div></div>';
     el.innerHTML = h;
 
     el.querySelectorAll('[data-pick]').forEach(card => card.addEventListener('click', () => {
@@ -216,9 +206,6 @@ const UI = {
     this.titleAnim = requestAnimationFrame(step);
   },
 
-  // ==========================================================
-  // Jogo
-  // ==========================================================
   initGame() {
     this.$('app').classList.remove('hidden');
     const st = Game.state;
@@ -228,16 +215,12 @@ const UI = {
     this.$('btn-exit').innerHTML = ICONS.exit;
     this.$('btn-board').innerHTML = ICONS.trophy;
     this.$('btn-board').classList.toggle('hidden', !Online.enabled);
-    // Abas
     this.$('tabs').innerHTML = TABS.map(([id, nm]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${nm}</button>`).join('');
-    // Velocidade
     this.$('speed').innerHTML = [1, 2, 3, 5].map(s => `<button data-speed="${s}">${s}x</button>`).join('');
-    // Retrato
     const pc = this.$('portrait').getContext('2d');
     pc.clearRect(0, 0, 40, 40); pc.imageSmoothingEnabled = false;
     const spr = Sprites.get(CLASSES[st.cls].sprite, Sprites.heroPal(st.cls, st.species));
     pc.drawImage(spr.c, 2, 2, 36, 36);
-    // Filtros do log
     this.$('log-filters').innerHTML = [['all', 'Tudo'], ['loot', 'Saque'], ['events', 'Eventos']].map(([k, n]) => `<button data-lf="${k}" class="${k === this.logFilter ? 'on' : ''}">${n}</button>`).join('');
     this.buildSkillbar();
     if (!this.bound) this.bind();
@@ -279,7 +262,6 @@ const UI = {
     const body = this.$('tab-body');
     body.addEventListener('click', e => this.onPanelClick(e));
     body.addEventListener('change', e => this.onPanelChange(e));
-    // Tooltips
     document.addEventListener('mouseover', e => this.onHover(e));
     document.addEventListener('mousemove', e => { if (!this.$('tooltip').classList.contains('hidden')) this.placeTip(e.clientX, e.clientY); });
     document.addEventListener('mouseout', e => { if (e.target.closest('[data-uid],[data-skill],[data-tip]') && !e.relatedTarget?.closest?.('[data-uid],[data-skill],[data-tip]')) this.hideTip(); });
@@ -308,7 +290,6 @@ const UI = {
     this.dirty('top');
   },
 
-  // ---------------------------------------------------------- tick
   tick(dt) {
     this.hudT -= dt;
     if (this.hudT <= 0) { this.hudT = 0.1; this.updateHud(); this.updateSkillbar(); }
@@ -328,7 +309,6 @@ const UI = {
         this.renderTab(false);
       }
     }
-    // Indicador de pontos de talento
     const free = Stats.talentFree(Game.state);
     const tb = this.$('tabs').querySelector('[data-tab="talents"]');
     if (tb) {
@@ -365,7 +345,6 @@ const UI = {
     const W = Game.W, st = Game.state;
     if (!W) return;
     const h = W.hero;
-    // Zona
     const exp = Math.round(World.exploredPct(W) * 100);
     const opened = W.chests.filter(c => c.opened).length;
     let tag = '';
@@ -374,14 +353,12 @@ const UI = {
     else tag = '<span class="ztag adv">AVANÇANDO</span>';
     const zh = `<div class="zt">Zona ${W.z}${W.isLord ? ' · Covil' : ''}</div><div class="zb">${W.biome.name}</div><div class="zr"><span>Inimigos <b>${W.killed}/${W.total}</b></span><span>Baús <b>${opened}/${W.chests.length}</b></span><span><b>${exp}%</b></span></div>${tag}`;
     if (this._zh !== zh) { this.$('hud-zone').innerHTML = zh; this._zh = zh; }
-    // Vida
     this.$('hp-fill').style.width = (h.hp / h.maxHp * 100).toFixed(1) + '%';
     this.$('shield-fill').style.width = Math.min(100, h.shield / h.maxHp * 100).toFixed(1) + '%';
     const ht = h.dead ? 'Derrotado' : `${U.fmt(Math.min(Math.ceil(h.hp), Math.ceil(h.maxHp)))} / ${U.fmt(Math.ceil(h.maxHp))}${h.shield > 0 ? ` (+${U.fmt(h.shield)})` : ''}`;
     if (this.$('hp-text').textContent !== ht) this.$('hp-text').textContent = ht;
     const stt = h.dead ? `Revivendo em ${Math.ceil(h.deathT)}s…` : h.status;
     if (this.$('hero-status').textContent !== stt) this.$('hero-status').textContent = stt;
-    // Poções
     const pm = Game.stats.potionMax;
     const pk = st.potions + '/' + pm + '/' + (st.hardcore ? st.hearts : '-');
     if (this._pk !== pk) {
@@ -392,10 +369,8 @@ const UI = {
       ph += Array.from({ length: pm }, (_, i) => `<img src="${url}" class="${i < st.potions ? '' : 'empty'}" alt="">`).join('');
       this.$('potions').innerHTML = ph;
     }
-    // Buffs
     const bh = h.buffs.map(b => `<span class="buff" style="border-color:${b.color};color:${b.color}">${b.name} ${Math.ceil(b.t)}s</span>`).join('');
     if (this._bh !== bh) { this.$('buffs').innerHTML = bh; this._bh = bh; }
-    // Chefe
     const b = W.boss;
     const showBoss = b && !b.dead && b.aggro && !h.dead;
     this.$('hud-boss').classList.toggle('hidden', !showBoss);
@@ -406,7 +381,6 @@ const UI = {
     }
   },
 
-  // ---------------------------------------------------------- barra de habilidades
   skillbarIds() {
     const st = Game.state, sp = SPECIES[st.species];
     return [...Stats.activeIds(st), ...(sp && sp.skill ? [sp.skill] : [])];
@@ -446,7 +420,6 @@ const UI = {
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   },
 
-  // Atualiza apenas estados dependentes de ouro, sem recriar o DOM
   refreshGold() {
     const st = Game.state, body = this.$('tab-body');
     if (this.tab !== 'train' && this.tab !== 'forge') return;
@@ -459,9 +432,6 @@ const UI = {
     if (g) g.textContent = U.fmt(st.gold);
   },
 
-  // ==========================================================
-  // Painéis
-  // ==========================================================
   renderTab(full) {
     const body = this.$('tab-body');
     const scroll = body.scrollTop;
@@ -485,7 +455,6 @@ const UI = {
       h += `<div class="eslot${it ? '' : ' empty'}">${this.itemHtml(it)}<div class="info"><div class="lbl">${SLOT_NAMES[s]}</div><div class="nm ${it ? 'c' + it.rarity : ''}">${it ? U.esc(it.name) + (it.plus ? ` +${it.plus}` : '') : s === 'offhand' ? 'Vazio · só armas exclusivas' : 'Vazio'}</div></div></div>`;
     }
     h += '</div>' + this.relicCard(st.cls, true) + '</div>';
-    // Atributos
     const K = 30 * enemyAtkScale(st.zone);
     const red = Math.min(0.85, S.def / (S.def + K)) * 100;
     const rows = [
@@ -503,7 +472,6 @@ const UI = {
     h += `<div class="sec"><div class="sec-h"><h3>Atributos</h3></div><div class="stat-list">${rows.map(([a, b]) => `<div class="r"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
     if (S.powers.size) h += `<div class="card" style="margin-top:10px">${[...S.powers].map(p => `<div style="margin-bottom:4px"><b style="color:var(--orange);font-family:var(--pixel)">✦ ${POWERS[p].name}</b> <span style="color:var(--muted);font-size:11px">${POWERS[p].desc}</span></div>`).join('')}</div>`;
     h += '</div>';
-    // Mochila
     const cap = Stats.invSize(st);
     const sel = this.selecting;
     h += `<div class="sec"><div class="sec-h"><h3>Mochila</h3><span class="sub">${st.inv.length}/${cap}</span></div>`;
@@ -532,7 +500,6 @@ const UI = {
     return h;
   },
 
-  // Card da Arma Ancestral (equipamento e Salão)
   relicCard(cls, compact) {
     const st = Game.state, info = Stats.relicInfo(st, cls), def = RELICS[cls];
     if (!def) return '';
@@ -568,17 +535,17 @@ const UI = {
     };
     const innate = (c, k) => c.innate ? `<div class="up-row innate"><div class="ic"><div class="glyph" style="color:${c.color}">✦</div></div><div><div class="nm" style="color:${c.color}">${c.innate.name}<span class="tag">INATO${k < 1 ? ' · 60%' : ''}</span></div><div class="ds">${c.innate.desc}</div></div><div></div></div>` : '';
     h += `<div class="sec"><div class="sec-h"><h3>Talento Inato</h3></div>${innate(cls, 1)}${c2 ? innate(c2, 0.6) : ''}</div>`;
-    h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas${c2 ? ' — ' + cls.name : ''}</h3></div>` + cls.skills.map(row).join('') + '</div>';
-    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas — ${c2.name}</h3></div>` + c2.skills.slice(0, 2).map(row).join('') + '</div>';
-    h += `<div class="sec"><div class="sec-h"><h3>Passivas${c2 ? ' — ' + cls.name : ''}</h3></div>` + cls.passives.map(row).join('') + '</div>';
-    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Passivas — ${c2.name}</h3></div>` + c2.passives.map(row).join('') + '</div>';
+    h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas${c2 ? ' (' + cls.name + ')' : ''}</h3></div>` + cls.skills.map(row).join('') + '</div>';
+    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Habilidades Ativas (${c2.name})</h3></div>` + c2.skills.slice(0, 2).map(row).join('') + '</div>';
+    h += `<div class="sec"><div class="sec-h"><h3>Passivas${c2 ? ' (' + cls.name + ')' : ''}</h3></div>` + cls.passives.map(row).join('') + '</div>';
+    if (c2) h += `<div class="sec"><div class="sec-h"><h3>Passivas (${c2.name})</h3></div>` + c2.passives.map(row).join('') + '</div>';
     const mOpen = Stats.maestriaOpen(st);
     const mrow = m => {
       const r = st.talents[m.id] || 0, can = Game.canMaestria(m.id);
       const txt = v => Items.statLine(m.stat, v) + (m.also ? ' e ' + Items.statLine(m.also, v) : '');
       return `<div class="up-row${mOpen ? '' : ' locked'}"><div class="ic"><img src="${Sprites.skillUrl(m.icon, m.color, 44)}" alt=""></div>
         <div><div class="nm" style="color:${r ? m.color : 'inherit'}">${m.name}<span class="rk">${r}${m.max ? '/' + m.max : ''}</span></div>
-        <div class="ds">${r ? txt(r * m.per) : '—'}<br><span class="nx">Próximo: ${txt((r + 1) * m.per)}</span></div></div>
+        <div class="ds">${r ? txt(r * m.per) : 'Nenhum ainda'}<br><span class="nx">Próximo: ${txt((r + 1) * m.per)}</span></div></div>
         <div class="act"><button class="btn small gold" data-act="maestria" data-id="${m.id}" ${can ? '' : 'disabled'}>+1</button><button class="btn small" data-act="maestria10" data-id="${m.id}" ${can ? '' : 'disabled'}>+10</button></div></div>`;
     };
     h += `<div class="sec"><div class="sec-h"><h3>Maestria</h3><span class="sub">${mOpen ? 'sem limite de pontos' : 'nível ' + MAESTRIA_LVL}</span></div>
@@ -596,7 +563,7 @@ const UI = {
       const q = this.qtyInfo(x => Stats.trainCost(t, x), r, t.max, st.gold);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(t.icon, t.color, 44)}" alt=""></div>
         <div><div class="nm">${t.name}<span class="rk">Nv ${r}${t.max ? '/' + t.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : '—'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${t.desc((r + q.n) * t.per, r + q.n)}</span>`}</div></div>
+        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : 'nenhum'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${t.desc((r + q.n) * t.per, r + q.n)}</span>`}</div></div>
         <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" data-cost="${q.first}" style="color:${q.can ? 'var(--gold)' : 'var(--red)'}">${gold}${U.fmt(q.cost)}</div>
         <button class="btn small gold" data-act="train" data-id="${t.id}" data-cost="${q.first}" ${q.can ? '' : 'disabled'}>Comprar${q.n > 1 ? ' ×' + q.n : ''}</button>`}</div></div>`;
     }
@@ -635,7 +602,6 @@ const UI = {
     return h;
   },
 
-  // Fusão de armas: é assim que se vira multiclasse
   fusionSection() {
     const st = Game.state, w = st.equip.weapon;
     let h = `<div class="sec"><div class="sec-h"><h3>Fusão de Armas · Multiclasse</h3><span class="sub">${Math.floor(st.shards || 0)} Fragmentos</span></div>
@@ -676,7 +642,7 @@ const UI = {
       const q = this.qtyInfo(x => Stats.soulCost(u, x), r, u.max, st.souls);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(u.icon, u.color, 44)}" alt=""></div>
         <div><div class="nm">${u.name}<span class="rk">Nv ${r}${u.max ? '/' + u.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? u.desc(Stats.soulVal(u, r)) : '—'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${u.desc(Stats.soulVal(u, r + q.n))}</span>`}</div></div>
+        <div class="ds">Atual: <b>${r ? u.desc(Stats.soulVal(u, r)) : 'nenhum'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${u.desc(Stats.soulVal(u, r + q.n))}</span>`}</div></div>
         <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" style="color:${q.can ? '#d9b8ff' : 'var(--red)'}">${soul}${U.fmt(q.cost)}</div><button class="btn small purple" data-act="soul" data-id="${u.id}" ${q.can ? '' : 'disabled'}>Comprar${q.n > 1 ? ' ×' + q.n : ''}</button>`}</div></div>`;
     }
     return h + '</div>';
@@ -793,7 +759,7 @@ const UI = {
   },
 
   quickSell(item, skipConfirm) {
-    if (item.locked) { this.notice('Item travado — destrave para vender.'); return; }
+    if (item.locked) { this.notice('Item travado. Destrave para vender.'); return; }
     const go = () => { Game.sell(item); this.renderTab(false); };
     if (item.rarity >= 3 && !skipConfirm) this.confirm('Vender item', `Vender <span class="c${item.rarity}">${U.esc(item.name)}</span> (${RARITIES[item.rarity].name}) por ${U.fmt(Items.sellPrice(item))} ouro?<br><small style="color:var(--muted)">Dica: Shift + botão direito vende sem perguntar.</small>`, 'Vender', go, 'danger');
     else go();
@@ -815,7 +781,6 @@ const UI = {
     m.style.top = Math.min(r.bottom + 4, innerHeight - mr.height - 8) + 'px';
   },
 
-  // ---------------------------------------------------------- menu de item
   openMenu(uid, x, y) {
     const f = Game.findItem(uid);
     if (!f) return;
@@ -867,7 +832,6 @@ const UI = {
     this.renderTab(false);
   },
 
-  // ---------------------------------------------------------- Salão dos Heróis
   tab_hall() {
     const st = Game.state;
     const C = CLASSES[st.cls], S = SPECIES[st.species];
@@ -903,7 +867,6 @@ const UI = {
       return `<div class="hcard${owned ? '' : ' locked'}${cur ? ' cur' : ''}" style="--rc:${R.color}" data-tip="${tip.replace(/"/g, '&quot;')}"><img src="${img}" alt=""><div class="hc-n">${def.name}</div><div class="hc-r" style="color:${R.color}">${R.name}</div>${act}</div>`;
     };
     const nc = st.unlocks.classes.length, ns = st.unlocks.species.length;
-    // Multiclasse
     const open = Stats.multiclassOpen(st);
     const mHint = !open
       ? `🔒 Liberada após <b>${MULTI_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
@@ -913,7 +876,6 @@ const UI = {
     const learned = Object.keys(st.fusions || {});
     h += `<div class="sec"><div class="sec-h"><h3>Multiclasse</h3><button class="btn small purple" data-act="goForge">Fusão na Forja</button></div>
       <div class="card multi-card"><div class="hint" style="margin:0 0 6px">A multiclasse vem da <b>fusão de armas</b>: na Forja, sua arma se funde com a arma de outra classe dominada (ex.: espada + arco). Equipada, ela dá as habilidades das duas classes (4 + 2), as passivas das duas, +${MULTI_SYNERGY}% de Dano e Vida e o inato da secundária a 60%. Em troca, cada nível exige ${Math.round((MULTI_XP - 1) * 100)}% mais XP.</div><div style="font-size:12px">${mHint}</div>${learned.length ? `<div class="hint" style="margin:6px 0 0">Fusões aprendidas: ${learned.map(k => k.split('+').map(c => CLASSES[c] ? CLASSES[c].name : c).join(' + ')).join(' · ')}</div>` : ''}</div></div>`;
-    // Mestiçagem
     const spOpen = Stats.multiSpeciesOpen(st);
     const sHint = !spOpen
       ? `🔒 Liberada após <b>${MULTI_SP_ASC} ascensões</b> (você tem ${st.stats.ascensions}).`
@@ -922,10 +884,9 @@ const UI = {
       : st.species2 ? `Ativa: <b>${Game.speciesName()}</b>.` : 'Escolha uma espécie dominada abaixo (botão <b>Mestiço</b>) para combinar com a atual.';
     h += `<div class="sec"><div class="sec-h"><h3>Mestiçagem</h3>${st.species2 ? '<button class="btn small" data-act="setMultiSp" data-id="">Remover</button>' : ''}</div>
       <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas espécies dominadas: a segunda soma ${Math.round(MULTI_SP_SHARE * 100)}% dos atributos dela (sem os poderes), vale a raridade mais alta e dá +${MULTI_SP_SYNERGY}% de Dano e Vida. Em troca, cada nível exige ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP (acumula com a multiclasse).</div><div style="font-size:12px">${sHint}</div></div></div>`;
-    // Armas Ancestrais
     const nr = Object.keys(st.relics || {}).length;
     h += `<div class="sec"><div class="sec-h"><h3>Armas Ancestrais</h3><span class="sub">${nr}/${CLASS_ORDER.length} · <b style="color:var(--gold)">${Math.floor(st.shards || 0)}</b> Fragmentos</span></div>
-      <div class="hint">Cada classe tem uma arma exclusiva, encontrada uma única vez no <b>Cofre Ancestral</b> (aparece jogando com a classe a partir da zona ${RELIC_ZONE}). Ela acompanha a classe em todas as jornadas e pode ser despertada de Comum até Mítica com <b style="color:var(--gold)">Fragmentos Ancestrais</b> — que caem dos Senhores de bioma, às vezes de chefes e Mímicos — e recordes cada vez maiores com a classe.</div>
+      <div class="hint">Cada classe tem uma arma exclusiva, encontrada uma única vez no <b>Cofre Ancestral</b> (aparece jogando com a classe a partir da zona ${RELIC_ZONE}). Ela acompanha a classe em todas as jornadas e pode ser despertada de Comum até Mítica com <b style="color:var(--gold)">Fragmentos Ancestrais</b> e recordes cada vez maiores com a classe. Os fragmentos caem dos Senhores de bioma e, às vezes, de chefes e Mímicos.</div>
       <div class="relic-list">${[st.cls, ...CLASS_ORDER.filter(c => c !== st.cls)].map(c => this.relicCard(c, false)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Classes</h3><span class="sub">${nc}/${CLASS_ORDER.length}</span></div><div class="hall-grid">${CLASS_ORDER.map(id => card('class', id)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Espécies</h3><span class="sub">${ns}/${SPECIES_ORDER.length}</span></div><div class="hall-grid">${SPECIES_ORDER.map(id => card('species', id)).join('')}</div></div>`;
@@ -933,7 +894,6 @@ const UI = {
     return h;
   },
 
-  // ---------------------------------------------------------- tooltips
   onHover(e) {
     const el = e.target.closest('[data-uid],[data-skill],[data-tip]');
     if (!el || !this.$('menu').classList.contains('hidden')) return;
@@ -973,7 +933,6 @@ const UI = {
   },
   hideTip() { this.$('tooltip').classList.add('hidden'); },
 
-  // ---------------------------------------------------------- avisos
   banner(title, sub, cls = '', dur = 2) {
     const b = this.$('banner');
     if (!b) return;
@@ -1019,7 +978,6 @@ const UI = {
     f.style.opacity = U.clamp(a, 0, 1).toFixed(2);
   },
 
-  // ---------------------------------------------------------- log
   addLog(html, cls = '') {
     const entry = { html, cls, t: U.clock() };
     this.logs.push(entry);
@@ -1044,7 +1002,6 @@ const UI = {
     box.scrollTop = box.scrollHeight;
   },
 
-  // ---------------------------------------------------------- modais
   modal(title, body, buttons = [], opts = {}) {
     this.closeModal();
     const bg = document.createElement('div');
@@ -1063,7 +1020,6 @@ const UI = {
     this.modal(title, `<p style="margin:0;color:#d8cfe6">${msg}</p>`, [{ label: 'Cancelar' }, { label: okLabel, cls, fn }]);
   },
 
-  // Chamado quando a conta entra/sai ou termina de conectar
   onlineChanged() {
     const ts = this.$('title-screen');
     if (ts && !ts.classList.contains('hidden') && this.titleMode === 'new' && !this.$('modal-root').children.length) this.showTitle('new');
@@ -1079,7 +1035,7 @@ const UI = {
       ${Online.captchaOn() ? '<div class="lg-captcha" id="lg-captcha"></div>' : ''}
       <div class="lg-msg" id="lg-msg"></div>
       ${up ? '' : '<button class="lg-link" data-lg="forgot">Esqueci minha senha</button>'}
-      <p class="hint" style="margin:8px 0 0">A conta guarda seus 3 slots na nuvem — dá para continuar em outro navegador ou computador — e coloca suas marcas no placar.</p>`;
+      <p class="hint" style="margin:8px 0 0">A conta guarda seu perfil e seus 3 slots na nuvem, para você continuar em outro navegador ou computador, e coloca suas marcas no placar.</p>`;
     const submit = async (bg) => {
       const msg = bg.querySelector('#lg-msg'), btn = bg.querySelector('.modal-f .gold');
       const email = bg.querySelector('#lg-email').value.trim(), pass = bg.querySelector('#lg-pass').value;
@@ -1149,9 +1105,9 @@ const UI = {
     const tog = (k, l, d) => `<div class="set-row"><div><div class="l">${l}</div><div class="d">${d}</div></div><input type="checkbox" data-s="${k}" ${s[k] ? 'checked' : ''}></div>`;
     const trackOpts = `<option value="auto" ${s.musicTrack === 'auto' ? 'selected' : ''}>Automática (por bioma)</option>` + MUSIC_ORDER.map(id => `<option value="${id}" ${s.musicTrack === id ? 'selected' : ''}>${MUSIC_TRACKS[id].name}</option>`).join('');
     const body = `<div class="set-h">Áudio</div>
-      ${tog('music', 'Música', 'Trilha sonora procedural — 10 faixas, uma para cada bioma, título e chefes')}
+      ${tog('music', 'Música', 'Trilha sonora procedural com 10 faixas: uma para cada bioma, para o título e para os chefes')}
       <div class="set-row"><div><div class="l">Volume da música</div></div><input type="range" min="0" max="1" step="0.05" value="${s.musicVol}" data-s="musicVol"></div>
-      <div class="set-row"><div><div class="l">Faixa</div><div class="d">Tocando agora: <span id="np-name">${Music.currentName() || '—'}</span></div></div><select class="sel" data-s="musicTrack">${trackOpts}</select></div>
+      <div class="set-row"><div><div class="l">Faixa</div><div class="d">Tocando agora: <span id="np-name">${Music.currentName() || 'nenhuma'}</span></div></div><select class="sel" data-s="musicTrack">${trackOpts}</select></div>
       ${tog('sound', 'Efeitos sonoros', 'Golpes, saque, magias e interface')}
       <div class="set-row"><div><div class="l">Volume dos efeitos</div></div><input type="range" min="0" max="1" step="0.05" value="${s.volume}" data-s="volume"></div>
       ${tog('bgSfx', 'Efeitos em segundo plano', 'Tocar efeitos com a aba minimizada (a música sempre continua)')}

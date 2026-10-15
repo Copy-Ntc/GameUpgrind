@@ -1,17 +1,10 @@
 'use strict';
-// ============================================================
-// Online (opcional): conta, save na nuvem e placar via Supabase.
-// Só liga quando js/online-config.js tem a URL e a chave do projeto;
-// sem isso o jogo funciona igual, salvando apenas no navegador.
-// ============================================================
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js';
-// Impressão digital do arquivo acima: se o CDN entregar qualquer coisa diferente, o navegador recusa.
-// Ao trocar a versão, gere de novo (veja ONLINE.md).
 const SUPABASE_SRI = 'sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT';
 const TURNSTILE_JS = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const MIN_PASS = 8;               // senha mínima para contas novas (deixe igual à do painel do Supabase)
-const CLOUD_PUSH_EVERY = 60;   // segundos entre envios do save para a nuvem
-const SCORE_PUSH_EVERY = 120;  // segundos entre envios para o placar
+const MIN_PASS = 8;
+const CLOUD_PUSH_EVERY = 60;
+const SCORE_PUSH_EVERY = 120;
 const BOARD_COLS = [
   ['max_zone', 'Zona'],
   ['max_hit', 'Maior golpe'],
@@ -19,7 +12,7 @@ const BOARD_COLS = [
   ['level', 'Nível'],
 ];
 
-const PROFILE_SLOT = 0;          // na tabela saves, o slot 0 guarda o perfil (progresso permanente)
+const PROFILE_SLOT = 0;
 const PROFILE_SQL_HINT = 'Para guardar o perfil na nuvem, rode o arquivo online/atualizacao-perfil.sql no SQL Editor do Supabase (veja ONLINE.md). Enquanto isso, o perfil fica salvo neste navegador.';
 
 const Online = {
@@ -63,8 +56,6 @@ const Online = {
     });
   },
 
-  // ---------------------------------------------------------- anti-robô (Cloudflare Turnstile, opcional)
-  // Liga quando ONLINE_CONFIG.turnstile tem a "site key"; o Supabase confere o token no cadastro, login e troca de senha.
   captchaOn() { return typeof ONLINE_CONFIG !== 'undefined' && !!ONLINE_CONFIG.turnstile; },
   loadTurnstile() {
     if (window.turnstile) return Promise.resolve();
@@ -80,7 +71,7 @@ const Online = {
   async mountCaptcha(el) {
     if (!this.captchaOn() || !el) return;
     this.captcha.token = '';
-    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.remove(this.captcha.id); } catch (e) { /* já saiu */ } }
+    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.remove(this.captcha.id); } catch (e) {  } }
     this.captcha.id = null;
     try { await this.loadTurnstile(); } catch (e) { el.textContent = 'Não foi possível carregar a verificação anti-robô. Verifique a internet.'; return; }
     if (!el.isConnected) return;
@@ -96,13 +87,11 @@ const Online = {
     if (!this.captcha.token) throw new Error('Confirme a verificação anti-robô (a caixa acima dos botões) e tente de novo.');
     return this.captcha.token;
   },
-  // Cada token vale uma vez só: depois de cada tentativa, pede outro
   resetCaptcha() {
     this.captcha.token = '';
-    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.reset(this.captcha.id); } catch (e) { /* ok */ } }
+    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.reset(this.captcha.id); } catch (e) {  } }
   },
 
-  // Mensagens de erro do Supabase em português
   errText(e) {
     const m = String((e && e.message) || e || '');
     if (/captcha/i.test(m)) return 'A verificação anti-robô falhou ou expirou. Marque a caixa de novo.';
@@ -133,7 +122,7 @@ const Online = {
     const captchaToken = this.captchaToken();
     const { data, error } = await this.sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: location.origin + location.pathname, captchaToken } }).finally(() => this.resetCaptcha());
     if (error) throw error;
-    if (!data.session) return 'confirm'; // o projeto exige confirmar o e-mail
+    if (!data.session) return 'confirm';
     await this.afterLogin(data.user);
     return 'ok';
   },
@@ -162,7 +151,6 @@ const Online = {
     let { data: prof, error } = await this.sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (error) throw error;
     if (!prof) {
-      // primeiro login: cria o perfil com o apelido escolhido no cadastro
       let name = ((user.user_metadata && user.user_metadata.name) || (user.email || 'heroi').split('@')[0]).slice(0, 20);
       if (!this.validName(name)) name = 'Heroi' + Math.floor(Math.random() * 9000 + 1000);
       for (let i = 0; i < 4 && !prof; i++) {
@@ -182,12 +170,10 @@ const Online = {
     if (!this.user) return;
     await this.flush();
     const uid = this.user.id;
-    // os heróis desta conta continuam na nuvem; tira as cópias locais para a próxima conta
     for (let n = 1; n <= SLOT_COUNT; n++) { const sv = Game.peekSave(n); if (sv && sv.owner === uid) Game.deleteSlotLocal(n); }
-    // o perfil da conta também sai deste navegador (volta inteiro ao entrar de novo)
     Game.setProfile(Game.defaultProfile());
     if (!Game.running) { Game.state = null; Game.W = null; }
-    try { await this.sb.auth.signOut(); } catch (e) { /* ok */ }
+    try { await this.sb.auth.signOut(); } catch (e) {  }
     this.user = null; this.profile = null;
     UI.onlineChanged();
   },
@@ -200,15 +186,12 @@ const Online = {
     this.profile = data;
   },
 
-  // ---------------------------------------------------------- save na nuvem
-  // Junta os slots do navegador com os da nuvem sem perder nenhum herói.
-  // local/cloud: arrays de 3 posições (save ou null). extras: heróis guardados à parte.
   merge(local, cloud, uid, extras = []) {
     const out = [null, null, null], upload = new Set(), orphans = [...extras];
     for (let i = 0; i < 3; i++) {
       let l = local[i];
       const c = cloud[i];
-      if (l && l.owner && l.owner !== uid) { orphans.push(l); l = null; } // herói de outra conta: não mistura
+      if (l && l.owner && l.owner !== uid) { orphans.push(l); l = null; }
       if (l && c) {
         if (l.created === c.created) {
           if ((l.lastSave || 0) > (c.lastSave || 0)) { out[i] = l; upload.add(i); } else out[i] = c;
@@ -226,7 +209,6 @@ const Online = {
     return { slots: out, upload, lost };
   },
 
-  // Decide qual perfil vale ao entrar na conta
   hasProgress(p) { return !!p && ((p.stats.ascensions || 0) > 0 || (p.souls || 0) > 0 || (p.stats.playTime || 0) > 600); },
   pickProfile(localP, cloudP, legacy, uid) {
     const mine = localP && (!localP.owner || localP.owner === uid) ? localP : null;
@@ -235,7 +217,6 @@ const Online = {
       if (mine && !mine.owner && this.hasProgress(mine)) return { p: cloudP, upload: false, backup: mine };
       return { p: cloudP, upload: false };
     }
-    // conta ainda sem perfil na nuvem: junta este navegador com os saves antigos da conta
     return { p: Game.buildProfile([mine, ...legacy]), upload: true };
   },
 
@@ -273,7 +254,6 @@ const Online = {
     for (const i of m.upload) await this.upload(i + 1, Game.runPart(m.slots[i]));
     if (this.dirty.has(PROFILE_SLOT)) { this.dirty.delete(PROFILE_SLOT); await this.uploadProfile(); }
   },
-  // O perfil vai no slot 0; se o banco ainda não aceita o slot 0, avisa e segue salvando no navegador
   async uploadProfile() {
     if (this.profileBlocked || !Game.profile) return;
     try { await this.upload(PROFILE_SLOT, Game.profile); }
@@ -298,7 +278,6 @@ const Online = {
     this.scoreDirty = true;
   },
 
-  // Envia o que mudou (chamado periodicamente, ao sair da run e ao esconder a aba)
   async flush() {
     if (!this.loggedIn || this.busy) return;
     this.busy = true;
@@ -327,8 +306,6 @@ const Online = {
     if (this.pushT > CLOUD_PUSH_EVERY && (this.dirty.size || this.scoreDirty)) { this.pushT = 0; this.flush(); }
   },
 
-  // ---------------------------------------------------------- placar
-  // As marcas são do perfil (todas as jornadas); o herói mostrado é o atual ou o último jogado
   scoreFrom(P, hero) {
     if (!P || !P.stats) return null;
     const s = P.stats, h = hero || P.lastHero || { name: '', cls: '', species: '' };

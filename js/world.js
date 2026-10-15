@@ -1,8 +1,4 @@
 'use strict';
-// ============================================================
-// Mundo: entidades, movimento, pathfinding, IA, combate,
-// habilidades, lacaios, chefes, saque e efeitos
-// ============================================================
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const VISION = 4.6;
 
@@ -10,7 +6,6 @@ const World = {
   W: null,
   nextId: 1,
 
-  // ---------------------------------------------------------- criação
   create(z) {
     const M = MapGen.generate(z, Game.pickEncounter ? Game.pickEncounter(z) : null);
     const n = M.w * M.h;
@@ -26,7 +21,6 @@ const World = {
     for (const c of W.chests) W.occ[this.idx(c.x, c.y)] = -1;
     for (const s of W.shrines) W.occ[this.idx(s.x, s.y)] = -1;
     if (W.recruit) W.occ[this.idx(W.recruit.x, W.recruit.y)] = -1;
-    // Herói
     const S = Game.stats;
     const hero = this.makeEnt('hero', W.start.x, W.start.y, {
       hp: S.maxHp, maxHp: S.maxHp, cls: Game.state.cls, sprite: CLASSES[Game.state.cls].sprite, pal: Sprites.heroPal(Game.state.cls, Game.state.species),
@@ -35,7 +29,6 @@ const World = {
     });
     W.hero = hero;
     this.addEnt(W, hero);
-    // Inimigos
     for (const sp of W.spawns) this.spawnEnemy(W, sp);
     W.total = W.ents.filter(e => e.kind === 'enemy').length;
     this.updateVision(W);
@@ -67,7 +60,6 @@ const World = {
     }
     const gi = def.g === 'f' ? 1 : 0;
     let hp = 40 * S * def.hp, atk = 16 * SA * def.atk;
-    // Início mais suave nas primeiras zonas
     if (z <= 5) { atk *= 0.55 + 0.09 * (z - 1); hp *= 0.75 + 0.05 * (z - 1); }
     let scale = 1, xpMult = 1;
     if (sp.elite) { hp *= 3; atk *= 1.6; scale = 1.15; xpMult = 3; name = name + ' ' + U.pick(ELITE_ADJ)[gi]; }
@@ -89,7 +81,6 @@ const World = {
     return e;
   },
 
-  // ---------------------------------------------------------- utilidades de grid
   walk(W, x, y) { return x >= 0 && y >= 0 && x < W.w && y < W.h && W.tiles[y * W.w + x] === 1; },
   free(W, x, y) { return this.walk(W, x, y) && W.occ[y * W.w + x] === 0; },
   dist(a, b) { return U.dist(a.x, a.y, b.x, b.y); },
@@ -143,7 +134,6 @@ const World = {
     return null;
   },
 
-  // Campo de fluxo a partir do herói (para inimigos)
   updateFlow(W, force) {
     const h = W.hero;
     const key = h.ny * W.w + h.nx;
@@ -180,7 +170,6 @@ const World = {
       if (!W.explored[i]) W.explored[i] = 1;
     }
     W.fogDirty = true;
-    // Avistamentos
     for (const c of W.chests) {
       if (!c.seen && !c.opened && W.vis[c.y * W.w + c.x]) {
         c.seen = true;
@@ -195,7 +184,7 @@ const World = {
     if (rc && !rc.seen && W.vis[rc.y * W.w + rc.x]) {
       rc.seen = true;
       Game.log(`Você avistou <b style="color:var(--gold)">${rc.name}</b> (${rc.label}) aprisionado! Liberte-o para recrutar.`, 'good');
-      UI.toastText('Prisioneiro avistado!', `${rc.name} — ${rc.label}`, '#f2c25b');
+      UI.toastText('Prisioneiro avistado!', `${rc.name} (${rc.label})`, '#f2c25b');
     }
   },
 
@@ -216,14 +205,12 @@ const World = {
     return f ? e / f : 1;
   },
 
-  // ---------------------------------------------------------- movimento
   startMove(W, e, nx, ny) {
     if (!this.walk(W, nx, ny)) return false;
     const j = ny * W.w + nx;
     const dx = nx - e.x, dy = ny - e.y;
     if (dx && dy && (!this.walk(W, e.x + dx, e.y) || !this.walk(W, e.x, e.y + dy))) return false;
     if (W.occ[j] !== 0 && W.occ[j] !== e.id) {
-      // O herói troca de lugar com seus lacaios em corredores estreitos
       const o = e.kind === 'hero' && W.occ[j] > 0 ? W.ents.find(m => m.id === W.occ[j]) : null;
       if (!o || o.kind !== 'minion' || o.moving || o.dead) return false;
       o.x = o.nx = o.rx = e.x; o.y = o.ny = o.ry = e.y;
@@ -268,20 +255,17 @@ const World = {
 
   onHeroStep(W, hero) {
     this.updateVision(W);
-    // Portal
     if (W.portal.active && hero.wantPortal && hero.x === W.portal.x && hero.y === W.portal.y && !W.completed) {
       W.completed = true;
       Game.completeZone();
     }
   },
 
-  // ---------------------------------------------------------- loop principal
   update(W, dt) {
     W.t += dt;
     const hero = W.hero;
     const S = Game.stats;
 
-    // ---- Herói ----
     if (hero.dead) {
       hero.deathT -= dt;
       if (hero.deathT <= 0) this.respawn(W);
@@ -295,7 +279,6 @@ const World = {
     }
     this.updateFlow(W);
 
-    // ---- Inimigos e lacaios ----
     for (const e of W.ents) {
       if (e.kind === 'hero') continue;
       if (e.dead) { e.deathT -= dt; continue; }
@@ -314,7 +297,6 @@ const World = {
     }
     W.ents = W.ents.filter(e => !(e.dead && e.deathT <= 0 && e.kind !== 'hero'));
 
-    // ---- Projéteis ----
     for (const p of W.proj) {
       if (p.delay > 0) { p.delay -= dt; continue; }
       p.life -= dt;
@@ -333,13 +315,11 @@ const World = {
     }
     W.proj = W.proj.filter(p => !p.done);
 
-    // ---- Timers agendados ----
     if (W.timers.length) {
       for (const t of W.timers) { t.t -= dt; if (t.t <= 0 && !t.done) { t.done = true; t.fn(); } }
       W.timers = W.timers.filter(t => !t.done);
     }
 
-    // ---- Visuais ----
     for (const f of W.fx) f.t += dt;
     W.fx = W.fx.filter(f => f.t < f.life);
     for (const p of W.parts) {
@@ -352,7 +332,6 @@ const World = {
     W.shake = Math.max(0, W.shake - dt * 3);
   },
 
-  // ---------------------------------------------------------- timers
   heroTimers(W, hero, dt) {
     const S = Game.stats;
     hero.atkT -= dt;
@@ -365,13 +344,11 @@ const World = {
     hero.buffs = hero.buffs.filter(b => b.t > 0);
     if (before !== hero.buffs.length) hero._bm = null;
     if (hero.shieldT > 0) { hero.shieldT -= dt; if (hero.shieldT <= 0) hero.shield = 0; }
-    // Regeneração
     const bmr = this.buffMods(hero);
     let reg = S.regen + hero.maxHp * (bmr.regen || 0);
     const idle = W.t - hero.lastCombat > 2.5;
     if (idle) reg += hero.maxHp * (hero.resting ? 0.09 * (S.flags.has('trance') ? 1.6 : 1) : 0.04);
     hero.hp = Math.min(hero.maxHp, hero.hp + reg * dt);
-    // DoTs no herói
     if (hero.dots.length) {
       hero.dotT -= dt;
       if (hero.dotT <= 0) {
@@ -382,7 +359,6 @@ const World = {
       for (const d of hero.dots) d.t -= dt;
       hero.dots = hero.dots.filter(d => d.t > 0);
     }
-    // Aura Sagrada (Paladino): dano contínuo em quem está colado
     if (S.flags.has('holyAura')) {
       hero.auraT = (hero.auraT || 0) - dt;
       if (hero.auraT <= 0) {
@@ -392,7 +368,6 @@ const World = {
         if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.2, color: '#fff2a0', life: 0.35 });
       }
     }
-    // Fogo Azul Sagrado (JesusSalva, arma secundária exclusiva)
     if (S.powers.has('bluefire')) {
       hero.blueT = (hero.blueT || 0) - dt;
       if (Math.random() < dt * 14) {
@@ -406,13 +381,11 @@ const World = {
         if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.5, color: '#5ac8ff', life: 0.4 });
       }
     }
-    // Estrela Cadente (Elfo Astral)
     if (S.flags.has('starfall')) {
       hero.starT = (hero.starT === undefined ? 4 : hero.starT) - dt;
       const t = hero.target;
       if (hero.starT <= 0 && t && !t.dead && this.dist(hero, t) <= 7) { hero.starT = 10; this.meteor(W, t.rx, t.ry, 1.6, 4); }
     }
-    // Poção automática
     if (hero.hp < hero.maxHp * 0.35 && Game.state.potions > 0 && hero.potionCd <= 0 && !hero.dead) this.drinkPotion(W, hero);
   },
 
@@ -453,7 +426,6 @@ const World = {
     hero._bm = null;
   },
 
-  // ---------------------------------------------------------- IA do herói
   heroThink(W, hero, dt) {
     const st = Game.state;
     hero.wantPortal = false;
@@ -471,7 +443,6 @@ const World = {
     }
 
     let tgt = this.pickTarget(W, hero);
-    // Descansar quando ferido e sem ameaça ativa
     if (tgt && !tgt.aggro && hero.hp < hero.maxHp * 0.5) tgt = null;
     if (!tgt) {
       if (hero.resting) {
@@ -499,7 +470,6 @@ const World = {
       let path = this.bfs(W, hero.x, hero.y, goal, { self: hero.id, avoid: true, max: 1500 });
       if (!path) path = this.bfs(W, hero.x, hero.y, goal, { self: hero.id, max: 1500 });
       if (this.stepPath(W, hero, path)) { hero.tgtStuck = 0; return; }
-      // Alvo inalcançável: ignora por um tempo para não travar
       hero.tgtStuck = (hero.tgtStuck || 0) + dt;
       if (hero.tgtStuck > 2.5 && !tgt.aggro) { hero.ignore.set(tgt.id, W.t + 10); hero.tgtStuck = 0; hero.target = null; }
       else if (hero.tgtStuck > 6) { hero.ignore.set(tgt.id, W.t + 4); hero.tgtStuck = 0; hero.target = null; }
@@ -508,7 +478,6 @@ const World = {
     }
     hero.target = null;
 
-    // Baús e santuários conhecidos
     const goals = new Map();
     for (const c of W.chests) if (!c.opened && W.explored[c.y * W.w + c.x]) goals.set(c, 'chest');
     for (const s of W.shrines) if (!s.used && W.explored[s.y * W.w + s.x]) goals.set(s, 'shrine');
@@ -534,7 +503,6 @@ const World = {
       }
     }
 
-    // Explorar
     const bossAlive = W.boss && !W.boss.dead;
     if (bossAlive || st.settings.exploreAll) {
       const path = this.bfs(W, hero.x, hero.y, (x, y) => this.frontier(W, x, y), { self: hero.id, explored: true });
@@ -547,20 +515,17 @@ const World = {
         return;
       }
     }
-    // Chefe
     if (bossAlive) {
       const b = W.boss;
       hero.status = `Caçando ${b.name}`;
       hero.ignore.delete(b.id);
       const path = this.bfs(W, hero.x, hero.y, (x, y) => U.dist(x, y, b.x, b.y) <= 1.5, { self: hero.id });
       if (!this.stepPath(W, hero, path)) {
-        // Já ao lado do chefe: força o combate
         if (this.dist(hero, b) <= 1.5) { this.alert(W, b); hero.target = b; }
         this.stuck(W, hero, dt);
       }
       return;
     }
-    // Portal
     if (W.portal.active) {
       hero.status = 'Indo ao portal…';
       hero.wantPortal = true;
@@ -573,13 +538,11 @@ const World = {
   stuck(W, hero, dt, goalIdx) {
     W.stuckT += dt;
     if (goalIdx !== undefined && W.stuckT > 3) { W.blacklist.add(goalIdx); W.stuckT = 0; }
-    // Passo aleatório para destravar
     if (W.stuckT > 4 && !hero.moving && Math.random() < dt * 2) {
       const opts = N8.map(([dx, dy]) => [hero.x + dx, hero.y + dy]).filter(([x, y]) => this.free(W, x, y));
       if (opts.length) { const [x, y] = U.pick(opts); this.startMove(W, hero, x, y); }
     }
     if (W.stuckT > 25 && !W.completed) {
-      // Garantia contra travamentos: abre o portal
       if (W.boss && !W.boss.dead) return;
       W.portal.active = true;
     }
@@ -626,7 +589,6 @@ const World = {
     }
   },
 
-  // Terra Partida (Espinho Pesado): o chão racha em chamas ao redor do alvo
   spikeSlam(W, tgt) {
     const S = Game.stats, cx = tgt.rx, cy = tgt.ry;
     for (const e of this.enemiesNear(W, cx, cy, 2.2)) {
@@ -863,8 +825,6 @@ const World = {
     this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2, color: '#ffffff', life: 0.6 });
   },
 
-  // ---------------------------------------------------------- habilidades
-  // Lista de habilidades ativas do herói: [id, rank] (classe + racial)
   heroSkillList(hero) {
     const st = Game.state;
     const out = [];
@@ -892,7 +852,7 @@ const World = {
         UI.skillFlash(id);
         if (echo) this.text(W, hero.rx + 0.5, hero.ry - 0.8, 'Eco!', '#b874ff', 10);
         this.text(W, hero.rx + 0.5, hero.ry - 0.5, sk.name, sk.color, 11, 1.1, -0.8);
-        break; // uma habilidade por tick
+        break;
       }
     }
   },
@@ -903,7 +863,6 @@ const World = {
     return out;
   },
 
-  // Efeitos secundários aplicados a um alvo atingido
   applyOnHit(W, sk, tt, mult) {
     if (!tt || tt.dead) return;
     const S = Game.stats;
@@ -1163,7 +1122,6 @@ const World = {
     if (o.proc) Sfx.play('zap');
   },
 
-  // ---------------------------------------------------------- lacaios
   spawnMinion(W, hero, hpF, dmgF, dur, champion, type = 'skel') {
     const S = Game.stats;
     const p = this.freeNear(W, hero.x, hero.y);
@@ -1228,7 +1186,6 @@ const World = {
     this.burst(W, m.rx + 0.5, m.ry + 0.6, '#d8ffe0', 10, 2.5);
   },
 
-  // ---------------------------------------------------------- inimigos
   enemyThink(W, e, dt) {
     if (e.effects.stun > 0 || e.effects.freeze > 0 || e.hidden) return;
     const hero = W.hero;
@@ -1254,14 +1211,12 @@ const World = {
       const dm = this.dist(e, m);
       if (dm < d - 0.5) { d = dm; tgt = m; }
     }
-    // Perde interesse se o herói estiver muito longe
     if (d > 12) { e.lostT += dt; if (e.lostT > 4) { e.aggro = false; return; } } else e.lostT = 0;
     if (d <= e.range + 0.05 && (!e.ranged || this.los(W, e.x, e.y, tgt.x, tgt.y))) {
       if (e.atkT <= 0) this.enemyAttack(W, e, tgt);
       return;
     }
     if (e.move <= 0) return;
-    // Movimento
     if (tgt !== hero) {
       let best = null, bd = d;
       for (const [dx, dy] of N8) {
@@ -1379,7 +1334,6 @@ const World = {
     }
     this.burst(W, e.rx + 0.5, e.ry + 0.6, e.pal.a || '#ffffff', e.boss ? 40 : 12, e.boss ? 6 : 3);
     Sfx.play('die', 70);
-    // XP e ouro
     const z = W.z, sc = zoneScale(z);
     const xp = 8 * Math.pow(1.16, z - 1) * e.xpMult;
     const goldMult = e.boss ? (e.lord ? 25 : 12) : e.elite ? 4 : e.type === 'mimic' ? 30 : 1;
@@ -1389,7 +1343,6 @@ const World = {
     if (st.settings.dmgNumbers) this.text(W, e.rx + 0.5, e.ry - 0.35, '+' + U.fmt(got), '#ffd04a', 10, 0.9, -1);
     if (S.powers.has('midas')) for (let i = 0; i < 8; i++) this.part(W, e.rx + 0.5, e.ry + 0.5, U.rand(-2, 2), U.rand(-4, -1), '#ffd04a', 0.8, 2.5, 9);
     if (S.powers.has('vampire')) this.healHero(W, W.hero.maxHp * 0.04);
-    // Itens
     let n = 0, minR = 0, boost = 0, ilvl = Math.max(1, z - (Math.random() < 0.4 ? 1 : 0));
     if (e.boss) { n = e.lord ? 3 : 2; minR = 2; boost = e.lord ? 0.4 : 0.2; ilvl = z + 1; }
     else if (e.type === 'mimic') { n = 3; minR = 2; boost = 0.5; ilvl = z + 1; st.stats.mimics++; }
@@ -1414,7 +1367,6 @@ const World = {
     else if (e.type === 'mimic') Game.log('O <b>Mímico</b> foi derrotado e deixou um tesouro!', 'loot');
   },
 
-  // ---------------------------------------------------------- objetos
   openChest(W, c) {
     const st = Game.state, S = Game.stats;
     c.opened = true; c.shaking = false;
@@ -1447,7 +1399,6 @@ const World = {
     Game.log(`Você abriu um <span class="c${Math.min(5, c.tier + (c.tier ? 1 : 0))}">${T.name}</span> (+${U.fmt(got)} ouro).`, 'gold');
   },
 
-  // Baú Arco-Íris: muito ouro, um item Mítico, Fragmentos e a chance de uma arma exclusiva
   openRainbowChest(W, c) {
     const st = Game.state, S = Game.stats, z = W.z, T = CHEST_TIERS[4];
     const got = Game.gainGold(15 * zoneScale(z) * T.gold * U.rand(0.9, 1.1));
@@ -1498,7 +1449,6 @@ const World = {
     Game.log(`<b style="color:${D.color}">${D.name}</b>: ${D.desc}${D.dur ? ` por ${D.dur}s` : ''}.`, 'good');
   },
 
-  // ---------------------------------------------------------- projéteis e efeitos
   shoot(W, src, tgt, kind, onHit, o = {}) {
     W.proj.push({
       x: src.rx + 0.5, y: src.ry + 0.35, tx: tgt.rx + 0.5, ty: tgt.ry + 0.45, tgt, kind, onHit,

@@ -1,7 +1,4 @@
 'use strict';
-// ============================================================
-// Itens: geração, nomes, atributos, preços e tooltips
-// ============================================================
 const Items = {
   tierOf(ilvl) { return U.clamp(Math.floor((ilvl - 1) / 5), 0, 7); },
   gIdx(g) { return { m: 0, f: 1, mp: 2, fp: 3 }[g] || 0; },
@@ -17,7 +14,6 @@ const Items = {
     return U.weighted(SLOTS.map(s => ({ s, w: SLOT_WEIGHTS[s] }))).s;
   },
 
-  // Gera item. opts: { cls, minR, mf, boost, slot, rarity }
   generate(ilvl, opts = {}) {
     ilvl = Math.max(1, Math.round(ilvl));
     const cls = opts.cls || 'knight';
@@ -40,7 +36,6 @@ const Items = {
     };
     if (slot === 'weapon') { item.cls = cls; item.bmult = base.atk; }
 
-    // Atributos principais
     const sm = SLOT_MAIN[slot];
     for (const k in sm) {
       let v = sm[k] * S * R.mult * q;
@@ -53,7 +48,6 @@ const Items = {
     }
     if (slot === 'boots') item.main.moveSpd = 4;
 
-    // Afixos
     const pool = AFFIXES.filter(a => (!a.slots || a.slots.includes(slot)) && (!a.cls || a.cls.includes(cls)));
     const n = R.affixes;
     const used = new Set();
@@ -68,7 +62,6 @@ const Items = {
       item.affixes.push({ k: a.k, v, flat: !!a.flat });
     }
 
-    // Poderes lendários
     const pkeys = Object.keys(POWERS).filter(k => !POWERS[k].excl);
     if (rarity >= 4) item.powers.push(U.pick(pkeys));
     if (rarity >= 5) { let p; do { p = U.pick(pkeys); } while (item.powers.includes(p)); item.powers.push(p); }
@@ -77,7 +70,6 @@ const Items = {
     return item;
   },
 
-  // Arma exclusiva (raridade Exclusiva). Os atributos são calculados para o nível ilvl.
   makeExclusive(id, ilvl) {
     const D = EXCLUSIVES[id], R = RARITIES[6], S = zoneScale(Math.max(1, ilvl));
     const item = {
@@ -90,7 +82,6 @@ const Items = {
     for (const k in D.affixes) item.affixes.push({ k, v: D.affixes[k], flat: false });
     return item;
   },
-  // Exclusivas e Armas Ancestrais crescem junto com a zona recorde da jornada
   retune(item, ilvl) {
     ilvl = Math.max(1, Math.round(ilvl));
     if (!item.excl || item.ilvl === ilvl) return;
@@ -99,7 +90,6 @@ const Items = {
     item.ilvl = ilvl;
   },
 
-  // Fusão (multiclasse): a arma ganha a forma da arma de outra classe
   fusionName(it, partner) {
     const b = WEAPON_BASES[partner][0];
     const fem = it.g === 'f' || it.g === 'fp';
@@ -118,9 +108,8 @@ const Items = {
     delete it.fusion; delete it.preFusion;
   },
 
-  // Reforja uma arma para a base de outra classe, mantendo raridade, nível, afixos e aprimoramento
   convertWeapon(it, cls) {
-    if (it.excl) return; // armas exclusivas servem para qualquer classe
+    if (it.excl) return;
     if (it.slot !== 'weapon' || it.cls === cls || !WEAPON_BASES[cls]) return;
     this.unfuse(it);
     const old = WEAPON_INDEX[it.base];
@@ -148,7 +137,6 @@ const Items = {
     return n + ' de ' + item.matName;
   },
 
-  // Subtítulo: "Espada Épica · Nv 12"
   typeLine(item) {
     const gi = this.gIdx(item.g);
     const adj = RARITY_ADJ[item.rarity][gi % 2 === 1 ? 1 : 0];
@@ -157,7 +145,6 @@ const Items = {
     return `${item.bname} ${adjTxt}`;
   },
 
-  // Atributos totais do item (com aprimoramento da forja)
   stats(item) {
     const out = {};
     const pm = 1 + 0.08 * item.plus;
@@ -192,7 +179,6 @@ const Items = {
     return `${this.fmtStatVal(k, v)} ${info ? info.name : k}`;
   },
 
-  // HTML do tooltip
   tooltip(item, opts = {}) {
     const R = RARITIES[item.rarity];
     const st = Game.state;
@@ -228,7 +214,7 @@ const Items = {
       if (cur !== item) {
         const diff = Stats.compareItem(item);
         const cls = diff > 0.0005 ? 'up-g' : diff < -0.0005 ? 'dn-r' : '';
-        const txt = cur ? `${diff >= 0 ? '+' : ''}${U.fmtNum(diff * 100, 1)}% de Poder` : 'Espaço vazio — melhoria!';
+        const txt = cur ? `${diff >= 0 ? '+' : ''}${U.fmtNum(diff * 100, 1)}% de Poder` : 'Espaço vazio, qualquer item é melhoria!';
         h += `<div class="tt-cmp">Comparado ao equipado: <b class="${cls}">${txt}</b>`;
         if (cur) {
           const a = this.stats(item), b = this.stats(cur);

@@ -1,0 +1,2 @@
+Os números do jogo usam um recorte (só os dígitos 0 a 9) da fonte Silkscreen, de Jason Kottke.
+Licença: SIL Open Font License 1.1 (https://openfontlicense.org).

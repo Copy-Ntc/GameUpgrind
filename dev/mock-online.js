@@ -117,6 +117,7 @@
       window.supabase = { createClient() { return { auth, from, rpc }; } };
       ONLINE_CONFIG.url = 'https://mock.local';
       ONLINE_CONFIG.key = 'mock';
+      ONLINE_CONFIG.turnstile = '';
       Online.ready = false;
       UI.showTitle('new');
       return Online.init();

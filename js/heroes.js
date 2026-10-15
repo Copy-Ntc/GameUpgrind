@@ -1,10 +1,5 @@
 'use strict';
-// ============================================================
-// Heróis: classes (inspiradas no D&D), espécies, habilidades,
-// armas e conjuntos de armadura
-// ============================================================
 
-// Raridade de classes/espécies (mesmas cores dos itens)
 const HERO_RARITY = [
   { name: 'Comum', color: '#c9c3b8', mult: 1.0, spMult: 1.0 },
   { name: 'Incomum', color: '#5fd068', mult: 1.12, spMult: 1.04 },
@@ -18,9 +13,6 @@ STAT_INFO.regenPct = { name: 'Regeneração (% Vida/s)', pct: true };
 
 const P = v => `${Math.round(v * 100)}%`;
 
-// ------------------------------------------------------------
-// Armas por classe (ids únicos entre todas as classes)
-// ------------------------------------------------------------
 const WEAPON_BASES = {
   fighter: [
     { id: 'longsword', name: 'Espada Longa', g: 'f', mat: 'metal', sprite: 'i_sword', atk: 1.0, spd: 0 },
@@ -103,13 +95,9 @@ const WEAPON_BASES = {
     { id: 'sawaxe', name: 'Machado Serrilhado', g: 'm', mat: 'metal', sprite: 'i_axe', atk: 1.08, spd: -3 },
   ],
 };
-// Índice id → base (para converter armas ao trocar de classe)
 const WEAPON_INDEX = {};
 for (const c in WEAPON_BASES) for (const b of WEAPON_BASES[c]) WEAPON_INDEX[b.id] = b;
 
-// ------------------------------------------------------------
-// Conjuntos de armadura (cada classe usa um)
-// ------------------------------------------------------------
 const ARMOR_SETS = {
   plate: {
     helm: [{ name: 'Elmo', g: 'm', mat: 'metal', sprite: 'i_helm' }, { name: 'Capacete', g: 'm', mat: 'metal', sprite: 'i_helm' }, { name: 'Elmo Alado', g: 'm', mat: 'metal', sprite: 'i_helm' }],
@@ -147,13 +135,9 @@ const JEWELRY = {
   amulet: [{ name: 'Amuleto', g: 'm', mat: 'jewel', sprite: 'i_amulet' }, { name: 'Colar', g: 'm', mat: 'jewel', sprite: 'i_amulet' }, { name: 'Talismã', g: 'm', mat: 'jewel', sprite: 'i_amulet' }, { name: 'Pingente', g: 'm', mat: 'jewel', sprite: 'i_amulet' }],
 };
 
-// Afixos exclusivos passam a valer para as classes equivalentes
 AFFIXES.find(a => a.k === 'minion').cls = ['necro', 'druid', 'artificer', 'warlock'];
 AFFIXES.find(a => a.k === 'block').cls = ['knight', 'paladin', 'fighter', 'cleric'];
 
-// ------------------------------------------------------------
-// Desbloqueios
-// ------------------------------------------------------------
 const STAT_GOALS = {
   maxZone: g => `Alcance a zona ${g}`,
   kills: g => `Derrote ${U.fmtInt(g)} inimigos`,
@@ -185,18 +169,12 @@ function unlockText(u) {
   if (u.asc) t += ` · requer ${u.asc} ${u.asc > 1 ? 'ascensões' : 'ascensão'}`;
   return t;
 }
-// Zona recorde (começando a jornada com ela) que torna a classe/espécie "dominada"
 const MASTERY_ZONE = 50;
-// Ascensões necessárias: mestiçagem (duas espécies, só atributos) vem antes da multiclasse,
-// que é mais forte e exige fundir as armas das duas classes na Forja
 const MULTI_SP_ASC = 10;
 const MULTI_ASC = 14;
-const FUSION_SHARDS = 30;      // Fragmentos para aprender cada fusão (par de classes) na primeira vez
-const FUSION_GOLD = 6;         // custo em ouro de cada fusão = 6× o custo de forja da arma
+const FUSION_SHARDS = 30;
+const FUSION_GOLD = 6;
 
-// ------------------------------------------------------------
-// Maestria: talentos infinitos para os pontos que sobram (nível 60+)
-// ------------------------------------------------------------
 const MAESTRIA_LVL = 60;
 const MAESTRIA = [
   { id: 'ms_dmg', name: 'Fúria Ancestral', stat: 'dmgPct', per: 3, icon: 'sk_sword', color: '#ff7a4a', w: 3 },
@@ -208,16 +186,12 @@ const MAESTRIA = [
 ];
 const MAESTRIA_IDX = Object.fromEntries(MAESTRIA.map(m => [m.id, m]));
 
-// ------------------------------------------------------------
-// Armas Ancestrais: uma por classe, obtida uma única vez no Cofre Ancestral
-// e despertada de raridade em raridade com Fragmentos Ancestrais.
-// ------------------------------------------------------------
-const RELIC_ZONE = 30;                              // o Cofre pode aparecer a partir desta zona
-const RELIC_REQ = [0, 45, 65, 90, 120, 160];        // recorde com a classe para despertar cada raridade
-const RELIC_COST = [0, 15, 40, 90, 200, 450];       // Fragmentos Ancestrais por despertar
-const RELIC_DMG = [15, 30, 50, 75, 110, 160];       // % de Dano por raridade
-const RELIC_ATK = 0.7;                              // dano base: 70% de uma arma da mesma raridade e nível
-const RELIC_RNAME = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária', 'Mítica']; // "arma" é feminino
+const RELIC_ZONE = 30;
+const RELIC_REQ = [0, 45, 65, 90, 120, 160];
+const RELIC_COST = [0, 15, 40, 90, 200, 450];
+const RELIC_DMG = [15, 30, 50, 75, 110, 160];
+const RELIC_ATK = 0.7;
+const RELIC_RNAME = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária', 'Mítica'];
 const RELICS = {
   fighter: { name: 'Lâmina do Campeão Eterno', per: { critDmg: 6, hpPct: 3 }, powers: ['berserk', 'slayer'] },
   mage: { name: 'Cajado do Primeiro Arcano', per: { cdr: 1.5, critDmg: 5 }, powers: ['echo', 'thunder'] },
@@ -237,9 +211,6 @@ const RELICS = {
   bloodhunter: { name: 'Lâmina Hemocrática', per: { lifesteal: 0.6, critDmg: 6 }, powers: ['berserk', 'executioner'] },
 };
 
-// ------------------------------------------------------------
-// Classes
-// ------------------------------------------------------------
 const CLASSES = {
   fighter: {
     name: 'Guerreiro', title: 'Mestre de Armas', color: '#e0c08a', rarity: 0, unlock: { t: 'default' }, armor: 'plate',
@@ -388,16 +359,12 @@ const CLASSES = {
 };
 const CLASS_ORDER = Object.keys(CLASSES);
 
-// ------------------------------------------------------------
-// Habilidades — ativas usam descrições com `this` (rank r)
-// ------------------------------------------------------------
 const pas = (name, unlock, icon, color, stat, per) => ({
   name, type: 'passive', unlock, max: 10, icon, color, stat, per,
   desc: r => `<b>+${U.fmtNum(r * per)}%</b> de ${STAT_INFO[stat].name}.`,
 });
 
 const SKILLS = {
-  // ---------- Guerreiro ----------
   f_power: { name: 'Golpe Poderoso', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_sword', color: '#ffb84a',
     mult: r => 2.3 + 0.23 * (r - 1),
     desc(r) { return `Um golpe devastador que causa <b>${P(this.mult(r))}</b> de dano.`; } },
@@ -415,7 +382,6 @@ const SKILLS = {
   f_crit: pas('Crítico Aprimorado', 15, 'sk_star', '#ffd04a', 'crit', 2),
   f_vet: pas('Veterano de Guerra', 20, 'sk_wind', '#7ad070', 'atkSpd', 3),
 
-  // ---------- Mago ----------
   m_fire: { name: 'Bola de Fogo', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_fire', color: '#ff8a2a',
     proj: 'fire', splash: 1.4, mult: r => 2.0 + 0.2 * (r - 1), burn: 0.4,
     desc(r) { return `Lança uma bola de fogo: <b>${P(this.mult(r))}</b> de dano em área e queimadura.`; } },
@@ -433,7 +399,6 @@ const SKILLS = {
   m_haste: pas('Fluxo Arcano', 15, 'sk_clock', '#b874ff', 'cdr', 3),
   m_barrier: pas('Barreira Mística', 20, 'sk_heart', '#7ae8ff', 'hpPct', 6),
 
-  // ---------- Ladino ----------
   g_back: { name: 'Golpe Traiçoeiro', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_dagger', color: '#c070ff',
     mult: r => 2.6 + 0.25 * (r - 1), forceCrit: true,
     desc(r) { return `Ataque crítico garantido causando <b>${P(this.mult(r))}</b> de dano.`; } },
@@ -451,7 +416,6 @@ const SKILLS = {
   g_reflex: pas('Reflexos', 15, 'sk_wind', '#9ad8ff', 'dodge', 2),
   g_cold: pas('Sangue Frio', 20, 'sk_dagger', '#ff5a62', 'critDmg', 10),
 
-  // ---------- Patrulheiro ----------
   r_pierce: { name: 'Flecha Perfurante', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_arrow', color: '#e8e0c8',
     proj: 'bigarrow', mult: r => 2.4 + 0.24 * (r - 1), bleed: 0.4,
     desc(r) { return `Dispara uma flecha poderosa: <b>${P(this.mult(r))}</b> de dano e sangramento.`; } },
@@ -469,7 +433,6 @@ const SKILLS = {
   r_evade: pas('Evasão', 15, 'sk_wind', '#9ad8ff', 'dodge', 1.5),
   r_lethal: pas('Precisão Letal', 20, 'sk_star', '#ff7a4a', 'critDmg', 8),
 
-  // ---------- Cavaleiro ----------
   k_bash: { name: 'Golpe Esmagador', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_hammer', color: '#ffd04a',
     mult: r => 2.2 + 0.22 * (r - 1), stun: 0.25, stunDur: 1.2,
     desc(r) { return `Golpeia o alvo causando <b>${P(this.mult(r))}</b> de dano com 25% de chance de atordoar.`; } },
@@ -487,7 +450,6 @@ const SKILLS = {
   k_block: pas('Muralha', 15, 'sk_shield', '#4fa3ff', 'block', 2),
   k_fury: pas('Fúria Justa', 20, 'sk_sword', '#ff7a4a', 'dmgPct', 5),
 
-  // ---------- Clérigo ----------
   c_flame: { name: 'Chama Sagrada', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_holy', color: '#fff2a0',
     proj: 'holy', mult: r => 2.0 + 0.2 * (r - 1), noDodge: true,
     desc(r) { return `Chamas radiantes descem sobre o alvo: <b>${P(this.mult(r))}</b> de dano que não pode ser evitado.`; } },
@@ -505,7 +467,6 @@ const SKILLS = {
   c_bless: pas('Bênção Divina', 15, 'sk_shield', '#ffd04a', 'defPct', 7),
   c_channel: pas('Canalizar Divindade', 20, 'sk_clock', '#b874ff', 'cdr', 3),
 
-  // ---------- Bárbaro ----------
   b_reck: { name: 'Ataque Imprudente', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_sword', color: '#ff5a3a',
     mult: r => 2.6 + 0.26 * (r - 1), critBonus: 30,
     desc(r) { return `Ataca sem pensar na defesa: <b>${P(this.mult(r))}</b> de dano com +30% de chance crítica.`; } },
@@ -523,7 +484,6 @@ const SKILLS = {
   b_brutal: pas('Crítico Brutal', 15, 'sk_star', '#ff7a4a', 'critDmg', 10),
   b_relent: pas('Fúria Implacável', 20, 'sk_drain', '#ff4a6a', 'lifesteal', 1),
 
-  // ---------- Bardo ----------
   bd_mock: { name: 'Zombaria Viciosa', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_note', color: '#ff7ad0',
     proj: 'note', mult: r => 1.8 + 0.18 * (r - 1), weaken: 4,
     desc(r) { return `Um insulto mágico: <b>${P(this.mult(r))}</b> de dano e o alvo causa 30% menos dano por 4s.`; } },
@@ -541,7 +501,6 @@ const SKILLS = {
   bd_secrets: pas('Segredos Mágicos', 15, 'sk_clock', '#b874ff', 'cdr', 3),
   bd_charm: pas('Lábia de Ouro', 20, 'sk_coin', '#ffd04a', 'goldPct', 8),
 
-  // ---------- Monge ----------
   mo_flurry: { name: 'Rajada de Golpes', type: 'strike', unlock: 1, cd: 5, max: 10, icon: 'sk_fist', color: '#ffb84a',
     hits: 3, mult: r => 0.95 + 0.09 * (r - 1),
     desc(r) { return `Três golpes velozes, cada um com <b>${P(this.mult(r))}</b> de dano.`; } },
@@ -559,7 +518,6 @@ const SKILLS = {
   mo_evasion: pas('Evasão', 15, 'sk_cloak', '#9ad8ff', 'dodge', 2),
   mo_open: pas('Mão Aberta', 20, 'sk_star', '#ffd04a', 'crit', 1.5),
 
-  // ---------- Druida ----------
   dr_thorn: { name: 'Chicote de Espinhos', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_clover', color: '#7ad070',
     proj: 'thorn', mult: r => 2 + 0.2 * (r - 1), bleed: 0.4,
     desc(r) { return `Um chicote de vinhas espinhosas: <b>${P(this.mult(r))}</b> de dano e sangramento.`; } },
@@ -577,7 +535,6 @@ const SKILLS = {
   dr_regrow: pas('Rejuvenescer', 15, 'sk_heart', '#5aff8a', 'hpPct', 6),
   dr_wis: pas('Sabedoria Druídica', 20, 'sk_clover', '#7ad070', 'dmgPct', 5),
 
-  // ---------- Paladino ----------
   pa_smite: { name: 'Golpe Divino', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_holy', color: '#fff2a0',
     mult: r => 2.5 + 0.25 * (r - 1), healSelf: 0.03,
     desc(r) { return `Golpe imbuído de luz: <b>${P(this.mult(r))}</b> de dano e cura 3% da Vida.`; } },
@@ -595,7 +552,6 @@ const SKILLS = {
   pa_courage: pas('Aura de Coragem', 15, 'sk_shield', '#4fa3ff', 'block', 2),
   pa_def: pas('Estilo Defensivo', 20, 'sk_shield', '#9aa3ad', 'defPct', 7),
 
-  // ---------- Feiticeiro ----------
   so_chroma: { name: 'Raio Cromático', type: 'proj', unlock: 1, cd: 4, max: 10, icon: 'sk_star', color: '#ff7ad0',
     proj: 'chaos', mult: r => 2.1 + 0.21 * (r - 1), chaos: true,
     desc(r) { return `Um raio de elemento aleatório: <b>${P(this.mult(r))}</b> de dano com queimadura, congelamento ou choque.`; } },
@@ -613,7 +569,6 @@ const SKILLS = {
   so_innate: pas('Magia Inata', 15, 'sk_book', '#ff7ad0', 'dmgPct', 6),
   so_elem: pas('Afinidade Elemental', 20, 'sk_star', '#ffd04a', 'critDmg', 10),
 
-  // ---------- Bruxo ----------
   wa_blast: { name: 'Rajada Mística', type: 'multi', unlock: 1, cd: 4, max: 10, icon: 'sk_eye', color: '#c070ff',
     proj: 'eldritch', sameTarget: true, count: r => 3 + Math.floor(r / 5), mult: r => 0.8 + 0.08 * (r - 1),
     desc(r) { return `Dispara <b>${this.count(r)}</b> raios místicos no alvo, cada um com <b>${P(this.mult(r))}</b> de dano.`; } },
@@ -631,7 +586,6 @@ const SKILLS = {
   wa_dark: pas('Bênção do Tenebroso', 15, 'sk_heart', '#ff5a62', 'hpPct', 6),
   wa_agony: pas('Agonia Mística', 20, 'sk_star', '#ff7ad0', 'critDmg', 10),
 
-  // ---------- Artífice ----------
   ar_cannon: { name: 'Canhão Arcano', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_gear', color: '#ffd04a',
     proj: 'cannon', splash: 1.3, mult: r => 2 + 0.2 * (r - 1),
     desc(r) { return `Dispara uma carga arcana: <b>${P(this.mult(r))}</b> de dano em área.`; } },
@@ -649,7 +603,6 @@ const SKILLS = {
   ar_arsenal: pas('Arsenal Arcano', 15, 'sk_gear', '#ffd04a', 'dmgPct', 5),
   ar_gadget: pas('Engenhocas', 20, 'sk_gear', '#c8a040', 'minion', 12),
 
-  // ---------- Necromante ----------
   n_drain: { name: 'Dreno de Vida', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_drain', color: '#ff4a6a',
     proj: 'drain', mult: r => 1.8 + 0.18 * (r - 1), drain: 0.5,
     desc(r) { return `Drena o alvo causando <b>${P(this.mult(r))}</b> de dano e curando 50% do dano causado.`; } },
@@ -667,7 +620,6 @@ const SKILLS = {
   n_siphon: pas('Sifão', 15, 'sk_drain', '#ff4a6a', 'lifesteal', 1),
   n_bone: pas('Carapaça Óssea', 20, 'sk_shield', '#e8e2d0', 'hpPct', 6),
 
-  // ---------- Caçador de Sangue ----------
   bh_rite: { name: 'Rito Carmesim', type: 'strike', unlock: 1, cd: 6, max: 10, icon: 'sk_dagger', color: '#ff3a4a',
     mult: r => 2.4 + 0.24 * (r - 1), bleed: 0.8,
     desc(r) { return `Lâmina banhada em sangue: <b>${P(this.mult(r))}</b> de dano e forte sangramento.`; } },
@@ -685,7 +637,6 @@ const SKILLS = {
   bh_cold: pas('Instinto Predatório', 15, 'sk_eye', '#ffd04a', 'crit', 2),
   bh_profane: pas('Resistência Profana', 20, 'sk_heart', '#ff5a62', 'hpPct', 6),
 
-  // ---------- Habilidades raciais (rank automático pelo nível) ----------
   sp_breath: { name: 'Sopro de Dragão', type: 'proj', racial: true, cd: 12, icon: 'sk_fire', color: '#ff8a2a',
     proj: 'fire', splash: 2, mult: r => 2.2 + 0.2 * (r - 1), burn: 0.5,
     desc(r) { return `Sopra chamas dracônicas: <b>${P(this.mult(r))}</b> de dano em área e queimadura.`; } },
@@ -761,12 +712,7 @@ const SKILLS = {
 };
 for (const id in SKILLS) { if (SKILLS[id].racial) { SKILLS[id].unlock = 1; SKILLS[id].max = 10; } }
 
-// ------------------------------------------------------------
-// Espécies
-// ------------------------------------------------------------
-// skin/hair/eyes/cloak colorem o retrato; acc = acessórios do retrato
 const SPECIES = {
-  // ---------- Comuns ----------
   human: { name: 'Humano', rarity: 0, unlock: { t: 'default' }, skin: '#f1c9a0', hair: '#5a3a24', cloak: '#3a5aa8',
     desc: 'Versáteis e ambiciosos, os humanos se adaptam a qualquer caminho.',
     traits: [['Versátil', '+15% de Experiência'], ['Engenhoso', '+5% de Dano, Vida e Armadura']],
@@ -784,7 +730,6 @@ const SPECIES = {
     traits: [['Sortudo', '8% de chance de evitar qualquer golpe'], ['Agilidade Halfling', '+6% de Esquiva'], ['Bravura', '+20% de Sorte']],
     stats: { mf: 20, dodge: 6 }, flags: ['luck'] },
 
-  // ---------- Incomuns ----------
   gnome: { name: 'Gnomo', rarity: 1, unlock: { t: 'stat', stat: 'chests', goal: 400, asc: 1 }, skin: '#f0c8a0', hair: '#e86a4a', cloak: '#4a8ac8', acc: ['ears'], accColor: '#f0c8a0',
     desc: 'Inventores curiosos com uma mente afiadíssima.',
     traits: [['Astúcia Gnômica', '+10% de Redução de Recarga'], ['Linhagem Gnômica', '+10% de Dano e +15% de Sorte']],
@@ -814,7 +759,6 @@ const SPECIES = {
     traits: [['Agilidade Felina', '+20% de Movimento, +12% de Vel. de Ataque e habilidade ativa'], ['Garras de Gato', '+4% de Crítico']],
     stats: { moveSpd: 20, atkSpd: 12, crit: 4 }, skill: 'sp_feline' },
 
-  // ---------- Raras (exigem 1 ascensão) ----------
   aasimar: { name: 'Aasimar', rarity: 2, unlock: { t: 'stat', stat: 'shrines', goal: 120, asc: 4 }, skin: '#f8e0c0', hair: '#fff0b0', eyes: '#5ae8ff', cloak: '#e8e0c8', acc: ['halo'], accColor: '#ffe680',
     desc: 'Mortais tocados pelos planos celestiais, portadores de luz.',
     traits: [['Mãos Curativas', 'Uma vez por zona, ao cair abaixo de 30% de Vida, cura 35%'], ['Portador da Luz', '+20% de Vida e Dano, regenera 1% da Vida/s'], ['Revelação Celestial', 'Habilidade ativa']],
@@ -848,7 +792,6 @@ const SPECIES = {
     traits: [['Magia Firbolg', 'Regenera 1% da Vida/s e +40% de cura de poções'], ['Constituição Poderosa', '+18% de Vida e +5% de Esquiva'], ['Passo Oculto', 'Habilidade ativa']],
     stats: { hpPct: 18, regenPct: 1, potionPct: 40, dodge: 5 }, skill: 'sp_hidden' },
 
-  // ---------- Épicas (exigem 2–3 ascensões) ----------
   genasi_fire: { name: 'Genasi do Fogo', rarity: 3, unlock: { t: 'encounter', minZone: 45, biomes: ['volcano'], asc: 8 }, skin: '#ff6a3a', hair: '#ffd04a', eyes: '#fff2a0', cloak: '#8a2a1a',
     desc: 'Mortais com a chama elemental correndo nas veias.',
     traits: [['Alcance das Chamas', 'Ataques têm 15% de chance de queimar e habilidade ativa'], ['Fogo Interior', '+25% de Dano, +6% de Crítico e +20% de Dano Crítico']],
@@ -882,7 +825,6 @@ const SPECIES = {
     traits: [['Mordida Vampírica', '+8% de Roubo de Vida e habilidade ativa'], ['Escalada de Aranha', '+15% de Movimento, +6% de Crítico e +10% de Dano']],
     stats: { lifesteal: 8, moveSpd: 15, crit: 6, dmgPct: 10 }, skill: 'sp_bite' },
 
-  // ---------- Lendárias (exigem 4–5 ascensões) ----------
   astral_elf: { name: 'Elfo Astral', rarity: 4, unlock: { t: 'stat', stat: 'ascensions', goal: 20, asc: 20 }, skin: '#c8d8f0', hair: '#f0f0ff', eyes: '#c8a8ff', cloak: '#3a3a8a', acc: ['ears'], accColor: '#c8d8f0',
     desc: 'Elfos que habitam o Mar Astral, banhados pela luz das estrelas.',
     traits: [['Estrela Cadente', 'A cada 10s um meteoro astral cai sobre o alvo (400% de dano)'], ['Fogo Astral', '+30% de Dano, +10% de Crítico e +30% de Dano Crítico'], ['Transe Astral', '+15% de Recarga'], ['Passo Estelar', 'Habilidade ativa']],
@@ -902,7 +844,6 @@ const SPECIES = {
 };
 const SPECIES_ORDER = Object.keys(SPECIES);
 
-// Lacaios invocados
 Object.assign(ENEMIES, {
   minion_wolf: { name: 'Lobo Espiritual', g: 'm', sprite: 'wolf', pal: { a: '#9ad0b0', b: '#5a9a7a', w: '#e8fff0', e: '#5affc8' }, hp: 1, atk: 1, spd: 1.3, move: 4.2 },
   minion_imp: { name: 'Diabrete Servo', g: 'm', sprite: 'goblin', pal: { a: '#e05a3a', b: '#2a1a1a', e: '#ffe040', t: '#ffffff', h: '#5a1a2a', m: '#ff8a2a' }, hp: 1, atk: 1, spd: 1.4, move: 4.0 },

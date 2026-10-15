@@ -1,8 +1,4 @@
 'use strict';
-// ============================================================
-// Dados do jogo: raridades, itens, classes, habilidades,
-// inimigos, biomas, treinos, almas e conquistas
-// ============================================================
 
 const RARITIES = [
   { id: 0, name: 'Comum', color: '#c9c3b8', mult: 1.0, affixes: 0, weight: 640, sell: 1 },
@@ -11,15 +7,13 @@ const RARITIES = [
   { id: 3, name: 'Épico', color: '#b874ff', mult: 1.85, affixes: 3, weight: 12, sell: 12 },
   { id: 4, name: 'Lendário', color: '#ff9a2e', mult: 2.35, affixes: 4, weight: 0.8, sell: 30, minZone: 4 },
   { id: 5, name: 'Mítico', color: '#ff4d6d', mult: 3.1, affixes: 5, weight: 0.08, sell: 80, minZone: 12 },
-  { id: 6, name: 'Exclusivo', color: '#ff7ae0', mult: 4.0, affixes: 0, weight: 0, sell: 200, excl: true }, // só no Baú Arco-Íris
+  { id: 6, name: 'Exclusivo', color: '#ff7ae0', mult: 4.0, affixes: 0, weight: 0, sell: 200, excl: true },
 ];
-// Formas femininas/plurais dos nomes de raridade (concordância)
 const RARITY_ADJ = [
   ['Comum', 'Comum'], ['Incomum', 'Incomum'], ['Raro', 'Rara'], ['Épico', 'Épica'], ['Lendário', 'Lendária'], ['Mítico', 'Mítica'],
   ['Exclusivo', 'Exclusiva'],
 ];
 
-// Materiais por tier (1 tier a cada 5 zonas)
 const MATERIALS = {
   metal: { names: ['Bronze', 'Ferro', 'Aço', 'Mithril', 'Adamantita', 'Oricalco', 'Obsidiana', 'Astralita'],
     colors: ['#c98a4a', '#9aa3ad', '#d5dde6', '#8fe3ff', '#7dffb4', '#ffd35a', '#8a6ab0', '#ff8af0'] },
@@ -35,11 +29,9 @@ const MATERIALS = {
 
 const SLOTS = ['weapon', 'helm', 'chest', 'gloves', 'boots', 'ring', 'amulet'];
 const SLOT_NAMES = { weapon: 'Arma', helm: 'Cabeça', chest: 'Peito', gloves: 'Mãos', boots: 'Pés', ring: 'Anel', amulet: 'Amuleto', offhand: 'Secundária' };
-// Espaços de equipamento: os 7 normais + a arma secundária (só armas exclusivas usam)
 const EQUIP_SLOTS = [...SLOTS, 'offhand'];
 const SLOT_WEIGHTS = { weapon: 20, helm: 14, chest: 14, gloves: 13, boots: 13, ring: 13, amulet: 13 };
 
-// Atributo principal por slot (multiplicado pela escala de zona e raridade)
 const SLOT_MAIN = {
   weapon: { atk: 6 },
   helm: { def: 2.2, hp: 10 },
@@ -50,7 +42,6 @@ const SLOT_MAIN = {
   amulet: { hp: 9, atk: 1.3 },
 };
 
-// Nomes e formatação dos atributos
 const STAT_INFO = {
   atk: { name: 'Dano', pct: false },
   hp: { name: 'Vida', pct: false },
@@ -75,7 +66,6 @@ const STAT_INFO = {
   potionPct: { name: 'Cura de Poções', pct: true },
 };
 
-// Afixos aleatórios. adj = [m, f, mp, fp]
 const AFFIXES = [
   { k: 'atk', flat: true, min: 1.0, max: 2.2, adj: ['Afiado', 'Afiada', 'Afiados', 'Afiadas'], w: 12 },
   { k: 'hp', flat: true, min: 5, max: 12, adj: ['Robusto', 'Robusta', 'Robustos', 'Robustas'], w: 12 },
@@ -98,7 +88,6 @@ const AFFIXES = [
   { k: 'block', min: 2, max: 5, adj: ['Defensor', 'Defensora', 'Defensores', 'Defensoras'], w: 6, cls: ['knight'] },
 ];
 
-// Poderes lendários
 const POWERS = {
   thunder: { name: 'Fúria da Tempestade', desc: '12% de chance ao acertar de invocar um raio que causa 150% de dano em até 3 inimigos.' },
   vampire: { name: 'Sede de Sangue', desc: 'Abates restauram 4% da Vida máxima.' },
@@ -112,19 +101,14 @@ const POWERS = {
   thorns: { name: 'Espinhos', desc: 'Reflete 35% do dano recebido ao atacante.' },
   greed: { name: 'Ganância do Dragão', desc: '+25% de Sorte e baús concedem o dobro de ouro.' },
   swift: { name: 'Passos do Vento', desc: '+20% de Vel. de Movimento e +10% de Vel. de Ataque.' },
-  // Poderes das armas exclusivas (nunca aparecem em itens comuns)
   dagon: { name: 'Chama de Dagon', desc: 'Todo golpe incendeia o alvo (40% do Dano por segundo, 3s). Críticos explodem em chamas, causando 100% do Dano aos inimigos próximos.', excl: true },
   spike: { name: 'Terra Partida', desc: 'A cada 4 ataques, golpeia o chão: 220% do Dano em área, atordoa por 0,6s e deixa as rachaduras em chamas (50% do Dano por segundo, 3s).', excl: true },
   bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
 };
 
-// ------------------------------------------------------------
-// Armas exclusivas (raridade Exclusiva, arco-íris): só saem do Baú Arco-Íris,
-// ficam travadas, acompanham você entre jornadas e crescem com a zona recorde.
-// ------------------------------------------------------------
-const RAINBOW_ZONE = 10;       // zona mínima para o Baú Arco-Íris aparecer
-const RAINBOW_CHANCE = 0.025;  // chance por zona de surgir um Baú Arco-Íris
-const EXCL_CHANCE = 0.35;      // chance do Baú Arco-Íris trazer uma arma exclusiva
+const RAINBOW_ZONE = 10;
+const RAINBOW_CHANCE = 0.025;
+const EXCL_CHANCE = 0.35;
 const EXCLUSIVES = {
   dagon: {
     name: 'Dagon', bname: 'Adaga', g: 'f', slot: 'weapon', sprite: 'i_dagon', by: 'PIRADO DA CABEÇA',
@@ -136,7 +120,7 @@ const EXCLUSIVES = {
     name: 'Espinho Pesado', bname: 'Martelão', g: 'm', slot: 'weapon', sprite: 'i_spike', by: 'superpenis',
     pal: { m: '#5a9ad8', d: '#2a4a7a', l: '#bfe4ff', h: '#2a2a35', g: '#9aa3ad', r: '#ff5a2a', w: '#ffffff', k: '#6a6a7a', y: '#ffd04a' },
     bmult: 1.5, main: { atkSpd: -20 }, affixes: { dmgPct: 45, hpPct: 25, bossDmg: 40, critDmg: 30 }, powers: ['spike'],
-    lore: 'Pesado demais para qualquer um — menos para quem já perdeu o medo.',
+    lore: 'Pesado demais para qualquer um, menos para quem já perdeu o medo.',
   },
   jesus: {
     name: 'JesusSalva', bname: 'Cruz', g: 'f', slot: 'offhand', sprite: 'i_jesus', by: 'Wendeu Delicia',
@@ -157,10 +141,6 @@ const LEGEND_NAMES = {
 };
 const MYTHIC_NAMES = ['Ira dos Deuses', 'Fim dos Tempos', 'Alvorada Divina', 'Ruína Eterna', 'Coração do Abismo', 'Voz do Vazio', 'Lâmina do Destino', 'Promessa Celestial', 'Eco da Criação', 'Último Suspiro'];
 
-// ============================================================
-// Inimigos
-// ============================================================
-// hp/atk = multiplicadores; spd = ataques/s; move = tiles/s; range; armor = redução de dano
 const ENEMIES = {
   slime: { name: 'Slime', g: 'm', sprite: 'slime', pal: { a: '#6cd65a', b: '#3e9a3a', w: '#d0ffb8', e: '#183018' }, hp: 0.8, atk: 0.8, spd: 0.8, move: 2.0 },
   wolf: { name: 'Lobo', g: 'm', sprite: 'wolf', pal: { a: '#8a8580', b: '#5d5853', w: '#d8d0c4', e: '#ffd23a' }, hp: 0.85, atk: 1.1, spd: 1.1, move: 3.4 },
@@ -189,11 +169,9 @@ const ENEMIES = {
   demon: { name: 'Demônio', g: 'm', sprite: 'demon', pal: { a: '#c82a2a', b: '#2a1a1a', e: '#ffe040', t: '#ffffff', w: '#5a1a2a' }, hp: 1.4, atk: 1.3, spd: 1.0, move: 2.8 },
   horror: { name: 'Horror Abissal', g: 'm', sprite: 'demon', pal: { a: '#4a2a8a', b: '#1a0a2a', e: '#40ffd0', t: '#c0ffe8', w: '#2a1a4a' }, hp: 1.6, atk: 1.25, spd: 0.9, move: 2.6 },
   mimic: { name: 'Mímico', g: 'm', sprite: 'mimic', pal: { a: '#8a5a2a', b: '#4a3020', g: '#e8b33a', t: '#f8f0d8', k: '#2a0a0a', e: '#ffe040', r: '#d83a5a' }, hp: 3.5, atk: 1.6, spd: 1.1, move: 3.0 },
-  // Lacaio do Necromante
   minion_skel: { name: 'Esqueleto', g: 'm', sprite: 'skeleton', pal: { a: '#c8ffd8', k: '#0a3a1a', m: '#4dff8a', h: '#2a6a3a' }, hp: 1, atk: 1, spd: 1.1, move: 3.6 },
 };
 
-// Senhores (chefes a cada 5 zonas)
 const LORDS = {
   ent: { name: 'Ent Ancião', sprite: 'golem', pal: { a: '#6a4a2a', b: '#3a8a3a', e: '#c8ff5a' }, abil: ['slam', 'summon'], summon: 'slime' },
   crystal_golem: { name: 'Golem de Cristal', sprite: 'golem', pal: { a: '#7a6aa8', b: '#c8a8ff', e: '#ffffff' }, abil: ['slam', 'volley'], proj: 'ice' },
@@ -208,9 +186,6 @@ const LORDS = {
 const ELITE_ADJ = [['Feroz', 'Feroz'], ['Furioso', 'Furiosa'], ['Sombrio', 'Sombria'], ['Brutal', 'Brutal'], ['Raivoso', 'Raivosa'], ['Vil', 'Vil']];
 const CHAMP_ADJ = [['Colossal', 'Colossal'], ['Ancestral', 'Ancestral'], ['Sanguinário', 'Sanguinária'], ['Corrompido', 'Corrompida'], ['Primordial', 'Primordial'], ['Supremo', 'Suprema']];
 
-// ============================================================
-// Biomas (1 a cada 5 zonas, ciclo de 8)
-// ============================================================
 const BIOMES = [
   { id: 'forest', name: 'Floresta Sussurrante', wall: 'trees', organic: 0.6, dark: 0,
     pal: { floor: '#4a6e33', floor2: '#527838', speck: ['#62903f', '#3b5a2a', '#76a84a'], wallTop: '#173016', wallTop2: '#1f4a1c', wallHi: '#2e6326', face: '#4a3424', faceDark: '#2a1c12', bg: '#081206', fog: '#050904' },
@@ -238,7 +213,6 @@ const BIOMES = [
     decor: ['crystal', 'star', 'crystal', 'rock', 'ember'], enemies: ['eye', 'demon', 'horror', 'cultist'], lord: 'devourer' },
 ];
 
-// Baús
 const CHEST_TIERS = [
   { id: 0, name: 'Baú de Madeira', pal: { a: '#8a5a2a', b: '#4a3020', g: '#c8a040', w: '#b07a40' }, minR: 0, items: [1, 1], gold: 1, w: 60 },
   { id: 1, name: 'Baú de Ferro', pal: { a: '#6a7080', b: '#3a3e4a', g: '#d8e0e8', w: '#9aa0b0' }, minR: 1, items: [1, 2], gold: 2, w: 28 },
@@ -247,7 +221,6 @@ const CHEST_TIERS = [
   { id: 4, name: 'Baú Arco-Íris', pal: { a: '#ff5ad8', b: '#4a1a6a', g: '#7affff', w: '#ffe07a' }, minR: 5, items: [1, 1], gold: 25, w: 0, rainbow: true },
 ];
 
-// Santuários (buffs temporários)
 const SHRINES = {
   fury: { name: 'Santuário da Fúria', short: 'Fúria', color: '#ff4a3a', buff: { dmg: 0.5 }, dur: 60, desc: '+50% de dano' },
   swift: { name: 'Santuário dos Ventos', short: 'Ventos', color: '#5ae8ff', buff: { atkSpd: 0.3, move: 0.3 }, dur: 60, desc: '+30% de velocidade' },
@@ -256,9 +229,6 @@ const SHRINES = {
   life: { name: 'Fonte da Vida', color: '#4cff7a', buff: null, dur: 0, desc: 'Cura total e poções' },
 };
 
-// ============================================================
-// Treinamento (ouro) — permanente até a Ascensão
-// ============================================================
 const TRAINING = [
   { id: 'str', name: 'Treino de Força', stat: 'dmgPct', per: 5, base: 25, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `+${U.fmtNum(v)}% de Dano Total` },
   { id: 'vit', name: 'Treino de Vitalidade', stat: 'hpPct', per: 5, base: 25, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `+${U.fmtNum(v)}% de Vida` },
@@ -273,9 +243,6 @@ const TRAINING = [
   { id: 'spd', name: 'Corrida', stat: 'moveSpd', per: 3, base: 50, growth: 1.3, max: 20, icon: 'sk_boot', color: '#5ae8ff', desc: v => `+${U.fmtNum(v)}% de Vel. de Movimento` },
 ];
 
-// ============================================================
-// Altar das Almas (Ascensão) — permanente
-// ============================================================
 const SOUL_UPGRADES = [
   { id: 'power', name: 'Poder Ancestral', stat: 'soulDmg', per: 8, comp: true, base: 1, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `+${U.fmt(v)}% de Dano (cada nível ×1,08)` },
   { id: 'vigor', name: 'Vigor Eterno', stat: 'soulHp', per: 8, comp: true, base: 1, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `+${U.fmt(v)}% de Vida (cada nível ×1,08)` },
@@ -291,9 +258,6 @@ const SOUL_UPGRADES = [
   { id: 'dream', name: 'Sonhos Lúcidos', stat: 'offline', per: 10, base: 3, growth: 1.5, max: 5, icon: 'sk_clock', color: '#7ae8ff', desc: v => `Progresso offline: ${50 + v}% de eficiência` },
 ];
 
-// ============================================================
-// Conquistas
-// ============================================================
 const ACHIEVEMENTS = [
   { id: 'kill100', name: 'Caçador', desc: 'Derrote 100 inimigos', stat: 'kills', goal: 100, reward: { dmgPct: 2 } },
   { id: 'kill1k', name: 'Exterminador', desc: 'Derrote 1.000 inimigos', stat: 'kills', goal: 1000, reward: { dmgPct: 3 } },

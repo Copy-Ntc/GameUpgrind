@@ -1,12 +1,6 @@
 'use strict';
-// ============================================================
-// Pixel art: todos os sprites desenhados em código.
-// Cada letra é mapeada para uma cor da paleta; '.' é transparente.
-// O contorno escuro é gerado automaticamente.
-// ============================================================
 
 const SPR = {
-  // ---------------- Heróis ----------------
   h_knight: [
     '................',
     '.......cc.......',
@@ -98,7 +92,6 @@ const SPR = {
     '..aaaaaaabbbbh..',
   ],
 
-  // ---------------- Inimigos ----------------
   slime: [
     '................',
     '................',
@@ -442,7 +435,6 @@ const SPR = {
     '................',
   ],
 
-  // ---------------- Objetos ----------------
   chest: [
     '................',
     '................',
@@ -505,7 +497,6 @@ const SPR = {
     'ggggggggg',
   ],
 
-  // ---------------- Itens (desenhados à mão) ----------------
   i_orb: [
     '................',
     '................',
@@ -957,7 +948,6 @@ const SPR = {
     '................',
   ],
 
-  // ---------------- Decoração (8x8) ----------------
   d_grass: ['........', '........', '........', '.a...a..', '.a.a.a..', '..aa.a.a', '.aaaaaa.', '........'],
   d_flower: ['........', '........', '...r....', '..ryr...', '...r..r.', '...g.ryr', '..gg..g.', '...g.gg.'],
   d_mushroom: ['........', '........', '..rrrr..', '.rwrrwr.', '.rrrrrr.', '...ww...', '...ww...', '..wwww..'],
@@ -979,7 +969,6 @@ const SPR = {
   d_cobweb: ['a...a...', '.a..a..a', '..aaaaa.', 'aaa.a.aa', '..aaaaa.', '.a..a..a', 'a...a...', '........'],
   d_star: ['........', '...a....', '...a....', '.aawaa..', '...a....', '...a....', '........', '........'],
 
-  // ---------------- Ícones de habilidade (12x12) ----------------
   sk_hammer: ['............', '..aaaaaa....', '..awwaaaa...', '..aaaaaaa...', '..aaaaaa....', '.....aa.....', '.....aa.....', '.....aa.....', '.....aa.....', '.....aa.....', '....aaaa....', '............'],
   sk_shout: ['............', '....a...a...', '.aa..a...a..', 'aaaa..a...a.', 'aaww..a...a.', 'aaaa..a...a.', '.aa..a...a..', '....a...a...', '............', '............', '............', '............'],
   sk_whirl: ['............', '...aaaaa....', '..a.....a...', '.a..aaa..a..', '.a.a...a.a..', '.a.a.w.a.a..', '.a.a..aa.a..', '.a..a....a..', '..a..aaaa...', '...a........', '....aaaaaa..', '............'],
@@ -1013,7 +1002,6 @@ const SPR = {
   sk_portal: ['....aaaa....', '..aa....aa..', '.a..aaaa..a.', '.a.a....a.a.', 'a.a..ww..a.a', 'a.a.w..w.a.a', 'a.a.w..w.a.a', 'a.a..ww..a.a', '.a.a....a.a.', '.a..aaaa..a.', '..aa....aa..', '....aaaa....'],
 };
 
-// ---------- Construtores procedurais (armas diagonais) ----------
 (function buildProcedural() {
   const G = () => Array.from({ length: 16 }, () => Array(16).fill('.'));
   const px = (g, x, y, c) => { if (y >= 0 && y < 16 && x >= 0 && x < 16) g[y][x] = c; };
@@ -1030,19 +1018,16 @@ const SPR = {
   };
   const rows = g => g.map(r => r.join(''));
 
-  // Espada
   let g = G();
   ln(g, 6, 8, 13, 1, 'm'); ln(g, 7, 9, 14, 2, 'd'); ln(g, 6, 9, 13, 2, 'l'); px(g, 14, 1, 'l');
   ln(g, 3, 8, 7, 12, 'g'); ln(g, 4, 11, 2, 13, 'h'); px(g, 1, 14, 'g'); px(g, 5, 10, 'r');
   SPR.i_sword = rows(g);
 
-  // Adaga
   g = G();
   ln(g, 9, 6, 13, 2, 'm'); ln(g, 10, 7, 14, 3, 'd'); ln(g, 9, 7, 13, 3, 'l'); px(g, 14, 2, 'l');
   ln(g, 6, 6, 10, 10, 'g'); ln(g, 7, 9, 4, 12, 'h'); px(g, 3, 13, 'g'); px(g, 8, 8, 'r');
   SPR.i_dagger = rows(g);
 
-  // Arco (curva bezier + corda)
   g = G();
   const P0 = [2, 13], P1 = [0, 0], P2 = [13, 2];
   for (let t = 0; t <= 1.0001; t += 0.02) {
@@ -1055,14 +1040,12 @@ const SPR = {
   px(g, 13, 2, 'l'); px(g, 2, 13, 'l');
   SPR.i_bow = rows(g);
 
-  // Dagon (exclusiva): adaga de lâmina longa envolta em chamas
   g = G();
   ln(g, 7, 8, 13, 2, 'm'); ln(g, 8, 9, 14, 3, 'd'); ln(g, 7, 9, 13, 3, 'l'); px(g, 14, 2, 'l'); px(g, 14, 1, 'w');
   ln(g, 4, 7, 8, 11, 'g'); ln(g, 5, 10, 2, 13, 'h'); px(g, 1, 14, 'r'); px(g, 6, 9, 'r');
   for (const [x, y, c] of [[11, 1, 'y'], [9, 3, 'r'], [12, 0, 'r'], [8, 5, 'y'], [6, 6, 'r'], [10, 2, 'y'], [15, 4, 'y'], [13, 6, 'r'], [7, 4, 'r']]) px(g, x, y, c);
   SPR.i_dagon = rows(g);
 
-  // Espinho Pesado (exclusiva): martelão de cabeça cravejada, rachando o chão em chamas
   g = G();
   ln(g, 1, 14, 8, 7, 'h'); px(g, 3, 12, 'k'); px(g, 5, 10, 'k'); px(g, 0, 15, 'g');
   ln(g, 6, 3, 11, 8, 'd'); ln(g, 7, 2, 12, 7, 'm'); ln(g, 8, 1, 13, 6, 'm'); ln(g, 9, 0, 14, 5, 'l');
@@ -1072,7 +1055,6 @@ const SPR = {
   SPR.i_spike = rows(g);
 })();
 
-// JesusSalva (exclusiva, arma secundária): cruz dourada envolta em fogo azul
 SPR.i_jesus = [
   '.......f........',
   '......fcf.......',
@@ -1092,16 +1074,12 @@ SPR.i_jesus = [
   '......fcf.......',
 ];
 
-// ============================================================
-// Renderização e cache
-// ============================================================
 const OUTLINE = '#120c18';
 
 const Sprites = {
   cache: new Map(),
   urlCache: new Map(),
 
-  // Constrói canvas com contorno. Retorna { c, w (silhueta branca), sw, sh }
   get(name, pal, opts = {}) {
     const key = name + '|' + (opts.key || JSON.stringify(pal)) + (opts.noOutline ? '|n' : '');
     let s = this.cache.get(key);
@@ -1141,7 +1119,6 @@ const Sprites = {
       }
     }
     ctx.putImageData(img, 0, 0);
-    // Silhueta branca (flash de dano)
     const wc = document.createElement('canvas'); wc.width = W; wc.height = H;
     const wctx = wc.getContext('2d');
     wctx.drawImage(c, 0, 0);
@@ -1153,7 +1130,6 @@ const Sprites = {
     return s;
   },
 
-  // Data URL ampliado (para UI)
   url(name, pal, scale = 3, opts = {}) {
     const key = name + '|' + (opts.key || JSON.stringify(pal)) + '|' + scale + (opts.bg || '');
     let u = this.urlCache.get(key);
@@ -1174,7 +1150,6 @@ const Sprites = {
 
   heroPal(cls) { return HERO_PALS[cls]; },
 
-  // Duas armas cruzadas: a da classe principal na frente, a da outra classe espelhada atrás
   fusionSprite(a, b) {
     const name = 'fu_' + a + '__' + b;
     if (!SPR[name] && SPR[a] && SPR[b]) {
@@ -1205,7 +1180,6 @@ const Sprites = {
   goldUrl() { return this.url('i_gold', { g: '#a8701a', y: '#ffd04a', w: '#fff6c0', d: '#d8a020' }, 2); },
   soulUrl() { return this.url('i_soul', { a: '#7a3ad8', b: '#b874ff', w: '#f0e0ff' }, 2); },
 
-  // Ícone de habilidade com fundo colorido
   skillUrl(iconName, color, size = 48) {
     const pal = { a: U.mix(color, '#ffffff', 0.55), w: '#ffffff' };
     return this.url(iconName, pal, 3, {
@@ -1240,7 +1214,6 @@ const DECOR_PALS = {
   tomb: { a: '#6a6478', d: '#3a3448', b: '#2a2632' }, candle: { y: '#ffe060', o: '#ff8a2a', w: '#e8e0d0' },
   cobweb: { a: '#9a96a8' }, star: { a: '#b88aff', w: '#ffffff' },
 };
-// Variações por bioma
 const DECOR_BIOME_PALS = {
   swamp: { grass: { a: '#4a6a2a' }, mushroom: { r: '#8a4ad8', w: '#d8c8e8' }, bones: { w: '#a8a088' } },
   cave: { crystal: { a: '#4ad8ff', l: '#d8f8ff', d: '#1a6a9a' }, mushroom: { r: '#3ad8a0', w: '#c8f0e0' } },
@@ -1254,9 +1227,6 @@ function decorPal(biomeId, name) {
   return (o && o[name]) || DECOR_PALS[name];
 }
 
-// ============================================================
-// Novos heróis, NPC viajante, acessórios de espécie e itens
-// ============================================================
 Object.assign(SPR, {
   h_fighter: [
     '................',
@@ -1572,8 +1542,6 @@ Object.assign(SPR, {
   sk_hand: ['...a.a.a....', '...a.a.a.a..', '...a.a.a.a..', '...aaaaaaa..', 'a..aaaaaaa..', 'aa.aawwaaa..', '.aaaawwaaa..', '..aaaaaaaa..', '...aaaaaa...', '....aaaa....', '....aaaa....', '............'],
 });
 
-// Acessórios do retrato de espécie (alinhados ao sprite 'npc')
-// mode 'over' sobrescreve; 'under' só pinta onde está vazio
 const ACCESSORIES = {
   horns: { mode: 'over', rows: { 0: '...z........z...', 1: '...zz......zz...', 2: '....z......z....' } },
   bighorns: { mode: 'over', rows: { 1: '.zz..........zz.', 2: '..zzz......zzz..', 3: '....z......z....' } },
@@ -1607,7 +1575,6 @@ Object.assign(HERO_PALS, {
   bloodhunter: { c: '#2a2028', s: '#f1c9a0', e: '#ff2a2a', r: '#d01a3a', a: '#3a2a30', b: '#1a1218', m: '#c8d0d8', h: '#4a3020' },
 });
 
-// Paleta do herói com a pele da espécie
 Sprites.heroPal = function (cls, species) {
   const base = HERO_PALS[cls] || HERO_PALS.fighter;
   const sp = SPECIES[species];
@@ -1615,7 +1582,6 @@ Sprites.heroPal = function (cls, species) {
   return Object.assign({}, base, { s: sp.skin });
 };
 
-// Retrato da espécie: NPC + acessórios (compostos no nível do texto)
 Sprites.speciesSprite = function (id) {
   const key = 'npc_' + id;
   if (!SPR[key]) {
@@ -1643,7 +1609,6 @@ Sprites.speciesPal = function (id) {
   };
 };
 Sprites.speciesUrl = function (id, scale = 3) { return this.url(this.speciesSprite(id), this.speciesPal(id), scale); };
-// Arma Ancestral como "item" (dourada, com a cor da raridade nos detalhes)
 Sprites.relicItem = function (cls, r) {
   const list = WEAPON_BASES[cls];
   return { sprite: list[list.length - 1].sprite, matColor: '#e8b33a', rarity: r };

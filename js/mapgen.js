@@ -1,8 +1,4 @@
 'use strict';
-// ============================================================
-// Gerador procedural de zonas
-// Salas + corredores (MST com laços) + erosão orgânica por bioma
-// ============================================================
 const MapGen = {
   biomeOf(z) { return BIOMES[Math.floor((z - 1) / 5) % BIOMES.length]; },
   cycleOf(z) { return Math.floor((z - 1) / 40); },
@@ -12,12 +8,11 @@ const MapGen = {
     const isLord = z % 5 === 0;
     const w = 42 + Math.min(14, Math.floor(z / 3));
     const h = 32 + Math.min(8, Math.floor(z / 5));
-    const T = new Uint8Array(w * h); // 0 parede, 1 chão
+    const T = new Uint8Array(w * h);
     const idx = (x, y) => y * w + x;
     const inb = (x, y) => x > 0 && y > 0 && x < w - 1 && y < h - 1;
     const setF = (x, y) => { if (inb(x, y)) T[idx(x, y)] = 1; };
 
-    // ---- Salas ----
     const rooms = [];
     const target = U.randi(9, 13);
     for (let t = 0; t < 400 && rooms.length < target; t++) {
@@ -28,7 +23,6 @@ const MapGen = {
     }
     for (const r of rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) setF(x, y);
 
-    // ---- Corredores (Prim) ----
     const wide = biome.organic > 0.4;
     const hline = (x0, x1, y) => { for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++) { setF(x, y); if (wide && Math.random() < 0.5) setF(x, y + 1); } };
     const vline = (y0, y1, x) => { for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) { setF(x, y); if (wide && Math.random() < 0.5) setF(x + 1, y); } };
@@ -50,7 +44,6 @@ const MapGen = {
       if (a !== b && d2(a, b) < 22 * 22) corridor(a, b);
     }
 
-    // ---- Erosão orgânica ----
     const org = biome.organic;
     if (org > 0) {
       for (let it = 0; it < 2; it++) {
@@ -63,7 +56,6 @@ const MapGen = {
         for (const [x, y] of add) setF(x, y);
       }
     }
-    // Suavização: remove pilares isolados e cantos estreitos
     for (let it = 0; it < 2; it++) {
       const add = [];
       for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
@@ -76,7 +68,6 @@ const MapGen = {
       for (const [x, y] of add) setF(x, y);
     }
 
-    // ---- Início e sala do chefe ----
     let start = rooms[0];
     for (const r of rooms) if (r.cx + r.cy < start.cx + start.cy) start = r;
     const dist = this.bfsDist(T, w, h, start.cx, start.cy);
@@ -90,7 +81,6 @@ const MapGen = {
     take(start.cx, start.cy);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) take(start.cx + dx, start.cy + dy);
 
-    // Tile cercado de chão nos 8 vizinhos: bloqueá-lo nunca desconecta o mapa
     const interior = (x, y) => {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (!T[idx(x + dx, y + dy)]) return false;
       return true;
@@ -103,11 +93,9 @@ const MapGen = {
       return null;
     };
 
-    // ---- Spawns ----
     const spawns = [];
     const portal = { x: bossRoom.cx, y: bossRoom.cy, active: false };
     take(portal.x, portal.y);
-    // Chefe ao lado do portal
     let bx = bossRoom.cx + 1, by = bossRoom.cy;
     if (!isFree(bx, by)) { const p = randIn(bossRoom); if (p) [bx, by] = p; }
     take(bx, by);
@@ -133,7 +121,6 @@ const MapGen = {
         spawns.push({ x: p[0], y: p[1], type: Math.random() < 0.6 ? packType : U.pick(biome.enemies), elite: Math.random() < eliteChance });
       }
     }
-    // Errantes em corredores
     const corridorTiles = [];
     for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
       if (!T[idx(x, y)]) continue;
@@ -150,7 +137,6 @@ const MapGen = {
       spawns.push({ x, y, type: U.pick(biome.enemies), elite: Math.random() < eliteChance });
     }
 
-    // ---- Baús ----
     const chests = [];
     const deadEnds = [];
     for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
@@ -173,18 +159,15 @@ const MapGen = {
       const p = randIn(U.pick(chestRooms), 30, true);
       if (p) placeChest(p[0], p[1], false);
     }
-    // Baú Arco-Íris (raro): pode trazer uma arma exclusiva
     if (z >= RAINBOW_ZONE && Math.random() < RAINBOW_CHANCE) {
       for (let t = 0; t < 40; t++) {
         const p = randIn(U.pick(chestRooms), 30, true);
         if (p) { chests.push({ x: p[0], y: p[1], tier: 4, opened: false, mimic: false, seen: false }); take(p[0], p[1]); break; }
       }
     }
-    // Baú garantido do chefe
     const bp = randIn(bossRoom, 40, true);
     if (bp) { chests.push({ x: bp[0], y: bp[1], tier: isLord ? 3 : 2, opened: false, mimic: false, seen: false, bossChest: true }); take(bp[0], bp[1]); }
 
-    // ---- Santuários ----
     const shrines = [];
     if (z >= 2) {
       const ns = Math.random() < 0.6 ? (Math.random() < 0.3 ? 2 : 1) : 0;
@@ -197,7 +180,6 @@ const MapGen = {
       }
     }
 
-    // ---- Prisioneiro resgatável (classe ou espécie) ----
     let recruit = null;
     if (encounter) {
       const pool = rooms.filter(r => r !== start && r !== bossRoom);
@@ -216,7 +198,6 @@ const MapGen = {
       }
     }
 
-    // ---- Decoração ----
     const decor = [];
     for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
       if (!T[idx(x, y)] || taken.has(key(x, y))) continue;

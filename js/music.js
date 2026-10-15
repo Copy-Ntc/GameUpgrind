@@ -1,10 +1,4 @@
 'use strict';
-// ============================================================
-// Música procedural: sintetizador + sequenciador com 10 faixas.
-// Cada faixa define escala, progressão, andamento e camadas;
-// a melodia é composta por um gerador com semente fixa (mesma
-// música sempre) e ganha 3 variações que se alternam a cada volta.
-// ============================================================
 const SCALES = {
   aeolian: [0, 2, 3, 5, 7, 8, 10],
   dorian: [0, 2, 3, 5, 7, 9, 10],
@@ -16,7 +10,6 @@ const SCALES = {
   lydian: [0, 2, 4, 6, 7, 9, 11],
 };
 
-// Timbres
 const INST = {
   warmPad: { wave: 'sawtooth', vol: 0.03, attack: 0.9, release: 1.4, cutoff: 900, detune: 7 },
   softPad: { wave: 'triangle', vol: 0.045, attack: 0.7, release: 1.2, detune: 5 },
@@ -36,7 +29,6 @@ const INST = {
   drone: { wave: 'sawtooth', vol: 0.028, attack: 2, release: 2, cutoff: 340, detune: 4 },
 };
 
-// Faixas. Camadas por bloco de 4 compassos: p pad, b baixo, a arpejo, l melodia, d bateria, k sinos, o drone
 const MUSIC_TRACKS = {
   title: { name: 'Crônicas do Abismo', bpm: 78, root: 57, scale: 'aeolian', prog: [0, 5, 2, 6], barsPerChord: 2, loopBars: 16, reverb: 0.45, seed: 11,
     pad: { inst: 'warmPad', oct: -1 }, bass: { inst: 'bassTri', oct: -2, pattern: 'x.......x.......' },
@@ -140,7 +132,6 @@ const Music = {
     return b;
   },
 
-  // Chamado com frequência (loop do jogo e tela de título)
   update() {
     const c = Sfx.ctx;
     if (!c || c.state !== 'running') return;
@@ -157,7 +148,7 @@ const Music = {
       g.gain.cancelScheduledValues(now);
       g.gain.setValueAtTime(g.gain.value, now);
       g.gain.linearRampToValueAtTime(0, now + 1.6);
-      setTimeout(() => { try { g.disconnect(); } catch (e) { /* já desconectado */ } }, 4000);
+      setTimeout(() => { try { g.disconnect(); } catch (e) {  } }, 4000);
       this.cur = null;
     }
     if (!id || !MUSIC_TRACKS[id]) return;
@@ -178,7 +169,6 @@ const Music = {
 
   schedule() {
     const c = Sfx.ctx, cur = this.cur;
-    // Se a aba ficou parada, retoma do agora (sem despejar notas atrasadas)
     if (cur.nextTime < c.currentTime - 0.25) cur.nextTime = c.currentTime + 0.05;
     const ahead = c.currentTime + 1.2;
     let guard = 0;
@@ -189,7 +179,6 @@ const Music = {
     }
   },
 
-  // ---------- composição ----------
   genMelody(def, variant) {
     const map = {};
     if (!def.lead) return map;
@@ -222,7 +211,6 @@ const Music = {
     return map;
   },
 
-  // ---------- reprodução ----------
   midiOf(def, deg, oct = 0) {
     const sc = SCALES[def.scale], L = sc.length;
     return def.root + 12 * oct + 12 * Math.floor(deg / L) + sc[((deg % L) + L) % L];

@@ -1,21 +1,17 @@
 'use strict';
-// ============================================================
-// Cálculo de atributos do herói, poder, XP e custos
-// ============================================================
-const MULTI_XP = 1.4;         // multiclasse precisa de 40% mais XP por nível
-const MULTI_SYNERGY = 15;     // bônus de sinergia multiclasse (% de Dano e Vida)
-const MULTI_SP_XP = 1.25;     // mestiçagem (duas espécies) precisa de 25% mais XP por nível
-const MULTI_SP_SYNERGY = 10;  // bônus de sinergia da mestiçagem (% de Dano e Vida)
-const MULTI_SP_SHARE = 0.5;   // a espécie secundária contribui com 50% dos atributos
-const RELAXED_SOULS = 0.6;    // Modo Relaxado (sem corações): só 60% das Almas
-const INNATE_CAP = 300;       // nível máximo considerado pelo talento inato
+const MULTI_XP = 1.4;
+const MULTI_SYNERGY = 15;
+const MULTI_SP_XP = 1.25;
+const MULTI_SP_SYNERGY = 10;
+const MULTI_SP_SHARE = 0.5;
+const RELAXED_SOULS = 0.6;
+const INNATE_CAP = 300;
 
 const Stats = {
   needXp(L) { return Math.floor(100 * Math.pow(1.1, L - 1)); },
   needXpFor(st, L = st.level) { return Math.floor(this.needXp(L) * (st.cls2 ? MULTI_XP : 1) * (st.species2 ? MULTI_SP_XP : 1)); },
   growth(L) { return Math.pow(1.04, L - 1); },
 
-  // Multiclasse vem da arma fundida equipada: devolve a classe secundária ou null
   fusionCls2(st, eq = st.equip) {
     const w = eq && eq.weapon;
     if (!w || !w.fusion || w.fusion === st.cls || !CLASSES[w.fusion]) return null;
@@ -23,7 +19,6 @@ const Stats = {
     return w.fusion;
   },
 
-  // Habilidades ativas disponíveis (classe principal + 2 primeiras da secundária)
   activeIds(st, c2 = st.cls2) {
     const ids = [...CLASSES[st.cls].skills];
     if (c2 && CLASSES[c2]) ids.push(...CLASSES[c2].skills.slice(0, 2));
@@ -36,7 +31,6 @@ const Stats = {
   },
   talentIds(st) { return [...this.activeIds(st), ...this.passiveIds(st)]; },
 
-  // Arma Ancestral da classe (se já foi encontrada): atributos e poderes conforme a raridade
   relicInfo(st, cls = st.cls) {
     const R = st.relics && st.relics[cls];
     if (!R || !RELICS[cls]) return null;
@@ -50,7 +44,6 @@ const Stats = {
     return { def, r, ilvl, stats, powers, base };
   },
 
-  // Valor de uma melhoria do Altar (as de Poder/Vida/Armadura acumulam multiplicando)
   soulVal(u, r) { return u.comp ? (Math.pow(1 + u.per / 100, r) - 1) * 100 : r * u.per; },
 
   compute(st, override) {
@@ -75,13 +68,11 @@ const Stats = {
       soulDmg: 0, soulHp: 0, soulDef: 0, talentPts: 0, invSlots: 0, startZone: 0, soulPct: 0, offline: 0, dr: 0, regenPct: 0,
     };
     const flags = new Set(sp.flags || []);
-    // Espécie (e a secundária, na mestiçagem)
     for (const k in sp.stats) s[k] = (s[k] || 0) + sp.stats[k];
-    if (sp2) { // a espécie secundária só soma atributos (sem poderes)
+    if (sp2) {
       for (const k in sp2.stats) s[k] = (s[k] || 0) + sp2.stats[k] * MULTI_SP_SHARE;
       s.dmgPct += MULTI_SP_SYNERGY; s.hpPct += MULTI_SP_SYNERGY;
     }
-    // Talentos inatos (crescem com o nível)
     const lv = Math.min(st.level, INNATE_CAP);
     const addInnate = (cls, k) => {
       const inn = cls.innate;
@@ -102,7 +93,6 @@ const Stats = {
       for (const k in is) s[k] = (s[k] || 0) + is[k];
       for (const p of it.powers) powers.add(p);
     }
-    // Arma Ancestral (a da classe secundária empresta metade do bônus de dano)
     const rel = this.relicInfo(st);
     if (rel) {
       for (const k in rel.stats) s[k] = (s[k] || 0) + rel.stats[k];
@@ -129,7 +119,6 @@ const Stats = {
     if (powers.has('swift')) { s.moveSpd += 20; s.atkSpd += 10; }
     if (powers.has('midas')) s.goldPct += 40;
 
-    // Raridade da classe e da espécie multiplicam o resultado final (como o "Poder" do Vampire Survivors)
     const rm = HERO_RARITY[rar].mult * HERO_RARITY[spRar].spMult;
     const out = {
       maxHp: Math.max(1, s.hp * (1 + s.hpPct / 100) * (1 + s.soulHp / 100) * rm),
@@ -166,7 +155,6 @@ const Stats = {
     return Math.sqrt(dps * ehp) * util;
   },
 
-  // Diferença relativa de poder ao equipar o item
   compareItem(item, st = Game.state) {
     const z = st.zone;
     const cur = Game.stats ? Game.stats : this.compute(st);
@@ -180,14 +168,13 @@ const Stats = {
     let n = 0;
     for (const id of this.talentIds(st)) n += st.talents[id] || 0;
     for (const m of MAESTRIA) n += st.talents[m.id] || 0;
-    return n - 1; // primeira habilidade da classe principal é gratuita
+    return n - 1;
   },
   talentFree(st) { return this.talentTotal(st) - this.talentSpent(st); },
   maestriaOpen(st) { return st.level >= MAESTRIA_LVL; },
 
   trainCost(t, rank) { return Math.ceil(t.base * Math.pow(t.growth, rank) * (1 + rank * 0.05)); },
   soulCost(u, rank) { return Math.ceil(u.base * Math.pow(u.growth, rank) * (1 + rank * 0.1)); },
-  // Quantos níveis comprar e quanto custam: até n níveis (Infinity = o máximo que der com o saldo)
   bulk(costFn, rank, max, n, money) {
     let k = 0, total = 0;
     while (k < n && (!max || rank + k < max)) {
@@ -207,7 +194,6 @@ const Stats = {
   },
   invSize(st) { return 30 + (st.soulUpg.bag || 0) * 6; },
 
-  // Classe/espécie dominada: zona recorde numa jornada iniciada com ela ≥ MASTERY_ZONE
   mastered(st, cls) { return ((st.classStats || {})[cls] || {}).best >= MASTERY_ZONE; },
   speciesMastered(st, sp) { return ((st.speciesStats || {})[sp] || {}).best >= MASTERY_ZONE; },
   multiclassOpen(st) { return (st.stats.ascensions || 0) >= MULTI_ASC; },

@@ -1,21 +1,14 @@
 'use strict';
-// ============================================================
-// Controlador principal: estado, progressão, desbloqueios,
-// saque, economia, salvamento e loop
-// ============================================================
-const SAVE_KEY = 'upgrind_save_v1';           // save antigo (único) — migrado para o slot 1
+const SAVE_KEY = 'upgrind_save_v1';
 const SLOT_KEY = n => 'upgrind_slot_' + n;
 const SLOT_COUNT = 3;
 const BACKUP_PREFIX = 'upgrind_backup_';
-const UNLOCK_KEY = 'upgrind_unlocks';   // (antigo) liberações compartilhadas — migradas para o perfil
-const PROFILE_KEY = 'upgrind_profile';  // perfil: progresso permanente, compartilhado por todos os slots
-// O que pertence ao perfil (fica para sempre); o resto do estado é da jornada (o slot)
+const UNLOCK_KEY = 'upgrind_unlocks';
+const PROFILE_KEY = 'upgrind_profile';
 const META_KEYS = ['souls', 'soulUpg', 'stats', 'ach', 'settings', 'unlocks', 'encPity', 'classStats', 'speciesStats',
   'relics', 'shards', 'relicPity', 'fusions', 'vault', 'fusionPref'];
 const META_SET = new Set(META_KEYS);
 
-// Armazenamento do navegador com reserva em memória: abas anônimas e navegadores
-// de aplicativos (WhatsApp, Discord, Instagram…) podem bloquear ou apagar o localStorage.
 const Store = {
   mem: {}, ok: true,
   test() {
@@ -35,13 +28,11 @@ const Store = {
   },
   keys() {
     const out = new Set(Object.keys(this.mem));
-    try { for (let i = 0; i < localStorage.length; i++) out.add(localStorage.key(i)); } catch (e) { /* sem storage */ }
+    try { for (let i = 0; i < localStorage.length; i++) out.add(localStorage.key(i)); } catch (e) {  }
     return [...out];
   },
 };
 
-// Relógio em Web Worker: continua batendo com a aba em segundo plano
-// (timers da página principal são congelados/limitados pelo navegador)
 const Ticker = {
   started: false,
   start(fn) {
@@ -58,13 +49,11 @@ const Ticker = {
   },
 };
 
-// Jornada adiantada (Atalho Astral): nível = zona × HEADSTART_LVL e kit completo dessa raridade.
-// Só começa numa zona em que o poder do herói seja ≥ HEADSTART_POW × escala dos inimigos (×1,4 com corações).
 const HEADSTART_LVL = 2;
 const HEADSTART_RAR = 2;
 const HEADSTART_POW = 120;
-const AUTO_ASC_STALL = 15 * 60;   // auto-ascensão "ao travar": tempo de jogo sem recorde de zona
-const AUTO_RESTART = 8;           // segundos até recomeçar sozinho após o Fim de Jogo (com auto-ascensão)
+const AUTO_ASC_STALL = 15 * 60;
+const AUTO_RESTART = 8;
 const DEFAULT_CLASSES = () => CLASS_ORDER.filter(id => CLASSES[id].unlock.t === 'default');
 const DEFAULT_SPECIES = () => SPECIES_ORDER.filter(id => SPECIES[id].unlock.t === 'default');
 
@@ -74,7 +63,6 @@ const Game = {
   lastSim: 0, lastFrame: 0, saveT: 0, achT: 0, rateT: 0, rateAcc: { gold: 0, xp: 0 },
   transition: null, autoSold: { n: 0, gold: 0 },
 
-  // ---------------------------------------------------------- estado
   defaultState(cls, species, name, hardcore = true) {
     species = species || 'human';
     return {
@@ -103,7 +91,6 @@ const Game = {
     };
   },
 
-  // Cria a jornada de um herói novo no slot atual, usando o progresso do perfil
   newGame(cls, species, name, hardcore, opts = {}) {
     name = U.cleanName(name) || 'Herói';
     if (!this.profile) this.profile = this.defaultProfile();
@@ -112,7 +99,6 @@ const Game = {
     this.state = fresh;
     this.recordT = 0;
     this.recalc();
-    // Atalho Astral: começa adiantado, com nível e equipamento, na zona mais alta que o herói aguenta
     const cap = opts.fromStart ? 1 : Math.min(1 + this.stats.startZone, Math.max(1, Math.floor((P.stats.maxZone || 1) / 2)));
     let sz = cap;
     for (; ; sz--) {
@@ -126,10 +112,8 @@ const Game = {
       if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyPowScale(sz)) break;
     }
     fresh.startZone = sz;
-    // A última fusão usada com essa classe volta de graça na arma inicial
     const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
     if (pref && pref !== cls && nw && !nw.excl && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
-    // As armas exclusivas guardadas no perfil vão com o novo herói (equipadas se forem melhores)
     for (const it of P.vault.splice(0)) {
       Items.retune(it, sz);
       const cur = fresh.equip[it.slot];
@@ -144,7 +128,6 @@ const Game = {
 
   giveStarter() {
     const st = this.state, z = Math.max(1, st.zone || 1);
-    // Jornadas que começam adiantadas (Atalho Astral) recebem um kit completo da zona
     for (const slot of z > 1 ? SLOTS : ['weapon']) {
       const it = Items.generate(z, { cls: st.cls, slot, rarity: z > 1 ? HEADSTART_RAR : 0 });
       it.isNew = false;
@@ -152,7 +135,6 @@ const Game = {
     }
   },
 
-  // Mescla campos novos em saves antigos
   migrate(s) {
     if (!CLASSES[s.cls]) s.cls = 'fighter';
     const d = this.defaultState(s.cls, s.species, s.name || 'Herói', false);
@@ -169,21 +151,17 @@ const Game = {
     if (s.species2 && !SPECIES[s.species2]) s.species2 = null;
     if (s.v < 4) { s.runCls = s.cls; s.runSp = s.species; s.v = 4; }
     if (!s.classStats[s.cls]) s.classStats[s.cls] = { best: s.maxZone || 1, kills: 0, bosses: 0 };
-    // Armas antigas sem classe registrada pertencem à classe atual
     const all = [...EQUIP_SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
     for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
     return s;
   },
 
-  // Até 3 saves independentes. O save antigo (de antes dos slots) vira o slot 1.
   slot: 1,
   migrateLegacySave() {
     const old = Store.get(SAVE_KEY);
     if (old && !Store.get(SLOT_KEY(1))) Store.set(SLOT_KEY(1), old);
     if (old) Store.del(SAVE_KEY);
   },
-  // Classes e espécies liberadas valem para todos os slots (como os personagens do Vampire Survivors).
-  // Junta o que está guardado à parte, o que cada slot liberou e o slot em memória.
   mergeUnlocks(...list) {
     const c = new Set(DEFAULT_CLASSES()), sp = new Set(DEFAULT_SPECIES());
     for (const u of list) {
@@ -195,7 +173,6 @@ const Game = {
   },
   sharedUnlocks() { return this.mergeUnlocks(this.profile && this.profile.unlocks, this.state && this.state.unlocks); },
 
-  // ---------------------------------------------------------- perfil (progresso permanente)
   profile: null,
   defaultProfile() {
     const d = this.defaultState('fighter', 'human', '', true);
@@ -213,7 +190,6 @@ const Game = {
     return p;
   },
   pickMeta(s) { const o = {}; for (const k of META_KEYS) if (s[k] !== undefined) o[k] = s[k]; return o; },
-  // Junta perfis ou saves antigos (de quando cada slot tinha tudo) num perfil só, sem perder liberações
   buildProfile(sources) {
     const list = sources.filter(x => x && x.stats);
     if (!list.length) return this.defaultProfile();
@@ -240,16 +216,15 @@ const Game = {
     }
     return this.normalizeProfile(p);
   },
-  // Carrega o perfil do navegador; na primeira vez, monta a partir dos saves antigos
   loadProfile() {
     let p = null;
-    try { p = JSON.parse(Store.get(PROFILE_KEY)); } catch (e) { /* sem perfil */ }
+    try { p = JSON.parse(Store.get(PROFILE_KEY)); } catch (e) {  }
     if (!p || !p.stats) {
       const legacy = [];
       for (let n = 1; n <= SLOT_COUNT; n++) { const sv = this.peekSave(n); if (sv && sv.stats) legacy.push(sv); }
       p = this.buildProfile(legacy);
       let un = null;
-      try { un = JSON.parse(Store.get(UNLOCK_KEY)); } catch (e) { /* sem registro */ }
+      try { un = JSON.parse(Store.get(UNLOCK_KEY)); } catch (e) {  }
       p.unlocks = this.mergeUnlocks(p.unlocks, un);
     }
     Store.del(UNLOCK_KEY);
@@ -268,7 +243,6 @@ const Game = {
     Store.set(PROFILE_KEY, JSON.stringify(P));
     Online.onSave(0);
   },
-  // O estado em jogo usa os mesmos objetos do perfil; números (Almas, Fragmentos…) são copiados de volta
   attach(run) { for (const k of META_KEYS) run[k] = this.profile[k]; return run; },
   syncProfileFromState() {
     const st = this.state;
@@ -281,7 +255,6 @@ const Game = {
   freeSlot() { for (let n = 1; n <= SLOT_COUNT; n++) if (!this.peekSave(n)) return n; return 0; },
   writeSlot(n, data) { Store.set(SLOT_KEY(n), JSON.stringify(data)); },
   deleteSlotLocal(n) { Store.del(SLOT_KEY(n)); },
-  // Apagar um slot encerra a jornada sem Almas; as armas exclusivas voltam para o perfil
   deleteSlot(n) {
     const sv = this.peekSave(n);
     const items = sv ? [...EQUIP_SLOTS.map(k => sv.equip && sv.equip[k]), ...(sv.inv || [])].filter(it => it && it.excl) : [];
@@ -289,7 +262,6 @@ const Game = {
     this.deleteSlotLocal(n);
     Online.deleteCloud(n);
   },
-  // Heróis que não couberam nos slots ao sincronizar com a nuvem
   listBackups() {
     return Store.keys().filter(k => k && k.startsWith(BACKUP_PREFIX)).map(key => {
       try { const data = JSON.parse(Store.get(key)); return data && data.cls ? { key, data } : null; } catch (e) { return null; }
@@ -317,7 +289,6 @@ const Game = {
     this.recalc();
     return true;
   },
-  // Sai da run para o menu sem apagar nada (o slot fica "estacionado": sem progresso offline ao voltar)
   exitToMenu() {
     if (!this.state) return;
     this.state.parked = true;
@@ -330,7 +301,6 @@ const Game = {
     UI.closeModal();
     UI.showTitle('new');
   },
-  // Backup: perfil + os 3 slots
   exportSave() {
     this.save();
     const slots = [1, 2, 3].map(n => this.peekSave(n));
@@ -339,13 +309,12 @@ const Game = {
   importSave(str) {
     str = String(str || '').trim();
     if (str.length > 8e6) throw new Error('inválido');
-    // o código pode vir de outra pessoa: passa pelo filtro antes de tocar no jogo
     const s = U.cleanData(JSON.parse(decodeURIComponent(escape(atob(str)))));
     if (s && s.profile && Array.isArray(s.slots)) {
       s.profile.owner = null;
       this.setProfile(s.profile);
       s.slots.forEach((run, i) => { if (run && run.cls) { run.owner = null; this.writeSlot(i + 1, run); } else this.deleteSlotLocal(i + 1); });
-    } else if (s && s.cls) { // save antigo (um slot com tudo dentro)
+    } else if (s && s.cls) {
       s.owner = null;
       this.setProfile(this.buildProfile([this.profile, s]));
       this.writeSlot(this.freeSlot() || 1, s);
@@ -360,7 +329,6 @@ const Game = {
     UI.showTitle('new');
   },
 
-  // ---------------------------------------------------------- atributos
   recalc() {
     const st = this.state;
     const W = this.W;
@@ -381,7 +349,6 @@ const Game = {
       UI.buildSkillbar && this.running && UI.buildSkillbar();
     }
   },
-  // Liga/desliga a classe secundária (devolve os pontos gastos nos talentos da classe que saiu)
   setCls2(c2) {
     const st = this.state, old = st.cls2;
     if (old && CLASSES[old]) {
@@ -393,11 +360,10 @@ const Game = {
     if (!this.running) return;
     if (c2) {
       UI.banner(this.className(), 'Multiclasse', 'purple', 2.4);
-      this.log(`Multiclasse: <b>${this.className()}</b> — habilidades das duas classes e +${MULTI_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
+      this.log(`Multiclasse: <b>${this.className()}</b>. Você usa as habilidades das duas classes e ganha +${MULTI_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
     } else if (old) this.log(`Multiclasse desfeita: a arma fundida não está mais equipada.`, '');
   },
 
-  // ---------------------------------------------------------- início e loop
   start() {
     this.running = true;
     this.paused = false;
@@ -407,7 +373,6 @@ const Game = {
     Sfx.setVolume(this.state.settings.volume);
     Music.configure(this.state.settings);
     UI.initGame();
-    // Slot "estacionado" (saiu pelo menu) não ganha progresso offline
     if (!this.state.pendingEnd && !this.state.parked) this.offlineProgress();
     this.state.parked = false;
     this.enterZone(this.state.zone, true);
@@ -425,7 +390,6 @@ const Game = {
     window.addEventListener('beforeunload', () => { if (this.running) { this.save(); Online.flush(); } });
   },
 
-  // Quadro visual (só roda com a aba visível)
   frame(ts) {
     requestAnimationFrame(t => this.frame(t));
     const dt = Math.min(0.1, Math.max(0, (ts - this.lastFrame) / 1000));
@@ -437,7 +401,6 @@ const Game = {
     UI.tick(dt);
   },
 
-  // Avança a simulação até o tempo real atual (chamado pelo quadro e pelo relógio do worker)
   pump() {
     if (!this.running) return;
     const now = performance.now();
@@ -486,8 +449,6 @@ const Game = {
     if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
   },
 
-  // Auto-ascensão (opção dos jogadores): ascende sozinho ao travar ou ao chegar numa zona,
-  // e recomeça sozinho após o Fim de Jogo, sempre com a mesma classe e espécie
   autoAscendCheck(dt) {
     const st = this.state, s = st.settings;
     if (!s.autoAsc || !this.running || UI.titleOpen()) { this.restartT = 0; return; }
@@ -508,8 +469,6 @@ const Game = {
     this.ascend(st.cls, st.species, st.hardcore);
   },
 
-  // Registra feitos (best = zona recorde, kills, bosses) da classe e da espécie com que a jornada
-  // começou. Trocar no meio da jornada não conta, senão dominar uma classe seria trivial.
   classStat(key, v) {
     const st = this.state;
     const add = (map, id) => {
@@ -521,7 +480,6 @@ const Game = {
     if (st.runSp === st.species) add(st.speciesStats, st.species);
   },
 
-  // ---------------------------------------------------------- zonas
   enterZone(z, first) {
     const st = this.state;
     z = Math.max(1, z);
@@ -538,9 +496,9 @@ const Game = {
     if (!first) st.potions = Math.min(this.stats.potionMax, st.potions + 1);
     const b = this.W.biome;
     const cyc = MapGen.cycleOf(z);
-    const sub = b.name + (cyc ? ` — Ciclo ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][cyc] || cyc + 1}` : '');
+    const sub = b.name + (cyc ? `, Ciclo ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][cyc] || cyc + 1}` : '');
     UI.banner(`Zona ${z}`, sub + (this.W.isLord ? ' · Covil do Senhor' : ''), this.W.isLord ? 'purple' : '', 2.4);
-    this.log(`Entrando na <b>Zona ${z}</b> — ${sub}.`, '');
+    this.log(`Entrando na <b>Zona ${z}</b>: ${sub}.`, '');
     if (this.W.chests.some(c => c.tier === 4)) {
       this.log('🌈 <b class="c6">Um Baú Arco-Íris está escondido nesta zona!</b> Ele pode guardar uma arma exclusiva.', 'loot');
       UI.toastText('🌈 Baú Arco-Íris nesta zona!', 'Pode conter uma arma exclusiva', '#ff7ae0');
@@ -595,7 +553,6 @@ const Game = {
     UI.dirty('top', 'zone');
   },
 
-  // ---------------------------------------------------------- desbloqueios
   unlockKey(kind) { return kind === 'class' ? 'classes' : 'species'; },
   isUnlocked(kind, id) { return this.state.unlocks[this.unlockKey(kind)].includes(id); },
   unlock(kind, id, reason) {
@@ -609,7 +566,7 @@ const Game = {
     if (reason && reason.includes('resgatado')) st.stats.recruits++;
     UI.banner(`${tag}: ${def.name}`, reason || R.name, 'purple', 3.2);
     UI.toastText(`✦ ${tag}: ${def.name}`, `${R.name} · use no Salão dos Heróis`, R.color);
-    this.log(`✦ <b style="color:${R.color}">${tag} desbloqueada: ${def.name}</b> (${R.name})${reason ? ' — ' + reason : ''}. Experimente no <b>Salão dos Heróis</b>!`, 'lvl');
+    this.log(`✦ <b style="color:${R.color}">${tag} desbloqueada: ${def.name}</b> (${R.name})${reason ? '. Meta: ' + reason : ''}. Experimente no <b>Salão dos Heróis</b>!`, 'lvl');
     Sfx.play('legendary');
     UI.dirty('hall');
     this.save();
@@ -626,11 +583,9 @@ const Game = {
     for (const id of CLASS_ORDER) test('class', id, CLASSES[id].unlock);
     for (const id of SPECIES_ORDER) test('species', id, SPECIES[id].unlock);
   },
-  // Sorteia um prisioneiro resgatável para a zona (classes/espécies bloqueadas por encontro)
   pickEncounter(z) {
     const st = this.state;
     if (!st) return null;
-    // Cofre Ancestral: a arma exclusiva da classe, uma única vez por save
     if (z >= RELIC_ZONE && RELICS[st.cls] && !(st.relics || {})[st.cls]) {
       const ch = 0.25 + (st.relicPity || 0) * 0.15;
       if (Math.random() < ch) { st.relicPity = 0; return { kind: 'relic', id: st.cls, name: RELICS[st.cls].name, label: RELICS[st.cls].name }; }
@@ -652,12 +607,11 @@ const Game = {
     return c;
   },
 
-  // Troca de classe a qualquer momento (talentos redistribuídos, armas reforjadas)
   switchClass(id) {
     const st = this.state;
     if (!this.isUnlocked('class', id) || st.cls === id) return;
     st.cls = id;
-    st.runCls = null; // recordes desta jornada deixam de contar para a classe
+    st.runCls = null;
     st.talents = { [CLASSES[id].skills[0]]: 1 };
     if (st.equip.weapon) Items.convertWeapon(st.equip.weapon, id);
     for (const it of st.inv) if (it.slot === 'weapon') Items.convertWeapon(it, id);
@@ -671,8 +625,6 @@ const Game = {
     Sfx.play('ascend');
     this.save();
   },
-  // Multiclasse por fusão: a arma equipada ganha a forma da arma de outra classe dominada.
-  // Enquanto a arma fundida estiver equipada, o herói é multiclasse.
   fusionKey(a, b) { return [a, b].sort().join('+'); },
   fusionCost(w) { return Items.forgeCost(w) * FUSION_GOLD; },
   fuseBlock(partner) {
@@ -714,7 +666,6 @@ const Game = {
   className(st = this.state) { return CLASSES[st.cls].name + (st.cls2 ? ' / ' + CLASSES[st.cls2].name : ''); },
   speciesName(st = this.state) { return SPECIES[st.species].name + (st.species2 ? ' / ' + SPECIES[st.species2].name : ''); },
 
-  // Mestiçagem: duas espécies dominadas, a secundária a 50%
   canMultiSpecies(id) {
     const st = this.state;
     return Stats.multiSpeciesOpen(st) && id !== st.species && this.isUnlocked('species', id) && Stats.speciesMastered(st, st.species) && Stats.speciesMastered(st, id);
@@ -728,13 +679,12 @@ const Game = {
     UI.initGame();
     if (id) {
       UI.banner(this.speciesName(), 'Mestiçagem', 'purple', 2.4);
-      this.log(`Mestiçagem: <b>${this.speciesName()}</b> — 50% dos atributos da segunda espécie e +${MULTI_SP_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
+      this.log(`Mestiçagem: <b>${this.speciesName()}</b>. Você ganha 50% dos atributos da segunda espécie e +${MULTI_SP_SYNERGY}% de Dano e Vida, mas ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP por nível.`, 'lvl');
     } else this.log('Mestiçagem removida.', '');
     Sfx.play('ascend');
     this.save();
   },
 
-  // ---------------------------------------------------------- Armas Ancestrais
   gainRelic(cls) {
     const st = this.state;
     if (!RELICS[cls] || st.relics[cls]) return;
@@ -748,7 +698,6 @@ const Game = {
     UI.dirty('hall', 'equip');
     this.save();
   },
-  // Pode despertar a próxima raridade? Retorna o motivo quando não pode
   relicBlock(cls) {
     const st = this.state, R = st.relics[cls];
     if (!R) return 'Ainda não encontrada';
@@ -780,7 +729,6 @@ const Game = {
     UI.dirty('hall');
   },
 
-  // ---------------------------------------------------------- Maestria (pontos de talento que sobram)
   canMaestria(id) {
     const st = this.state, m = MAESTRIA_IDX[id];
     return !!m && Stats.maestriaOpen(st) && Stats.talentFree(st) > 0 && (!m.max || (st.talents[id] || 0) < m.max);
@@ -819,7 +767,6 @@ const Game = {
     World.fx(W, 'holy', h.rx + 0.5, h.ry + 0.5, { r: 1.8, color: '#d9b8ff', life: 0.8 });
   },
 
-  // ---------------------------------------------------------- progressão
   gainXp(x) {
     const st = this.state, S = this.stats;
     const bm = this.W ? World.buffMods(this.W.hero) : { xp: 0 };
@@ -875,7 +822,6 @@ const Game = {
     if (this.W) World.text(this.W, x + 0.5, y - 0.2, '+Poção', '#ff7a9a', 11);
   },
 
-  // ---------------------------------------------------------- itens
   dropItem(item, x, y) {
     const st = this.state, W = this.W;
     if (!item.dup && this.stats.flags.has('fairyDust') && Math.random() < 0.2) {
@@ -893,11 +839,10 @@ const Game = {
     const diff = Stats.compareItem(item);
     const equipIt = st.settings.autoEquip && diff > 0.002;
 
-    // Lixo: vendido na hora, sem celebração
     if (!equipIt && this.isJunk(item)) {
       const p = this.autoSell(item);
       if (W && st.settings.dmgNumbers) World.text(W, x + 0.5, y - 0.4, `Vendido +${U.fmt(p)}`, col, 10, 1.1, -0.8);
-      if (item.rarity >= 2) this.log(`Saque: <span class="c${item.rarity}">${U.esc(item.name)}</span> <span style="color:var(--dim)">— vendido automaticamente (+${U.fmt(p)} ouro)</span>`, 'loot');
+      if (item.rarity >= 2) this.log(`Saque: <span class="c${item.rarity}">${U.esc(item.name)}</span> <span style="color:var(--dim)">(vendido automaticamente por ${U.fmt(p)} ouro)</span>`, 'loot');
       return;
     }
 
@@ -912,7 +857,7 @@ const Game = {
       item.locked = true;
       Sfx.play('legendary'); setTimeout(() => Sfx.play('ascend'), 400);
       UI.banner(item.name, `ARMA EXCLUSIVA! Criada por ${EXCLUSIVES[item.excl].by}`, 'purple', 4);
-      this.log(`🌈 <b class="c6">${U.esc(item.name)}</b> — arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
+      this.log(`🌈 <b class="c6">${U.esc(item.name)}</b> é uma arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
     } else if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
     else if (item.rarity === 4) { Sfx.play('legendary'); UI.banner(item.name, 'Item Lendário encontrado!', '', 2.2); }
     else if (item.rarity === 3) Sfx.play('epic');
@@ -930,7 +875,6 @@ const Game = {
     this.addToInv(item);
   },
 
-  // Item que a auto-venda pode vender (nunca travados, forjados ou melhorias)
   isJunk(item, lvl = this.state.settings.autoSell) {
     return lvl > 0 && item.rarity < lvl && !item.locked && item.plus === 0 && Stats.compareItem(item) <= 0;
   },
@@ -940,7 +884,6 @@ const Game = {
     if (this.isJunk(item)) { this.autoSell(item); return; }
     const cap = Stats.invSize(st);
     if (st.inv.length >= cap) {
-      // Vende o pior item destravado (incluindo o novo)
       let worst = item, ws = this.itemScore(item);
       for (const it of st.inv) {
         if (it.locked) continue;
@@ -971,14 +914,12 @@ const Game = {
     }
   },
 
-  // Aplica a regra de auto-venda aos itens que já estão na mochila
   applyAutoSell() {
     const r = this.sellWhere(it => this.isJunk(it));
     if (r.n) this.log(`Auto-venda aplicada à mochila: ${r.n} ${r.n > 1 ? 'itens vendidos' : 'item vendido'} (+${U.fmt(r.gold)} ouro).`, 'gold');
     return r;
   },
 
-  // Venda em massa: vende itens destravados da mochila que satisfazem o filtro
   sellWhere(pred) {
     const st = this.state;
     let n = 0, gold = 0;
@@ -993,7 +934,6 @@ const Game = {
     }
     return { n, gold };
   },
-  // Contagem para o menu de venda em massa
   sellPreview(pred) {
     let n = 0, gold = 0, up = 0;
     for (const it of this.state.inv) if (!it.locked && pred(it)) { n++; gold += Items.sellPrice(it); if (Stats.compareItem(it) > 0.002) up++; }
@@ -1058,7 +998,6 @@ const Game = {
     UI.dirty('equip');
   },
 
-  // ---------------------------------------------------------- forja
   forge(item) {
     const st = this.state;
     const cost = Items.forgeCost(item);
@@ -1078,8 +1017,6 @@ const Game = {
     return ok;
   },
 
-  // ---------------------------------------------------------- treino
-  // n: quantidade (true = o máximo possível). Compra o que der, até n níveis.
   buyTraining(id, n = 1) {
     const st = this.state, t = TRAINING.find(x => x.id === id);
     const want = n === true || n === Infinity ? Infinity : Math.max(1, +n || 1);
@@ -1095,7 +1032,6 @@ const Game = {
     return k;
   },
 
-  // ---------------------------------------------------------- talentos
   canTalent(id) {
     const st = this.state, sk = SKILLS[id];
     return st.level >= sk.unlock && (st.talents[id] || 0) < sk.max && Stats.talentFree(st) > 0;
@@ -1112,14 +1048,12 @@ const Game = {
     while (Stats.talentFree(st) > 0 && guard-- > 0) {
       const ids = Stats.talentIds(st).filter(id => st.level >= SKILLS[id].unlock && (st.talents[id] || 0) < SKILLS[id].max);
       if (!ids.length) {
-        // Tudo no máximo: os pontos vão para a Maestria (Dano e Vida pesam mais)
         if (!Stats.maestriaOpen(st)) break;
         const opts = MAESTRIA.filter(m => m.w && (!m.max || (st.talents[m.id] || 0) < m.max));
         const pick = opts.reduce((a, b) => ((st.talents[b.id] || 0) / b.w < (st.talents[a.id] || 0) / a.w ? b : a));
         st.talents[pick.id] = (st.talents[pick.id] || 0) + 1;
         continue;
       }
-      // Prioriza desbloquear habilidades novas; depois equilibra os ranks
       let pick = ids.find(id => !(st.talents[id] || 0) && SKILLS[id].type !== 'passive') || ids.find(id => !(st.talents[id] || 0));
       if (!pick) pick = ids.reduce((a, b) => ((st.talents[b] || 0) < (st.talents[a] || 0) ? b : a));
       st.talents[pick] = (st.talents[pick] || 0) + 1;
@@ -1133,7 +1067,6 @@ const Game = {
     if (st.settings.autoTalent) this.autoTalents();
   },
 
-  // ---------------------------------------------------------- almas / ascensão
   buySoul(id, n = 1) {
     const st = this.state, u = SOUL_UPGRADES.find(x => x.id === id);
     const want = n === true || n === Infinity ? Infinity : Math.max(1, +n || 1);
@@ -1149,8 +1082,6 @@ const Game = {
     return k;
   },
 
-  // Encerra a jornada: Almas e recordes ficam no perfil, as armas exclusivas vão para o cofre
-  // do perfil (o próximo herói recebe) e o slot fica livre.
   endRun(gain, countAsc) {
     const st = this.state, n = this.slot;
     if (!st) return null;
@@ -1172,8 +1103,6 @@ const Game = {
     this.state = null;
     return info;
   },
-  // Depois de ascender ou do Fim de Jogo: volta ao menu de slots para escolher o próximo herói.
-  // Com newCls (auto-ascensão e simuladores), recomeça na hora no mesmo slot.
   finishRun(gain, countAsc, label, newCls, newSpecies, hardcore, fromStart) {
     const wasRunning = this.running;
     const info = this.endRun(gain, countAsc);
@@ -1198,7 +1127,6 @@ const Game = {
     this.finishRun(gain, true, 'Ascensão!', newCls, newSpecies, hardcore, fromStart);
   },
 
-  // Modo desafio: perdeu os 3 corações
   gameOver() {
     const st = this.state;
     if (st.pendingEnd) return;
@@ -1218,7 +1146,6 @@ const Game = {
     this.finishRun(pe.gain, pe.zone >= 15, 'Fim de jogo:', newCls, newSpecies, hardcore, fromStart);
   },
 
-  // ---------------------------------------------------------- conquistas
   checkAchievements() {
     const st = this.state;
     let any = false;
@@ -1227,7 +1154,7 @@ const Game = {
       if ((st.stats[a.stat] || 0) >= a.goal) {
         st.ach[a.id] = true; any = true;
         const rw = Object.entries(a.reward).map(([k, v]) => Items.statLine(k, v)).join(', ');
-        this.log(`🏆 Conquista: <b style="color:var(--gold)">${a.name}</b> — ${rw}`, 'good');
+        this.log(`🏆 Conquista: <b style="color:var(--gold)">${a.name}</b>. Recompensa: ${rw}`, 'good');
         UI.toastText(`🏆 ${a.name}`, rw, '#f2c25b');
         Sfx.play('rare');
       }
@@ -1235,7 +1162,6 @@ const Game = {
     if (any) { this.recalc(); UI.dirty('ach'); }
   },
 
-  // ---------------------------------------------------------- offline
   offlineGains(sec, eff) {
     const st = this.state, z = st.zone;
     const rg = Math.max(st.rates.gold, 1.0 * zoneScale(z)), rx = Math.max(st.rates.xp, 1.5 * zoneScale(z));
@@ -1276,7 +1202,6 @@ const Game = {
     this.autoSold.n = 0; this.autoSold.gold = 0;
     UI.offlineModal(sec, eff, g, r);
   },
-  // Só acontece se o navegador congelar a aba (ex.: computador suspenso)
   backgroundCatchUp(sec) {
     if (!this.state || !this.W) return;
     sec = Math.min(sec, 12 * 3600);
@@ -1285,6 +1210,5 @@ const Game = {
     this.log(`Progresso enquanto a aba estava congelada (${U.fmtTime(sec)}): +${U.fmt(g.gold)} ouro, +${U.fmt(g.xp)} XP${r.levels ? `, +${r.levels} níveis` : ''}, ${r.items} itens.`, 'gold');
   },
 
-  // ---------------------------------------------------------- log
   log(html, cls) { UI.addLog(html, cls); },
 };

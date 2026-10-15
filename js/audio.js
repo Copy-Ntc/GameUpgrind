@@ -1,7 +1,4 @@
 'use strict';
-// ============================================================
-// Efeitos sonoros sintetizados com WebAudio (sem arquivos)
-// ============================================================
 const Sfx = {
   ctx: null, master: null, enabled: true, volume: 0.5, last: {}, noiseBuf: null,
 
@@ -46,7 +43,6 @@ const Sfx = {
 
   play(name, throttle = 60) {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
-    // Efeitos ficam mudos com a aba em segundo plano (a música continua)
     if (document.hidden && !(typeof Game !== 'undefined' && Game.state && Game.state.settings.bgSfx)) return;
     const now = performance.now();
     if (this.last[name] && now - this.last[name] < throttle) return;

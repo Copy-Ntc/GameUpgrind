@@ -1,7 +1,4 @@
 'use strict';
-// ============================================================
-// Utilitários gerais
-// ============================================================
 const U = {
   rand(a, b) { return a + Math.random() * (b - a); },
   randi(a, b) { return Math.floor(a + Math.random() * (b - a + 1)); },
@@ -14,7 +11,6 @@ const U = {
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a;
   },
-  // Escolha ponderada: items = [{..., w}] ou função de peso
   weighted(items, wfn) {
     let total = 0;
     for (const it of items) total += Math.max(0, wfn ? wfn(it) : it.w);
@@ -27,7 +23,6 @@ const U = {
     return items[items.length - 1];
   },
   uid() { return Math.random().toString(36).slice(2, 9) + (U._uidc = (U._uidc || 0) + 1).toString(36); },
-  // Hash determinístico 0..1 para texturas estáveis
   hash2(x, y, s = 0) {
     let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1442695041)) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -76,12 +71,9 @@ const U = {
   esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
-  // Nome digitado pelo jogador: sem caracteres de HTML nem invisíveis
   cleanName(s, max = 16) {
     return String(s == null ? '' : s).replace(/[<>"&`\\\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '').trim().slice(0, max);
   },
-  // Dados que vêm de fora (código importado, nuvem): só JSON simples, sem HTML escondido em textos,
-  // sem chaves que mexem no protótipo dos objetos e com limite de tamanho
   cleanData(v, depth = 0, budget = { n: 0 }) {
     if (++budget.n > 400000 || depth > 24) throw new Error('dados grandes demais');
     if (v === null || typeof v === 'boolean') return v;
@@ -99,7 +91,6 @@ const U = {
     return null;
   },
   $(sel) { return document.querySelector(sel); },
-  // Cor: mistura hex
   mix(c1, c2, t) {
     const a = U.hexRgb(c1), b = U.hexRgb(c2);
     return U.rgbHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
@@ -117,10 +108,7 @@ const U = {
   rgba(c, a) { const [r, g, b] = U.hexRgb(c); return `rgba(${r},${g},${b},${a})`; },
 };
 
-// Escala por zona: itens e ouro crescem com zoneScale; a Vida (enemyScale) e o Dano (enemyAtkScale)
-// dos inimigos crescem um pouco mais rápido. Essa diferença é a "parede" do grind — calibrada com
-// dev/career.js para a zona 200 ser a meta de longo prazo e as escolhas de build valerem dezenas de zonas.
-const SCALE = { item: 1.175, ehp: 1.25, eatk: 1.24, soul: 1.05 };  // soul: crescimento das Almas por zona recorde
+const SCALE = { item: 1.175, ehp: 1.25, eatk: 1.24, soul: 1.05 };
 function zoneScale(z) { return Math.pow(SCALE.item, z - 1); }
 function enemyScale(z) { return Math.pow(SCALE.ehp, z - 1); }
 function enemyAtkScale(z) { return Math.pow(SCALE.eatk, z - 1); }

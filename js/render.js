@@ -1,7 +1,4 @@
 'use strict';
-// ============================================================
-// Renderização em canvas: mapa, névoa, luz, entidades, efeitos
-// ============================================================
 const Render = {
   canvas: null, ctx: null, mini: null, mctx: null,
   dpr: 1, zoom: 2, unit: 2, TS: 32,
@@ -16,7 +13,7 @@ const Render = {
     this.mctx = this.mini.getContext('2d');
     this.lightCanvas = document.createElement('canvas');
     this.zoom = window.innerWidth > 1700 ? 2.5 : 2;
-    try { const z = parseFloat(localStorage.getItem('upgrind_zoom')); if (z) this.zoom = z; } catch (e) { /* sem storage */ }
+    try { const z = parseFloat(localStorage.getItem('upgrind_zoom')); if (z) this.zoom = z; } catch (e) {  }
     window.addEventListener('resize', () => this.resize());
     if (window.ResizeObserver) new ResizeObserver(() => this.resize()).observe(this.canvas.parentElement);
     this.canvas.parentElement.addEventListener('wheel', (ev) => {
@@ -25,7 +22,7 @@ const Render = {
       let i = Z.indexOf(this.zoom); if (i < 0) i = 1;
       i = U.clamp(i + (ev.deltaY < 0 ? 1 : -1), 0, Z.length - 1);
       this.zoom = Z[i];
-      try { localStorage.setItem('upgrind_zoom', this.zoom); } catch (e) { /* sem storage */ }
+      try { localStorage.setItem('upgrind_zoom', this.zoom); } catch (e) {  }
       this.resize();
     }, { passive: false });
     this.resize();
@@ -45,7 +42,6 @@ const Render = {
     this.cam.init = false;
   },
 
-  // ---------------------------------------------------------- mapa
   buildMap(W) {
     const c = document.createElement('canvas');
     c.width = W.w * 16; c.height = W.h * 16;
@@ -60,7 +56,6 @@ const Render = {
     for (let ty = 0; ty < W.h; ty++) for (let tx = 0; tx < W.w; tx++) {
       const X = tx * 16, Y = ty * 16;
       if (T(tx, ty)) {
-        // ---- Chão ----
         fill(X, Y, 16, 16, H(tx, ty, 1) < 0.5 ? P.floor : P.floor2);
         if (B.id === 'crypt') {
           g.fillStyle = U.shade(P.floor, -0.25);
@@ -94,18 +89,15 @@ const Render = {
         if (B.id === 'swamp' && H(tx, ty, 150) < 0.1) {
           fill(X + 3, Y + 6, 8, 4, P.puddle); fill(X + 4, Y + 5, 6, 6, P.puddle); fill(X + 5, Y + 6, 2, 1, U.shade(P.puddle, 0.3));
         }
-        // Sombra de paredes adjacentes (oclusão)
         if (!T(tx, ty - 1)) { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(X, Y, 16, 3); g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(X, Y + 3, 16, 2); }
         if (!T(tx - 1, ty)) { g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(X, Y, 2, 16); }
         if (!T(tx + 1, ty)) { g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(X + 14, Y, 2, 16); }
       } else {
-        // ---- Parede ----
         const nearFloor = (() => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (T(tx + dx, ty + dy)) return true; return false; })();
         const face = T(tx, ty + 1) === 1;
         this.drawWall(g, W, tx, ty, X, Y, face, nearFloor, H, fill);
       }
     }
-    // Decorações
     for (const d of W.decor) {
       const pal = decorPal(B.id, d.type);
       if (!pal) continue;
@@ -124,7 +116,6 @@ const Render = {
       return;
     }
     const topH = face ? 6 : 16;
-    // Topo
     fill(X, Y, 16, topH, P.wallTop);
     if (style === 'trees') {
       const blobs = 3 + Math.floor(H(tx, ty, 4) * 3);
@@ -145,13 +136,11 @@ const Render = {
       }
       if (style === 'ice') { fill(X, Y, 16, 1, P.wallHi); }
     }
-    // Bordas destacadas onde encontra chão
     const T = (x, y) => (x < 0 || y < 0 || x >= W.w || y >= W.h) ? 0 : W.tiles[y * W.w + x];
     if (T(tx, ty - 1)) fill(X, Y, 16, 1, P.wallHi);
     if (T(tx - 1, ty)) fill(X, Y, 1, topH, U.shade(P.wallHi, -0.1));
     if (T(tx + 1, ty)) fill(X + 15, Y, 1, topH, U.shade(P.wallTop, -0.3));
     if (!face) return;
-    // Face frontal
     const FY = Y + 6, FH = 10;
     fill(X, FY, 16, FH, P.face);
     if (style === 'trees') {
@@ -197,7 +186,6 @@ const Render = {
     W.fogDirty = false;
   },
 
-  // ---------------------------------------------------------- quadro
   frame(W, dt) {
     if (!W) return;
     this.time += dt;
@@ -205,7 +193,6 @@ const Render = {
     if (W.mapDirty || !this.mapCanvas) this.buildMap(W);
     if (W.fogDirty) this.buildFog(W);
 
-    // Câmera
     const hero = W.hero;
     const tx = (hero.rx + 0.5) * TS - cv.width / 2, ty = (hero.ry + 0.5) * TS - cv.height / 2;
     const mw = W.w * TS, mh = W.h * TS;
@@ -225,7 +212,6 @@ const Render = {
     ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.setTransform(1, 0, 0, 1, ox, oy);
 
-    // Mapa
     ctx.drawImage(this.mapCanvas, 0, 0, W.w * 16, W.h * 16, 0, 0, W.w * TS, W.h * TS);
 
     const vx0 = Math.floor(-ox / TS) - 2, vy0 = Math.floor(-oy / TS) - 2;
@@ -234,7 +220,6 @@ const Render = {
     const explored = (x, y) => W.explored[y * W.w + x];
     const visible = (x, y) => W.vis[y * W.w + x];
 
-    // Lava/poças animadas (brilho)
     if (W.biome.id === 'volcano') {
       ctx.globalCompositeOperation = 'lighter';
       for (const d of W.decor) if (d.type === 'lava' && onScreen(d.x, d.y) && explored(d.x, d.y)) {
@@ -245,13 +230,10 @@ const Render = {
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Portal
     if (explored(W.portal.x, W.portal.y)) this.drawPortal(W);
 
-    // Tochas
     for (const t of W.torches) if (onScreen(t.x, t.y) && explored(t.x, t.y)) this.drawTorch(t);
 
-    // Santuários
     for (const s of W.shrines) {
       if (!onScreen(s.x, s.y) || !explored(s.x, s.y)) continue;
       const D = SHRINES[s.type];
@@ -267,12 +249,10 @@ const Render = {
       this.drawSprite(spr, (s.x + 0.5) * TS, (s.y + 1) * TS, 1, false);
     }
 
-    // Baús
     for (const c of W.chests) {
       if (c.gone || !onScreen(c.x, c.y) || !explored(c.x, c.y)) continue;
       const T = CHEST_TIERS[c.tier];
       if (T.rainbow && !c.opened) {
-        // brilho arco-íris girando atrás do baú
         const cx = (c.x + 0.5) * TS, cy = (c.y + 0.6) * TS;
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.45 + 0.15 * Math.sin(this.time * 3);
@@ -294,14 +274,11 @@ const Render = {
       }
     }
 
-    // Prisioneiro resgatável
     const R = W.recruit;
     if (R && explored(R.x, R.y) && onScreen(R.x, R.y)) this.drawRecruit(W, R);
 
-    // Efeitos de chão
     for (const f of W.fx) if (f.type === 'telegraph' || f.type === 'cloud') this.drawFx(W, f);
 
-    // Entidades (ordenadas por Y)
     const ents = W.ents.filter(e => {
       if (!onScreen(e.x, e.y)) return false;
       if (e.kind === 'enemy') return !e.hidden && (visible(e.x, e.y) || visible(e.nx, e.ny));
@@ -310,13 +287,10 @@ const Render = {
     for (const e of ents) this.drawShadow((e.rx + 0.5) * TS, (e.ry + 1) * TS - u * 2, e.scale * (e.kind === 'hero' ? 0.85 : 0.8), e.fly);
     for (const e of ents) this.drawEnt(W, e);
 
-    // Projéteis
     for (const p of W.proj) if (p.delay <= 0) this.drawProj(p);
 
-    // Efeitos
     for (const f of W.fx) if (f.type !== 'telegraph' && f.type !== 'cloud') this.drawFx(W, f);
 
-    // Partículas
     for (const p of W.parts) {
       const a = 1 - p.t / p.life;
       ctx.globalAlpha = a;
@@ -326,22 +300,18 @@ const Render = {
     }
     ctx.globalAlpha = 1;
 
-    // Escuridão (biomas sombrios)
     if (W.biome.dark > 0) this.drawLight(W, ox, oy);
 
-    // Névoa de guerra
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.fogCanvas, 0, 0, W.w, W.h, -TS * 0.5 + TS * 0.5, 0, W.w * TS, W.h * TS);
     ctx.imageSmoothingEnabled = false;
 
-    // Barras de vida
     for (const e of ents) if (e.kind !== 'hero' && !e.dead && (e.hp < e.maxHp || e.elite || e.boss || e.kind === 'minion')) this.drawHpBar(e);
     if (hero.opening) {
       const tot = hero.opening.kind === 'chest' ? 0.55 : 0.8;
       this.bar((hero.rx + 0.5) * TS, (hero.ry - 0.15) * TS, TS * 0.7, u * 1.5, 1 - hero.opening.t / tot, '#ffd04a');
     }
 
-    // Textos flutuantes
     const fs = this.dpr * Math.max(1, this.zoom / 2);
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
@@ -349,7 +319,7 @@ const Render = {
       const a = t.t > t.life * 0.6 ? 1 - (t.t - t.life * 0.6) / (t.life * 0.4) : 1;
       const pop = t.bold && t.t < 0.12 ? 1 + (0.12 - t.t) * 4 : 1;
       ctx.globalAlpha = Math.max(0, a);
-      ctx.font = `${t.bold ? 700 : 600} ${Math.round(t.size * fs * pop)}px 'Pixelify Sans', sans-serif`;
+      ctx.font = `${t.bold ? 700 : 600} ${Math.round(t.size * fs * pop)}px 'OL Digitos', 'Pixelify Sans', sans-serif`;
       ctx.lineWidth = 3 * fs;
       ctx.strokeStyle = 'rgba(10,6,14,0.9)';
       ctx.strokeText(t.text, t.x * TS, t.y * TS);
@@ -359,7 +329,6 @@ const Render = {
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // Minimapa
     this.miniT -= dt;
     if (this.miniT <= 0) { this.miniT = 0.15; this.drawMinimap(W); }
   },
@@ -419,7 +388,6 @@ const Render = {
     if (e.dead) { alpha = Math.max(0, e.deathT / 0.45); by += (1 - alpha) * u * 4; }
     if (e.kind === 'minion' && e.life < 2) alpha = 0.5 + 0.5 * Math.abs(Math.sin(t * 10));
 
-    // Auras
     if (!e.dead && (e.elite || e.boss)) {
       const col = e.boss ? '#ff3a3a' : '#ffcf4a';
       ctx.globalAlpha = 0.45 + 0.2 * Math.sin(t * 4 + e.bob);
@@ -455,7 +423,6 @@ const Render = {
       const ps = Math.max(1, Math.round(u * scale));
       this.drawSprite(crown, cx, by - 16 * ps + ps * 1, scale, false, alpha);
     }
-    // Atordoado
     if (e.effects.stun > 0 && !e.dead) {
       const ps = Math.max(1, Math.round(u * scale));
       for (let i = 0; i < 3; i++) {
@@ -467,7 +434,7 @@ const Render = {
     if (e.kind === 'enemy' && e.casting && !e.dead) {
       ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 20);
       ctx.fillStyle = '#ff3a3a';
-      ctx.font = `700 ${Math.round(14 * this.dpr)}px 'Pixelify Sans'`;
+      ctx.font = `700 ${Math.round(14 * this.dpr)}px 'OL Digitos', 'Pixelify Sans'`;
       ctx.textAlign = 'center';
       ctx.fillText('!', cx, by - 18 * Math.max(1, Math.round(u * scale)));
       ctx.globalAlpha = 1;
@@ -510,7 +477,6 @@ const Render = {
       this.drawSprite(spr, cx, by - k * TS * 0.8, 1, false, 1 - k);
       return;
     }
-    // Brilho dourado
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.22 + 0.08 * Math.sin(t * 3);
     const gr = ctx.createRadialGradient(cx, by - TS * 0.5, 0, cx, by - TS * 0.5, TS * 1.2);
@@ -519,23 +485,20 @@ const Render = {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     this.drawShadow(cx, by - u, 0.8);
     this.drawSprite(spr, cx, by, 1, Math.sin(t * 0.7) > 0);
-    // Jaula
     ctx.fillStyle = '#4a4458';
     const top = by - TS * 1.15, h = TS * 1.15;
     for (let i = 0; i < 5; i++) ctx.fillRect(Math.round(cx - TS * 0.48 + i * TS * 0.24), Math.round(top), u, Math.round(h));
     ctx.fillRect(Math.round(cx - TS * 0.5), Math.round(top), Math.round(TS), u * 1.5);
     ctx.fillRect(Math.round(cx - TS * 0.5), Math.round(by - u * 1.5), Math.round(TS), u * 1.5);
-    // Balão "!"
     const bob = Math.sin(t * 4) * u * 1.5;
     ctx.fillStyle = '#ffd04a';
-    ctx.font = `700 ${Math.round(16 * this.dpr * Math.max(1, this.zoom / 2))}px 'Pixelify Sans', sans-serif`;
+    ctx.font = `700 ${Math.round(16 * this.dpr * Math.max(1, this.zoom / 2))}px 'OL Digitos', 'Pixelify Sans', sans-serif`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 3 * this.dpr; ctx.strokeStyle = '#1a1206';
     ctx.strokeText('!', cx, top - u * 2 + bob);
     ctx.fillText('!', cx, top - u * 2 + bob);
   },
 
-  // Cofre Ancestral: a arma da classe flutuando sobre um pedestal
   drawRelicVault(W, R) {
     const ctx = this.ctx, TS = this.TS, u = this.unit, t = this.time;
     const it = Sprites.relicItem(R.id, 0);
@@ -553,14 +516,13 @@ const Render = {
     gr.addColorStop(0, '#ffd04a'); gr.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = gr; ctx.fillRect(cx - TS * 1.5, by - TS * 2.1, TS * 3, TS * 3);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    // Pedestal
     ctx.fillStyle = '#3a3448'; ctx.fillRect(Math.round(cx - TS * 0.42), Math.round(by - TS * 0.32), Math.round(TS * 0.84), Math.round(TS * 0.32));
     ctx.fillStyle = '#5a5470'; ctx.fillRect(Math.round(cx - TS * 0.48), Math.round(by - TS * 0.38), Math.round(TS * 0.96), u * 2);
     ctx.fillStyle = '#ffd04a'; ctx.fillRect(Math.round(cx - TS * 0.3), Math.round(by - TS * 0.2), Math.round(TS * 0.6), u);
     this.drawSprite(spr, cx, by - TS * 0.4 + Math.sin(t * 2) * u * 2, 1.1, false);
     const bob = Math.sin(t * 4) * u * 1.5;
     ctx.fillStyle = '#ffd04a';
-    ctx.font = `700 ${Math.round(16 * this.dpr * Math.max(1, this.zoom / 2))}px 'Pixelify Sans', sans-serif`;
+    ctx.font = `700 ${Math.round(16 * this.dpr * Math.max(1, this.zoom / 2))}px 'OL Digitos', 'Pixelify Sans', sans-serif`;
     ctx.textAlign = 'center';
     ctx.lineWidth = 3 * this.dpr; ctx.strokeStyle = '#1a1206';
     ctx.strokeText('⚔', cx, by - TS * 1.45 + bob);
@@ -589,7 +551,6 @@ const Render = {
     const ctx = this.ctx, TS = this.TS, u = this.unit, t = this.time;
     const p = W.portal;
     const cx = (p.x + 0.5) * TS, cy = (p.y + 0.55) * TS;
-    // Círculo rúnico no chão
     ctx.strokeStyle = p.active ? 'rgba(200,160,255,0.8)' : 'rgba(120,110,140,0.6)';
     ctx.lineWidth = u;
     ctx.beginPath(); ctx.ellipse(cx, cy + TS * 0.15, TS * 0.7, TS * 0.32, 0, 0, 7); ctx.stroke();

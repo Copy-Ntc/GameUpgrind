@@ -1,4 +1,4 @@
-# UPGRIND — Crônicas do Abismo
+# OverLevelGame
 
 RPG de grind/idle para navegador. Você escolhe uma classe e o herói explora sozinho masmorras geradas proceduralmente: luta contra monstros, abre baús, equipa armas melhores, sobe de nível, derrota chefes e avança por zonas cada vez mais difíceis.
 
@@ -14,7 +14,7 @@ python -m http.server 5173
 
 Depois acesse `http://localhost:5173`. O Live Server do VS Code também funciona.
 
-**Atalhos:** `P` pausa · `1`–`4` mudam a velocidade (1x, 2x, 3x, 5x) · roda do mouse sobre o mapa aproxima/afasta · `Esc` fecha janelas.
+**Atalhos:** `P` pausa · `1` a `4` mudam a velocidade (1x, 2x, 3x, 5x) · roda do mouse sobre o mapa aproxima/afasta · `Esc` fecha janelas.
 
 O progresso é salvo automaticamente no navegador (localStorage) em duas partes:
 
@@ -46,7 +46,7 @@ Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24
 - **3 corações por jornada (padrão).** Cada derrota custa um coração e faz o herói recuar uma zona para se fortalecer. Sem corações é Fim de Jogo: você recebe as Almas e escolhe a próxima jornada. A partir da zona 15, um Fim de Jogo conta como ascensão. O **Modo Relaxado** tira os corações, mas rende só 60% das Almas.
 - **16 classes de D&D em 5 raridades.** Guerreiro, Mago, Ladino e Patrulheiro vêm liberados. Cavaleiro, Clérigo, Bárbaro e Bardo são Incomuns. Monge, Druida, Paladino e Feiticeiro são Raros. Bruxo, Artífice e Necromante são Épicos, e o Caçador de Sangue é Lendário. Cada classe tem 4 habilidades ativas, 4 passivas e um **talento inato** que cresce a cada nível, no estilo Vampire Survivors. A raridade multiplica Vida, Dano e Armadura finais (até ×1,7 numa classe Lendária).
 - **31 espécies** (Humano, Anão, Elfo, Halfling, Orc, Tiferino, Aasimar, Genasi, Forjado Bélico, Shadar-kai, Fada, Thri-kreen…) com bônus e um poder racial próprio. A raridade da espécie também multiplica os atributos finais.
-- **Desbloqueios lentos.** Conteúdo novo libera por metas (zona recorde, abates, santuários, Senhores derrotados), por feitos com uma classe específica (ex.: zona 45 com o Ladino libera o Monge) ou resgatando o personagem preso numa jaula na masmorra. Incomuns pedem 1–3 ascensões, Raros 4–6, Épicos 8–11 e Lendários 14–20.
+- **Desbloqueios lentos.** Conteúdo novo libera por metas (zona recorde, abates, santuários, Senhores derrotados), por feitos com uma classe específica (ex.: zona 45 com o Ladino libera o Monge) ou resgatando o personagem preso numa jaula na masmorra. Incomuns pedem 1 a 3 ascensões, Raros 4 a 6, Épicos 8 a 11 e Lendários 14 a 20.
 - **Domínio:** uma classe ou espécie fica "dominada" ao chegar à zona 50 numa jornada que **começou** com ela. Trocar no meio da jornada não conta para recordes.
 - **Mestiçagem (10 ascensões):** combina duas espécies dominadas. A segunda só soma 50% dos atributos dela (sem os poderes) e dá +10% de Dano e Vida. Cada nível pede 25% mais XP.
 - **Multiclasse por fusão de armas (14 ascensões):** na Forja, sua arma se funde com a arma de outra classe dominada (ex.: espada + arco = "Espada-Arco Fundida", com sprite próprio de armas cruzadas). Enquanto a arma fundida estiver equipada, você é multiclasse: 4+2 habilidades ativas, as passivas das duas classes, +15% de Dano e Vida e 60% do inato da segunda. Cada nível pede 40% mais XP. Aprender cada fusão custa 30 Fragmentos uma vez; depois, só ouro. A fusão volta sozinha na arma inicial das próximas jornadas.
