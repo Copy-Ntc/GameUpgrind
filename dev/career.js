@@ -17,7 +17,7 @@ global.UI = new Proxy({}, { get: () => noop });
 global.Render = { cam: {}, mapCanvas: null };
 
 let code = '';
-for (const f of ['util', 'data', 'heroes', 'sprites', 'audio', 'music', 'items', 'stats', 'mapgen', 'world', 'game']) code += fs.readFileSync(ROOT + f + '.js', 'utf8').replace(/^'use strict';/, '') + '\n';
+for (const f of ['util', 'data', 'heroes', 'sprites', 'audio', 'music', 'items', 'stats', 'mapgen', 'world', 'game', 'online-config', 'online']) code += fs.readFileSync(ROOT + f + '.js', 'utf8').replace(/^'use strict';/, '') + '\n';
 code += '\nObject.assign(global,{U,Game,World,Stats,Items,TRAINING,SOUL_UPGRADES,CLASSES,SPECIES,CLASS_ORDER,SPECIES_ORDER,HERO_RARITY,RELICS,RARITIES,RELIC_RNAME,SCALE});';
 (0, eval)(code);
 if (process.env.SCALE) { const [a, b, c, d] = process.env.SCALE.split(',').map(Number); Object.assign(SCALE, { item: a, ehp: b, eatk: c }, d ? { soul: d } : {}); }

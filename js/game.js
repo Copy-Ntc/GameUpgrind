@@ -6,6 +6,33 @@
 const SAVE_KEY = 'upgrind_save_v1';           // save antigo (único) — migrado para o slot 1
 const SLOT_KEY = n => 'upgrind_slot_' + n;
 const SLOT_COUNT = 3;
+const BACKUP_PREFIX = 'upgrind_backup_';
+
+// Armazenamento do navegador com reserva em memória: abas anônimas e navegadores
+// de aplicativos (WhatsApp, Discord, Instagram…) podem bloquear ou apagar o localStorage.
+const Store = {
+  mem: {}, ok: true,
+  test() {
+    try { localStorage.setItem('__upg', '1'); localStorage.removeItem('__upg'); this.ok = true; } catch (e) { this.ok = false; }
+    return this.ok;
+  },
+  get(k) {
+    if (k in this.mem) return this.mem[k];
+    try { return localStorage.getItem(k); } catch (e) { this.ok = false; return null; }
+  },
+  set(k, v) {
+    try { localStorage.setItem(k, v); delete this.mem[k]; } catch (e) { this.ok = false; this.mem[k] = v; }
+  },
+  del(k) {
+    delete this.mem[k];
+    try { localStorage.removeItem(k); } catch (e) { this.ok = false; }
+  },
+  keys() {
+    const out = new Set(Object.keys(this.mem));
+    try { for (let i = 0; i < localStorage.length; i++) out.add(localStorage.key(i)); } catch (e) { /* sem storage */ }
+    return [...out];
+  },
+};
 
 // Relógio em Web Worker: continua batendo com a aba em segundo plano
 // (timers da página principal são congelados/limitados pelo navegador)
@@ -110,20 +137,30 @@ const Game = {
   // Até 3 saves independentes. O save antigo (de antes dos slots) vira o slot 1.
   slot: 1,
   migrateLegacySave() {
-    try {
-      const old = localStorage.getItem(SAVE_KEY);
-      if (old && !localStorage.getItem(SLOT_KEY(1))) localStorage.setItem(SLOT_KEY(1), old);
-      if (old) localStorage.removeItem(SAVE_KEY);
-    } catch (e) { /* armazenamento indisponível */ }
+    const old = Store.get(SAVE_KEY);
+    if (old && !Store.get(SLOT_KEY(1))) Store.set(SLOT_KEY(1), old);
+    if (old) Store.del(SAVE_KEY);
   },
-  peekSave(n = this.slot) { try { const s = JSON.parse(localStorage.getItem(SLOT_KEY(n))); return s && s.cls ? s : null; } catch (e) { return null; } },
+  peekSave(n = this.slot) { try { const s = JSON.parse(Store.get(SLOT_KEY(n))); return s && s.cls ? s : null; } catch (e) { return null; } },
   freeSlot() { for (let n = 1; n <= SLOT_COUNT; n++) if (!this.peekSave(n)) return n; return 0; },
-  deleteSlot(n) { try { localStorage.removeItem(SLOT_KEY(n)); } catch (e) { /* ok */ } },
+  writeSlot(n, data) { Store.set(SLOT_KEY(n), JSON.stringify(data)); },
+  deleteSlotLocal(n) { Store.del(SLOT_KEY(n)); },
+  deleteSlot(n) { this.deleteSlotLocal(n); Online.deleteCloud(n); },
+  // Heróis que não couberam nos slots ao sincronizar com a nuvem
+  listBackups() {
+    return Store.keys().filter(k => k && k.startsWith(BACKUP_PREFIX)).map(key => {
+      try { const data = JSON.parse(Store.get(key)); return data && data.cls ? { key, data } : null; } catch (e) { return null; }
+    }).filter(Boolean);
+  },
+  addBackup(data) { Store.set(BACKUP_PREFIX + (data.created || Date.now()), JSON.stringify(data)); },
+  deleteBackup(key) { Store.del(key); },
 
   save() {
     if (!this.state) return;
     this.state.lastSave = Date.now();
-    try { localStorage.setItem(SLOT_KEY(this.slot), JSON.stringify(this.state)); } catch (e) { /* armazenamento indisponível */ }
+    if (Online.loggedIn) this.state.owner = Online.user.id;
+    Store.set(SLOT_KEY(this.slot), JSON.stringify(this.state));
+    Online.onSave(this.slot);
   },
   load(n = this.slot) {
     const s = this.peekSave(n);
@@ -138,6 +175,8 @@ const Game = {
     if (!this.state) return;
     this.state.parked = true;
     this.save();
+    Online.scoreDirty = true;
+    Online.flush();
     this.running = false;
     this.paused = false;
     this.transition = null;
@@ -197,10 +236,10 @@ const Game = {
     Ticker.start(() => this.pump());
     document.addEventListener('visibilitychange', () => {
       if (!this.running) return;
-      if (document.hidden) this.save();
+      if (document.hidden) { this.save(); Online.flush(); }
       else UI.dirty('top', 'zone', UI.tab);
     });
-    window.addEventListener('beforeunload', () => { if (this.running) this.save(); });
+    window.addEventListener('beforeunload', () => { if (this.running) { this.save(); Online.flush(); } });
   },
 
   // Quadro visual (só roda com a aba visível)
@@ -257,6 +296,7 @@ const Game = {
     }
     this.saveT += dt;
     if (this.saveT > 15) { this.saveT = 0; this.save(); }
+    Online.tick(dt);
     this.achT += dt;
     if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
   },
@@ -280,7 +320,7 @@ const Game = {
     z = Math.max(1, z);
     st.zone = z;
     if (z > st.maxZone) st.maxZone = z;
-    if (z > st.stats.maxZone) st.stats.maxZone = z;
+    if (z > st.stats.maxZone) { st.stats.maxZone = z; Online.scoreDirty = true; }
     this.classStat('best', z);
     st.deathsInZone = 0;
     this.recalc();
@@ -922,6 +962,8 @@ const Game = {
     st.stats.gameOvers = (st.stats.gameOvers || 0) + 1;
     this.paused = true;
     this.save();
+    Online.scoreDirty = true;
+    Online.flush();
     Sfx.play('death');
     UI.gameOverModal();
   },

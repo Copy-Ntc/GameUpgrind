@@ -19,7 +19,7 @@ global.UI = new Proxy({ addLog: (h, c) => logs.push(h) }, { get: (t, k) => t[k] 
 global.Render = { cam: {}, mapCanvas: null };
 
 let code = '';
-for (const f of ['util', 'data', 'heroes', 'sprites', 'audio', 'music', 'items', 'stats', 'mapgen', 'world', 'game']) code += fs.readFileSync(ROOT + f + '.js', 'utf8').replace(/^'use strict';/, '') + '\n';
+for (const f of ['util', 'data', 'heroes', 'sprites', 'audio', 'music', 'items', 'stats', 'mapgen', 'world', 'game', 'online-config', 'online']) code += fs.readFileSync(ROOT + f + '.js', 'utf8').replace(/^'use strict';/, '') + '\n';
 code += '\nglobal.U=U;global.Game=Game;global.World=World;global.Stats=Stats;global.Items=Items;global.TRAINING=TRAINING;global.CLASSES=CLASSES;global.zoneScale=zoneScale;global.enemyScale=enemyScale;global.enemyAtkScale=enemyAtkScale;global.SKILLS=SKILLS;global.SPECIES=SPECIES;global.CLASS_ORDER=CLASS_ORDER;global.SCALE=SCALE;';
 (0, eval)(code);
 if (process.env.SCALE) { const [a, b, c, d] = process.env.SCALE.split(',').map(Number); Object.assign(SCALE, { item: a, ehp: b, eatk: c }, d ? { soul: d } : {}); }

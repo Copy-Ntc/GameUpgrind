@@ -7,6 +7,7 @@ const ICONS = {
   play: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11a.5.5 0 0 0 .77.42l8.5-5.5a.5.5 0 0 0 0-.84l-8.5-5.5A.5.5 0 0 0 4 2.5z"/></svg>',
   sound: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5M13.5 3.5a6.5 6.5 0 0 1 0 9"/></svg>',
   mute: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6h3l4-3v10l-4-3H2z" fill="currentColor" stroke="none"/><path d="M11 6l4 4M15 6l-4 4"/></svg>',
+  trophy: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5h8v1.5h2.5v1.8a3 3 0 0 1-3 3h-.2A4 4 0 0 1 9 9.9V12h2.5v2.5h-7V12H7V9.9A4 4 0 0 1 4.7 7.8h-.2a3 3 0 0 1-3-3V3H4zm0 3H3v.3a1.5 1.5 0 0 0 1.2 1.5A4 4 0 0 1 4 4.5zm8 0c0 .4 0 .9-.2 1.3A1.5 1.5 0 0 0 13 4.8v-.3z"/></svg>',
   exit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5H3.5v11H9"/><path d="M7 8h7M11.5 5.5 14 8l-2.5 2.5"/></svg>',
   gear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm6.3 3.7-.1-1.8 1.4-1.2-1.4-2.5-1.8.5-1.4-1L10.6 1H7.8l-.4 1.9-1.5.9-1.8-.5L2.7 5.8l1.4 1.3v1.8l-1.4 1.2 1.4 2.5 1.8-.5 1.5 1 .4 1.8h2.8l.4-1.9 1.4-.9 1.8.5 1.4-2.5z"/></svg>',
 };
@@ -49,6 +50,14 @@ const UI = {
       : asc
       ? `<div class="ts-tag">Sua alma renasce mais forte. Escolha classe e espécie para a nova jornada — Almas, Altar, conquistas, Armas Ancestrais e desbloqueios permanecem.</div>`
       : `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte — até quando você não está olhando.</div>`;
+    if (slots && Online.enabled) {
+      const name = Online.profile ? U.esc(Online.profile.name) : '';
+      h += `<div class="ts-account">${!Online.ready ? '<span>Conectando ao servidor…</span>'
+        : Online.loggedIn ? `<span>👤 <b>${name}</b> · ☁ seus slots ficam salvos na nuvem</span><button class="btn small" id="ts-board">🏆 Placar</button><button class="btn small ghost" id="ts-logout">Sair da conta</button>`
+        : `<span>Entre com uma conta para salvar na nuvem e aparecer no placar.</span><button class="btn small gold" id="ts-login">Entrar / Criar conta</button><button class="btn small" id="ts-board">🏆 Placar</button>`}</div>`;
+      if (Online.error) h += `<div class="ts-warn">${U.esc(Online.error)}</div>`;
+    }
+    if (slots && !Store.ok) h += `<div class="ts-warn">⚠ Este navegador está bloqueando o salvamento (aba anônima ou navegador de aplicativo, como o do WhatsApp/Discord/Instagram). O progresso se perde ao fechar. Abra o jogo no Chrome, Edge ou Firefox${Online.enabled ? ' ou entre com uma conta para salvar na nuvem' : ''}.</div>`;
     if (slots) {
       h += '<div class="ts-slots">';
       slots.forEach((sv, i) => {
@@ -59,7 +68,8 @@ const UI = {
           h += `<div class="ts-slot full"><div class="sl-n">Slot ${n}</div><img src="${Sprites.classUrl(cl, spId, 3)}" alt="">
             <div class="info"><b>${U.esc(sv.name)}${sv.hardcore ? ` <span class="sl-h">${'❤'.repeat(Math.max(0, sv.hearts))}</span>` : ''}</b>
             <span>${c.name}${sv.cls2 && CLASSES[sv.cls2] ? ' / ' + CLASSES[sv.cls2].name : ''} · ${sp.name}${sv.species2 && SPECIES[sv.species2] ? ' / ' + SPECIES[sv.species2].name : ''}</span>
-            <span>Nível ${sv.level} · Zona ${sv.zone} · Recorde ${sv.stats.maxZone}${sv.stats.ascensions ? ` · ${sv.stats.ascensions} ${sv.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span></div>
+            <span>Nível ${sv.level} · Zona ${sv.zone} · Recorde ${sv.stats.maxZone}${sv.stats.ascensions ? ` · ${sv.stats.ascensions} ${sv.stats.ascensions > 1 ? 'ascensões' : 'ascensão'}` : ''}</span>
+            <span class="sl-t">${sv.lastSave ? 'Salvo em ' + new Date(sv.lastSave).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}${sv.owner && Online.loggedIn && sv.owner === Online.user.id ? ' · ☁' : ''}</span></div>
             <div class="sl-btns"><button class="btn gold" data-cont="${n}">Continuar</button><button class="btn small danger" data-del="${n}">Apagar</button></div></div>`;
         } else {
           h += `<div class="ts-slot empty${this.selSlot === n ? ' sel' : ''}" data-newslot="${n}"><div class="sl-n">Slot ${n}</div><div class="sl-empty">Vazio</div><div class="hint">${this.selSlot === n ? 'O novo herói será criado aqui ↓' : 'Clique para criar um herói aqui'}</div></div>`;
@@ -106,6 +116,9 @@ const UI = {
       this.confirm('Apagar slot', `Apagar <b>${U.esc(sv ? sv.name : '')}</b> (slot ${n})? Todo o progresso desse slot — Almas, desbloqueios e Armas Ancestrais — será perdido para sempre.`, 'Apagar', () => { Game.deleteSlot(n); this.selSlot = n; this.showTitle('new'); }, 'danger');
     });
     el.querySelectorAll('[data-newslot]').forEach(b => b.onclick = () => { Sfx.init(); Sfx.play('click'); this.selSlot = +b.dataset.newslot; this.showTitle('new'); });
+    if (this.$('ts-login')) this.$('ts-login').onclick = () => { Sfx.init(); this.loginModal('in'); };
+    if (this.$('ts-board')) this.$('ts-board').onclick = () => { Sfx.init(); this.boardModal(); };
+    if (this.$('ts-logout')) this.$('ts-logout').onclick = () => this.confirm('Sair da conta', 'Seus heróis continuam guardados na nuvem e voltam quando você entrar de novo. As cópias deste navegador serão removidas.', 'Sair da conta', async () => { await Online.signOut(); this.showTitle('new'); });
     const dice = this.$('ts-dice');
     if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
     if (this.$('ts-cancel')) this.$('ts-cancel').onclick = () => { this.hideTitle(); Game.paused = false; Music.zone(Game.W ? Game.W.biome.id : 'title'); };
@@ -205,6 +218,8 @@ const UI = {
     this.$('ico-soul').src = Sprites.soulUrl();
     this.$('btn-settings').innerHTML = ICONS.gear;
     this.$('btn-exit').innerHTML = ICONS.exit;
+    this.$('btn-board').innerHTML = ICONS.trophy;
+    this.$('btn-board').classList.toggle('hidden', !Online.enabled);
     // Abas
     this.$('tabs').innerHTML = TABS.map(([id, nm]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${nm}</button>`).join('');
     // Velocidade
@@ -246,6 +261,7 @@ const UI = {
     };
     this.$('btn-settings').onclick = () => this.settingsModal();
     this.$('btn-exit').onclick = () => this.exitPrompt();
+    this.$('btn-board').onclick = () => this.boardModal();
     this.$('log-filters').addEventListener('click', e => {
       const b = e.target.closest('[data-lf]'); if (!b) return;
       this.logFilter = b.dataset.lf;
@@ -1010,6 +1026,81 @@ const UI = {
     this.modal(title, `<p style="margin:0;color:#d8cfe6">${msg}</p>`, [{ label: 'Cancelar' }, { label: okLabel, cls, fn }]);
   },
 
+  // Chamado quando a conta entra/sai ou termina de conectar
+  onlineChanged() {
+    const ts = this.$('title-screen');
+    if (ts && !ts.classList.contains('hidden') && this.titleMode === 'new' && !this.$('modal-root').children.length) this.showTitle('new');
+    if (this.$('btn-board')) this.$('btn-board').classList.toggle('hidden', !Online.enabled);
+  },
+
+  loginModal(mode = 'in') {
+    const up = mode === 'up';
+    const body = `<div class="lg-tabs"><button data-lg="in" class="${up ? '' : 'on'}">Entrar</button><button data-lg="up" class="${up ? 'on' : ''}">Criar conta</button></div>
+      ${up ? '<label class="lg-f"><span>Apelido (aparece no placar)</span><input id="lg-name" maxlength="20" autocomplete="nickname"></label>' : ''}
+      <label class="lg-f"><span>E-mail</span><input id="lg-email" type="email" autocomplete="email"></label>
+      <label class="lg-f"><span>Senha${up ? ' (mínimo 6 caracteres)' : ''}</span><input id="lg-pass" type="password" autocomplete="${up ? 'new-password' : 'current-password'}"></label>
+      <div class="lg-msg" id="lg-msg"></div>
+      ${up ? '' : '<button class="lg-link" data-lg="forgot">Esqueci minha senha</button>'}
+      <p class="hint" style="margin:8px 0 0">A conta guarda seus 3 slots na nuvem — dá para continuar em outro navegador ou computador — e coloca suas marcas no placar.</p>`;
+    const submit = async (bg) => {
+      const msg = bg.querySelector('#lg-msg'), btn = bg.querySelector('.modal-f .gold');
+      const email = bg.querySelector('#lg-email').value.trim(), pass = bg.querySelector('#lg-pass').value;
+      if (!email || !pass) { msg.textContent = 'Preencha e-mail e senha.'; return; }
+      btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'Conectando…';
+      try {
+        if (up) {
+          const r = await Online.signUp(email, pass, bg.querySelector('#lg-name').value);
+          if (r === 'confirm') { msg.style.color = 'var(--gold)'; msg.textContent = 'Conta criada! Abra o e-mail de confirmação que enviamos e depois volte aqui para entrar.'; btn.disabled = false; return; }
+        } else await Online.signIn(email, pass);
+        this.closeModal();
+        this.notice(`Bem-vindo(a), ${U.esc(Online.profile.name)}! Seus slots estão sincronizados.`, 'var(--green)');
+        this.showTitle('new');
+      } catch (e) {
+        msg.style.color = 'var(--red)'; msg.textContent = Online.errText(e); btn.disabled = false;
+      }
+    };
+    const m = this.modal(up ? 'Criar conta' : 'Entrar', body, [{ label: 'Cancelar' }, { label: up ? 'Criar conta' : 'Entrar', cls: 'gold', close: false, fn: submit }]);
+    m.querySelectorAll('[data-lg]').forEach(b => b.onclick = async () => {
+      if (b.dataset.lg !== 'forgot') { this.loginModal(b.dataset.lg); return; }
+      const msg = m.querySelector('#lg-msg'), email = m.querySelector('#lg-email').value.trim();
+      if (!email) { msg.style.color = 'var(--red)'; msg.textContent = 'Digite seu e-mail acima e clique de novo em "Esqueci minha senha".'; return; }
+      try { await Online.resetPassword(email); msg.style.color = 'var(--gold)'; msg.textContent = 'Enviamos um link para trocar a senha. Abra-o neste navegador.'; }
+      catch (e) { msg.style.color = 'var(--red)'; msg.textContent = Online.errText(e); }
+    });
+    m.addEventListener('keydown', e => { if (e.key === 'Enter') submit(m); });
+    setTimeout(() => { const f = m.querySelector(up ? '#lg-name' : '#lg-email'); if (f) f.focus(); }, 30);
+  },
+
+  newPasswordModal() {
+    const m = this.modal('Nova senha', `<label class="lg-f"><span>Digite a nova senha (mínimo 6 caracteres)</span><input id="np-pass" type="password" autocomplete="new-password"></label><div class="lg-msg" id="np-msg"></div>`,
+      [{ label: 'Salvar senha', cls: 'gold', close: false, fn: async (bg) => {
+        const msg = bg.querySelector('#np-msg');
+        try { await Online.setNewPassword(bg.querySelector('#np-pass').value); this.closeModal(); this.notice('Senha alterada! Você já está conectado.', 'var(--green)'); this.showTitle('new'); }
+        catch (e) { msg.style.color = 'var(--red)'; msg.textContent = Online.errText(e); }
+      } }]);
+    setTimeout(() => { const f = m.querySelector('#np-pass'); if (f) f.focus(); }, 30);
+  },
+
+  boardModal(col = 'max_zone') {
+    if (!Online.enabled || !Online.sb) { this.notice(Online.enabled ? 'Ainda conectando ao placar…' : 'O placar online não está configurado.', 'var(--red)'); return; }
+    if (Online.loggedIn) { Game.state && Game.running && Game.save(); Online.scoreDirty = true; Online.flush(); }
+    const tabs = BOARD_COLS.map(([k, n]) => `<button data-lb="${k}" class="${k === col ? 'on' : ''}">${n}</button>`).join('');
+    const m = this.modal('🏆 Placar', `<div class="lg-tabs lb-tabs">${tabs}</div><div class="lb-body" id="lb-body"><div class="hint">Carregando…</div></div>
+      <p class="hint" style="margin:8px 0 0">${Online.loggedIn ? 'Suas marcas são enviadas sozinhas enquanto você joga (a cada 2 minutos e ao bater recorde de zona).' : 'Entre com uma conta na tela inicial para aparecer aqui.'} Tempo de jogo soma os 3 slots da conta.</p>`, [{ label: 'Fechar', cls: 'gold' }]);
+    m.querySelector('.modal').classList.add('wide');
+    m.querySelectorAll('[data-lb]').forEach(b => b.onclick = () => this.boardModal(b.dataset.lb));
+    const fmt = { max_zone: v => `Zona ${v}`, max_hit: v => U.fmt(v), play_time: v => U.fmtTime(v), level: v => `Nv ${v}` };
+    Online.top(col).then(rows => {
+      const body = m.querySelector('#lb-body');
+      if (!body) return;
+      if (!rows.length) { body.innerHTML = '<div class="hint">Ninguém no placar ainda. Seja o primeiro!</div>'; return; }
+      const me = Online.user && Online.user.id;
+      body.innerHTML = `<table class="lb"><thead><tr><th>#</th><th>Jogador</th><th>Herói</th><th>${BOARD_COLS.find(c => c[0] === col)[1]}</th></tr></thead><tbody>` +
+        rows.map((r, i) => `<tr class="${r.user_id === me ? 'me' : ''}"><td class="pos">${['🥇', '🥈', '🥉'][i] || i + 1}</td><td><b>${U.esc(r.name)}</b></td><td class="hero">${U.esc(r.hero || '')}<br><small>${U.esc(r.cls || '')} · ${U.esc(r.species || '')}</small></td><td class="val">${fmt[col](r[col])}</td></tr>`).join('') +
+        '</tbody></table>';
+    }).catch(e => { const body = m.querySelector('#lb-body'); if (body) body.innerHTML = `<div class="hint" style="color:var(--red)">${U.esc(Online.errText(e))}</div>`; });
+  },
+
   exitPrompt() {
     this.confirm('Sair para o menu', `O progresso fica salvo no <b>slot ${Game.slot}</b> e o herói espera parado até você voltar (sem progresso offline). Você pode continuar este herói ou jogar com outro slot.`, 'Sair', () => Game.exitToMenu());
   },
@@ -1032,6 +1123,8 @@ const UI = {
       ${tog('autoEquip', 'Auto-equipar', 'Equipa automaticamente itens melhores')}
       ${tog('autoTalent', 'Talentos automáticos', 'Distribui pontos de talento sozinho')}
       <div class="set-row"><div><div class="l">Salvamento</div><div class="d">Exporte para guardar um backup ou jogar em outro navegador</div></div><div style="display:flex;gap:6px"><button class="btn small" data-x="export">Exportar</button><button class="btn small" data-x="import">Importar</button></div></div>
+      ${Online.enabled ? `<div class="set-h">Conta e placar</div>
+      <div class="set-row"><div><div class="l">${Online.loggedIn ? `Conectado como <b>${U.esc(Online.profile.name)}</b>` : 'Sem conta'}</div><div class="d">${Online.loggedIn ? `Os slots são enviados para a nuvem a cada minuto e ao sair.${Online.lastPush ? ' Último envio: ' + new Date(Online.lastPush).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : ''}${Online.error ? ' <span style="color:var(--red)">' + U.esc(Online.error) + '</span>' : ''}` : 'Saia para o menu e entre com uma conta para salvar na nuvem e entrar no placar.'}</div></div><div style="display:flex;gap:6px">${Online.loggedIn ? '<button class="btn small" data-x="sync">Salvar agora</button>' : ''}<button class="btn small" data-x="board">🏆 Placar</button></div></div>` : ''}
       <div class="set-row"><div><div class="l">Sair para o menu</div><div class="d">Salva e volta para a tela de slots (até 3 heróis)</div></div><button class="btn small" data-x="exit">Sair</button></div>
       <div class="set-row"><div><div class="l" style="color:var(--red)">Apagar este slot</div><div class="d">Apaga o herói do slot ${Game.slot} e todo o progresso dele (irreversível)</div></div><button class="btn small danger" data-x="reset">Apagar</button></div>`;
     const m = this.modal('Configurações', body, [{ label: 'Fechar', cls: 'gold' }]);
@@ -1053,6 +1146,11 @@ const UI = {
         this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O progresso atual será substituído.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
           try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
         } }]);
+      } else if (x.dataset.x === 'sync') {
+        Game.save(); Online.scoreDirty = true;
+        Online.flush().then(() => this.notice(Online.error ? Online.error : '☁ Progresso enviado para a nuvem!', Online.error ? 'var(--red)' : 'var(--green)'));
+      } else if (x.dataset.x === 'board') {
+        this.boardModal();
       } else if (x.dataset.x === 'exit') {
         this.closeModal(); this.exitPrompt();
       } else if (x.dataset.x === 'reset') {

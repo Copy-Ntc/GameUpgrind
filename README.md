@@ -18,6 +18,12 @@ Depois acesse `http://localhost:5173`. O Live Server do VS Code também funciona
 
 O progresso é salvo automaticamente no navegador (localStorage), em até **3 slots** independentes. O botão de sair (canto superior direito) salva e volta para a tela de slots sem apagar nada. Use **Configurações → Exportar** para fazer backup.
 
+Abra o jogo no Chrome, Edge ou Firefox. Navegadores internos de aplicativos (WhatsApp, Discord, Instagram) e abas anônimas apagam o progresso ao fechar; o jogo avisa quando detecta isso.
+
+## Modo online (opcional)
+
+Com um projeto gratuito no Supabase, os jogadores criam conta, os 3 slots ficam salvos na nuvem (dá para continuar em outro computador) e aparece um **placar** com zona recorde, maior golpe, tempo de jogo e nível. O passo a passo está em [ONLINE.md](ONLINE.md). Sem configurar, o jogo funciona normalmente, só com o salvamento do navegador.
+
 ## Duração e escala
 
 Não há limite de zona nem de nível. A escala foi calibrada com `dev/career.js` para a **zona 200** ser a meta de longo prazo:
@@ -64,6 +70,8 @@ Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24
 | `js/game.js` | Estado, slots de salvamento, progressão, economia e loop principal |
 | `js/ui.js` | Interface: tela de título e slots, HUD, painéis, tooltips e janelas |
 | `js/items.js`, `js/stats.js` | Geração de itens e cálculo de atributos/poder |
+| `js/online.js`, `js/online-config.js` | Contas, save na nuvem e placar (Supabase), ligados só quando configurados |
+| `online/supabase.sql` | Tabelas e regras de segurança do modo online |
 | `js/audio.js` | Efeitos sonoros sintetizados com WebAudio |
 | `js/music.js` | Músicas procedurais (sequenciador WebAudio) |
 
@@ -72,4 +80,5 @@ Ferramentas de desenvolvimento em `dev/`:
 - `dev/gallery.html` mostra todos os sprites ampliados (heróis, espécies, inimigos, itens e ícones), útil para editar a pixel art.
 - `dev/sim.js` roda uma jornada sem navegador, em alta velocidade, e imprime a progressão zona a zona: `node dev/sim.js mage 90 1 elf` (classe, minutos de jogo, comprar melhorias, espécie).
 - `dev/career.js` simula uma carreira inteira com várias jornadas e mostra quando cada classe, espécie e Arma Ancestral é liberada: `node dev/career.js 60 fighter 1 10` (horas, classe inicial, corações 1/0, relatório a cada N horas).
-- Os dois aceitam `SCALE="item,vidaInimigo,danoInimigo,almas"` para testar outra escala sem editar o jogo.
+- `dev/mock-online.js` simula o servidor do modo online em memória, para testar contas e placar sem Supabase (veja o fim do ONLINE.md).
+- Os dois simuladores aceitam `SCALE="item,vidaInimigo,danoInimigo,almas"` para testar outra escala sem editar o jogo.

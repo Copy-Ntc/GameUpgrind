@@ -511,3 +511,26 @@ input[type=range] { accent-color: var(--gold); }
 .relic-card.locked .nm { color: var(--dim); }
 .relic-card .ds { font-size: 11px; color: #cfc4de; line-height: 1.4; }
 .relic-card .btn { margin-top: 6px; }
+
+/* Conta online e placar */
+.ts-account { max-width: 1040px; margin: -10px auto 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; font-size: 13px; color: #d8cfe6; }
+.ts-account b { color: var(--gold); }
+.ts-warn { max-width: 1040px; margin: 0 auto 14px; background: #2a1418; border: 1px solid #6a2a3a; border-radius: 10px; padding: 9px 12px; font-size: 12px; color: #ffc8d0; text-align: center; }
+.ts-slot .sl-t { font-size: 10px !important; color: var(--dim) !important; }
+.lg-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.lg-tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: 600 13px var(--pixel); padding: 6px 10px; cursor: pointer; }
+.lg-tabs button.on { color: var(--gold); border-bottom-color: var(--gold); }
+.lg-f { display: grid; gap: 4px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+.lg-f input { background: #0e0b14; border: 1px solid var(--line2); border-radius: 7px; padding: 8px 10px; color: var(--text); font: 14px var(--sans); }
+.lg-f input:focus { outline: none; border-color: var(--gold); }
+.lg-msg { min-height: 18px; font-size: 12px; }
+.lg-link { background: none; border: 0; padding: 0; color: #9ab8ff; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.modal.wide { width: min(640px, 100%); }
+.lb-body { max-height: 56vh; overflow: auto; }
+table.lb { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.lb th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+table.lb td { padding: 6px; border-bottom: 1px solid #241c30; vertical-align: middle; }
+table.lb td.pos { width: 34px; text-align: center; font: 600 13px var(--pixel); }
+table.lb td.hero small { color: var(--muted); }
+table.lb td.val { text-align: right; font: 600 13px var(--pixel); color: var(--gold); white-space: nowrap; }
+table.lb tr.me td { background: rgba(242,194,91,.08); }
