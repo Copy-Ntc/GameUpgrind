@@ -7,6 +7,7 @@ const SAVE_KEY = 'upgrind_save_v1';           // save antigo (único) — migrad
 const SLOT_KEY = n => 'upgrind_slot_' + n;
 const SLOT_COUNT = 3;
 const BACKUP_PREFIX = 'upgrind_backup_';
+const UNLOCK_KEY = 'upgrind_unlocks';   // classes/espécies liberadas, compartilhadas entre os slots
 
 // Armazenamento do navegador com reserva em memória: abas anônimas e navegadores
 // de aplicativos (WhatsApp, Discord, Instagram…) podem bloquear ou apagar o localStorage.
@@ -98,7 +99,9 @@ const Game = {
   },
 
   newGame(cls, species, name, hardcore) {
+    const un = this.sharedUnlocks();
     this.state = this.defaultState(cls, species, name, hardcore);
+    this.state.unlocks = un;
     this.giveStarter();
     this.recalc();
     this.state.potions = this.stats.potionMax;
@@ -145,6 +148,25 @@ const Game = {
     if (old && !Store.get(SLOT_KEY(1))) Store.set(SLOT_KEY(1), old);
     if (old) Store.del(SAVE_KEY);
   },
+  // Classes e espécies liberadas valem para todos os slots (como os personagens do Vampire Survivors).
+  // Junta o que está guardado à parte, o que cada slot liberou e o slot em memória.
+  mergeUnlocks(...list) {
+    const c = new Set(DEFAULT_CLASSES()), sp = new Set(DEFAULT_SPECIES());
+    for (const u of list) {
+      if (!u) continue;
+      for (const id of u.classes || []) if (CLASSES[id]) c.add(id);
+      for (const id of u.species || []) if (SPECIES[id]) sp.add(id);
+    }
+    return { classes: CLASS_ORDER.filter(id => c.has(id)), species: SPECIES_ORDER.filter(id => sp.has(id)) };
+  },
+  sharedUnlocks() {
+    let saved = null;
+    try { saved = JSON.parse(Store.get(UNLOCK_KEY)); } catch (e) { /* sem registro */ }
+    const slots = [];
+    for (let n = 1; n <= SLOT_COUNT; n++) { const sv = this.peekSave(n); if (sv) slots.push(sv.unlocks); }
+    return this.mergeUnlocks(saved, ...slots, this.state && this.state.unlocks);
+  },
+  rememberUnlocks() { Store.set(UNLOCK_KEY, JSON.stringify(this.sharedUnlocks())); },
   peekSave(n = this.slot) { try { const s = JSON.parse(Store.get(SLOT_KEY(n))); return s && s.cls ? s : null; } catch (e) { return null; } },
   freeSlot() { for (let n = 1; n <= SLOT_COUNT; n++) if (!this.peekSave(n)) return n; return 0; },
   writeSlot(n, data) { Store.set(SLOT_KEY(n), JSON.stringify(data)); },
@@ -169,8 +191,10 @@ const Game = {
   load(n = this.slot) {
     const s = this.peekSave(n);
     if (!s) return false;
+    const un = this.sharedUnlocks();
     this.slot = n;
     this.state = this.migrate(s);
+    this.state.unlocks = this.mergeUnlocks(this.state.unlocks, un);
     this.recalc();
     return true;
   },
@@ -446,6 +470,7 @@ const Game = {
     const list = st.unlocks[this.unlockKey(kind)];
     if (list.includes(id)) return false;
     list.push(id);
+    this.rememberUnlocks();
     const def = kind === 'class' ? CLASSES[id] : SPECIES[id];
     const R = HERO_RARITY[def.rarity];
     const tag = kind === 'class' ? 'Nova Classe' : 'Nova Espécie';

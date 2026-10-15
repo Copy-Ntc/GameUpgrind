@@ -128,6 +128,8 @@ const Online = {
     const uid = this.user.id;
     // os heróis desta conta continuam na nuvem; tira as cópias locais para a próxima conta
     for (let n = 1; n <= SLOT_COUNT; n++) { const sv = Game.peekSave(n); if (sv && sv.owner === uid) Game.deleteSlotLocal(n); }
+    Store.del(UNLOCK_KEY); // as liberações desta conta voltam junto com os slots ao entrar de novo
+    if (!Game.running) { Game.state = null; Game.W = null; }
     try { await this.sb.auth.signOut(); } catch (e) { /* ok */ }
     this.user = null; this.profile = null;
     UI.onlineChanged();

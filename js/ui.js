@@ -44,7 +44,7 @@ const UI = {
   // ==========================================================
   titleUnlocks() {
     if ((this.titleMode === 'ascend' || this.titleMode === 'gameover') && Game.state) return Game.state.unlocks;
-    return { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() };
+    return Game.sharedUnlocks();
   },
 
   rarityTag(r) { const R = HERO_RARITY[r]; return `<span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${R.name}</span>`; },
@@ -116,7 +116,7 @@ const UI = {
     if (asc) h += `<div class="ts-start"><button class="btn small ghost" id="ts-menu">⟵ Voltar ao menu (slots)</button></div><div class="hint" style="text-align:center;margin-top:-4px">${over ? 'O Fim de Jogo fica esperando neste slot até você escolher a próxima jornada.' : 'Sai sem ascender: a jornada atual continua salva no slot.'}</div>`;
     if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Apague um para criar outro herói.</div>';
     h += '</div></div>';
-    h += '<div class="ts-foot">Classes e espécies bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
+    h += '<div class="ts-foot">Classes e espécies liberadas valem para todos os slots. As bloqueadas são liberadas jogando: metas de zona, conquistas, chefes ou resgatando prisioneiros nas masmorras.<br>Role o mouse sobre o mapa para aproximar · <b>P</b> pausa · <b>1–4</b> velocidade · O jogo salva automaticamente no navegador</div></div>';
     el.innerHTML = h;
 
     el.querySelectorAll('[data-pick]').forEach(card => card.addEventListener('click', () => {
