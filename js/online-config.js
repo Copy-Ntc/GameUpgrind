@@ -14,5 +14,5 @@ const ONLINE_CONFIG = {
   key: 'sb_publishable_leFDZEk-AgUDaGJvDerwDQ_UWdpQwQp',
   // Anti-robô (opcional): "Site Key" de um widget Cloudflare Turnstile. Também pública.
   // Coloque aqui ANTES de ligar o CAPTCHA no Supabase (passo a passo em ONLINE.md).
-  turnstile: '',
+  turnstile: '0x4AAAAAAFX1xIIJxa-lPeVn',
 };
