@@ -10,6 +10,6 @@
 // são as regras do arquivo online/supabase.sql. Passo a passo em ONLINE.md.
 // ============================================================
 const ONLINE_CONFIG = {
-  url: '',
-  key: '',
+  url: 'https://kcvfdogthuhdcgtcgoom.supabase.co',
+  key: 'sb_publishable_leFDZEk-AgUDaGJvDerwDQ_UWdpQwQp',
 };
