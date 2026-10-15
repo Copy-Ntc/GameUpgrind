@@ -523,6 +523,7 @@ input[type=range] { accent-color: var(--gold); }
 .lg-f { display: grid; gap: 4px; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
 .lg-f input { background: #0e0b14; border: 1px solid var(--line2); border-radius: 7px; padding: 8px 10px; color: var(--text); font: 14px var(--sans); }
 .lg-f input:focus { outline: none; border-color: var(--gold); }
+.lg-captcha { min-height: 65px; margin: 2px 0 8px; display: flex; justify-content: center; }
 .lg-msg { min-height: 18px; font-size: 12px; }
 .lg-link { background: none; border: 0; padding: 0; color: #9ab8ff; font-size: 12px; cursor: pointer; text-decoration: underline; }
 .modal.wide { width: min(640px, 100%); }

@@ -105,6 +105,7 @@ const Game = {
 
   // Cria a jornada de um herói novo no slot atual, usando o progresso do perfil
   newGame(cls, species, name, hardcore, opts = {}) {
+    name = U.cleanName(name) || 'Herói';
     if (!this.profile) this.profile = this.defaultProfile();
     const P = this.profile;
     const fresh = this.attach(this.defaultState(cls, species, name, hardcore));
@@ -336,7 +337,10 @@ const Game = {
     return btoa(unescape(encodeURIComponent(JSON.stringify({ v: 5, profile: this.profile, slots }))));
   },
   importSave(str) {
-    const s = JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
+    str = String(str || '').trim();
+    if (str.length > 8e6) throw new Error('inválido');
+    // o código pode vir de outra pessoa: passa pelo filtro antes de tocar no jogo
+    const s = U.cleanData(JSON.parse(decodeURIComponent(escape(atob(str)))));
     if (s && s.profile && Array.isArray(s.slots)) {
       s.profile.owner = null;
       this.setProfile(s.profile);
@@ -844,7 +848,7 @@ const Game = {
         World.text(W, W.hero.rx + 0.5, W.hero.ry - 0.6, `NÍVEL ${st.level}!`, '#d9b8ff', 16, 1.6, -1, true);
       }
       Sfx.play('levelup');
-      this.log(`<b>${st.name}</b> alcançou o <b>nível ${st.level}</b>!`, 'lvl');
+      this.log(`<b>${U.esc(st.name)}</b> alcançou o <b>nível ${st.level}</b>!`, 'lvl');
       UI.dirty('talents');
     }
     UI.dirty('top');

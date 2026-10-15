@@ -1075,7 +1075,8 @@ const UI = {
     const body = `<div class="lg-tabs"><button data-lg="in" class="${up ? '' : 'on'}">Entrar</button><button data-lg="up" class="${up ? 'on' : ''}">Criar conta</button></div>
       ${up ? '<label class="lg-f"><span>Apelido (aparece no placar)</span><input id="lg-name" maxlength="20" autocomplete="nickname"></label>' : ''}
       <label class="lg-f"><span>E-mail</span><input id="lg-email" type="email" autocomplete="email"></label>
-      <label class="lg-f"><span>Senha${up ? ' (mínimo 6 caracteres)' : ''}</span><input id="lg-pass" type="password" autocomplete="${up ? 'new-password' : 'current-password'}"></label>
+      <label class="lg-f"><span>Senha${up ? ` (mínimo ${MIN_PASS} caracteres)` : ''}</span><input id="lg-pass" type="password" autocomplete="${up ? 'new-password' : 'current-password'}"></label>
+      ${Online.captchaOn() ? '<div class="lg-captcha" id="lg-captcha"></div>' : ''}
       <div class="lg-msg" id="lg-msg"></div>
       ${up ? '' : '<button class="lg-link" data-lg="forgot">Esqueci minha senha</button>'}
       <p class="hint" style="margin:8px 0 0">A conta guarda seus 3 slots na nuvem — dá para continuar em outro navegador ou computador — e coloca suas marcas no placar.</p>`;
@@ -1105,11 +1106,12 @@ const UI = {
       catch (e) { msg.style.color = 'var(--red)'; msg.textContent = Online.errText(e); }
     });
     m.addEventListener('keydown', e => { if (e.key === 'Enter') submit(m); });
+    Online.mountCaptcha(m.querySelector('#lg-captcha'));
     setTimeout(() => { const f = m.querySelector(up ? '#lg-name' : '#lg-email'); if (f) f.focus(); }, 30);
   },
 
   newPasswordModal() {
-    const m = this.modal('Nova senha', `<label class="lg-f"><span>Digite a nova senha (mínimo 6 caracteres)</span><input id="np-pass" type="password" autocomplete="new-password"></label><div class="lg-msg" id="np-msg"></div>`,
+    const m = this.modal('Nova senha', `<label class="lg-f"><span>Digite a nova senha (mínimo ${MIN_PASS} caracteres)</span><input id="np-pass" type="password" autocomplete="new-password"></label><div class="lg-msg" id="np-msg"></div>`,
       [{ label: 'Salvar senha', cls: 'gold', close: false, fn: async (bg) => {
         const msg = bg.querySelector('#np-msg');
         try { await Online.setNewPassword(bg.querySelector('#np-pass').value); this.closeModal(); this.notice('Senha alterada! Você já está conectado.', 'var(--green)'); this.showTitle('new'); }
@@ -1178,14 +1180,15 @@ const UI = {
       const x = e.target.closest('[data-x]'); if (!x) return;
       if (x.dataset.x === 'export') {
         const code = Game.exportSave();
-        this.modal('Exportar progresso', `<p class="hint">Copie e guarde este código:</p><textarea readonly onclick="this.select()">${code}</textarea>`, [{ label: 'Copiar', cls: 'gold', fn: () => { navigator.clipboard && navigator.clipboard.writeText(code); this.notice('Código copiado!'); } }]);
+        this.modal('Exportar progresso', `<p class="hint">Copie e guarde este código:</p><textarea readonly id="exp-code">${code}</textarea>`, [{ label: 'Copiar', cls: 'gold', fn: () => { navigator.clipboard && navigator.clipboard.writeText(code); this.notice('Código copiado!'); } }]);
+        const ta = document.getElementById('exp-code'); if (ta) ta.onclick = () => ta.select();
       } else if (x.dataset.x === 'import') {
         this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O perfil e os 3 slots deste navegador serão substituídos.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
           try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
         } }]);
       } else if (x.dataset.x === 'sync') {
         Game.save(); Online.scoreDirty = true;
-        Online.flush().then(() => this.notice(Online.error ? Online.error : '☁ Progresso enviado para a nuvem!', Online.error ? 'var(--red)' : 'var(--green)'));
+        Online.flush().then(() => this.notice(Online.error ? U.esc(Online.error) : '☁ Progresso enviado para a nuvem!', Online.error ? 'var(--red)' : 'var(--green)'));
       } else if (x.dataset.x === 'board') {
         this.boardModal();
       } else if (x.dataset.x === 'exit') {

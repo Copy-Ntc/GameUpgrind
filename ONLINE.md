@@ -23,10 +23,11 @@ O servidor é o [Supabase](https://supabase.com), que tem plano gratuito e funci
 3. **Ajuste o login.** Em **Authentication → Sign In / Providers**, deixe **Email** ligado (já vem assim).
    - **Recomendado para jogar com amigos:** desligue *Confirm email*, assim a conta já entra na hora.
    - Se deixar ligado, cada pessoa precisa clicar no link do e-mail de confirmação, e o e-mail gratuito do Supabase só envia poucas mensagens por hora.
+   - Na mesma página, em **Email**, ponha a senha mínima em **8** caracteres (o jogo já pede 8 para contas novas).
 
 4. **Diga onde o jogo está.** Em **Authentication → URL Configuration**:
    - **Site URL:** `https://copy-ntc.github.io/GameUpgrind/`
-   - **Redirect URLs:** adicione o mesmo endereço. Ele é usado pelos links de confirmação e de "Esqueci minha senha".
+   - **Redirect URLs:** adicione o mesmo endereço. Ele é usado pelos links de confirmação e de "Esqueci minha senha". Não use curingas como `*` ou `**`: um endereço aberto deixa um site falso receber o link de login de alguém.
 
 5. **Copie as duas informações públicas.** Em **Project Settings → API Keys** (ou no botão **Connect** no topo):
    - **Project URL**, por exemplo `https://abcdefgh.supabase.co`;
@@ -48,10 +49,55 @@ O servidor é o [Supabase](https://supabase.com), que tem plano gratuito e funci
 
 Se o seu projeto foi criado antes desta versão, rode uma vez o arquivo [`online/atualizacao-perfil.sql`](online/atualizacao-perfil.sql) no **SQL Editor** do Supabase (*New query* → colar → **Run**). Ele libera o "slot 0" da tabela `saves`, onde fica o perfil. Antes disso, o jogo avisa na tela inicial e o perfil continua salvo só no navegador. Os slots de jornada já sincronizam normalmente.
 
+## Atualização: segurança
+
+Rode uma vez o arquivo [`online/atualizacao-seguranca.sql`](online/atualizacao-seguranca.sql) no **SQL Editor** (*New query* → colar → **Run**). No fim ele mostra 3 linhas (`profiles_name_chars`, `saves_data_size` e `saves_slot_check`). Ele:
+
+- tira permissões que o jogo não usa (por exemplo, ninguém consegue gravar direto no placar ou mudar a data de criação do perfil);
+- recusa apelidos com HTML ou caracteres invisíveis (usados para imitar outro jogador);
+- limita cada save a 1 MB (um save cheio tem uns 100 KB), para ninguém lotar o banco;
+- aceita no máximo um envio ao placar a cada 20 segundos por conta, e o tempo de jogo não cresce mais rápido que o relógio;
+- cria a coluna `hidden` no placar para moderação (veja abaixo).
+
+Quem instalar do zero com o `supabase.sql` já recebe tudo isso.
+
+### Esconder um trapaceiro do placar
+
+**Table Editor → leaderboard**, ache a linha e mude `hidden` para `true`. Ela some para todo mundo, menos para o próprio jogador, que nem percebe. Para trocar um apelido ofensivo, edite `name` em **profiles**.
+
+### Anti-robô com Cloudflare Turnstile (grátis, não precisa de domínio)
+
+Impede robôs de criar contas em massa e de testar senhas no login.
+
+1. Em https://dash.cloudflare.com (crie uma conta grátis), abra **Turnstile → Add widget**:
+   - **Widget name:** `upgrind`
+   - **Hostnames:** `copy-ntc.github.io` (e `localhost` se for testar no seu PC)
+   - **Widget Mode:** *Managed*
+
+   Copie a **Site Key** e a **Secret Key**.
+2. **Primeiro o jogo:** cole a **Site Key** em [`js/online-config.js`](js/online-config.js), no campo `turnstile`, faça commit e push e espere o site atualizar (a caixa da Cloudflare aparece no "Entrar / Criar conta").
+3. **Depois o Supabase:** em **Authentication → Attack Protection** (em versões antigas, *Bot and Abuse Protection*), ligue **Enable CAPTCHA protection**, escolha **Cloudflare Turnstile** e cole a **Secret Key**.
+
+Nessa ordem. Se ligar no Supabase antes de o site ter a Site Key, ninguém consegue entrar até o passo 2 ficar pronto. A Secret Key é a única informação que **nunca** vai para o código.
+
+### Contas do dono do jogo
+
+Quem controla o GitHub ou o Supabase controla o jogo. Ligue a verificação em duas etapas (2FA) no **GitHub** (*Settings → Password and authentication*), no **Supabase** (*Account → Security*) e no e-mail usado nos dois.
+
+### Trocar a versão da biblioteca do Supabase
+
+O jogo carrega `supabase-js` com uma impressão digital (SRI) em `SUPABASE_SRI`, em [`js/online.js`](js/online.js). Se mudar a versão em `SUPABASE_CDN`, gere a impressão nova com:
+
+```bash
+curl -s URL_DO_ARQUIVO | openssl dgst -sha384 -binary | openssl base64 -A
+```
+
+e cole como `sha384-<resultado>`. Sem isso, o navegador recusa o arquivo e o modo online não liga.
+
 ## Perguntas comuns
 
 - **A chave fica pública no GitHub, tem problema?** Não. A URL e a chave *anon/publishable* foram feitas para ficar no site. Quem protege os dados são as regras do `supabase.sql`: cada conta só lê e grava os próprios saves, e o placar só aceita recordes enviados pela própria conta.
-- **Dá para trapacear no placar?** Quem souber mexer no console do navegador consegue enviar números falsos. Para um placar entre amigos, isso basta. Se virar algo público, aí vale mover a validação para o servidor.
+- **Dá para trapacear no placar?** O jogo roda no navegador de cada um, então quem souber mexer no código ainda consegue mandar uma zona falsa. O servidor barra os exageros mais fáceis (envios em rajada, tempo de jogo impossível, textos com HTML), e o resto se resolve escondendo a pessoa com a coluna `hidden`. Impedir de vez exigiria rodar o combate no servidor.
 - **O projeto gratuito para sozinho?** Sim: depois de 1 semana sem ninguém jogar, o Supabase pausa o projeto. Basta entrar no painel e clicar em *Restore*. Enquanto isso o jogo continua funcionando e salvando no navegador.
 - **Meus amigos perdem o progresso.** Isso acontece quando abrem o link pelo navegador interno do WhatsApp, Discord ou Instagram, ou numa aba anônima: esses navegadores apagam os dados ao fechar. O jogo mostra um aviso quando percebe isso. A saída é abrir no Chrome, Edge ou Firefox normal, ou entrar com uma conta.
 - **Como testar sem servidor?** Abra o jogo pelo servidor local, rode no console `const s = document.createElement('script'); s.src = 'dev/mock-online.js'; document.head.appendChild(s);` e depois `MockOnline.start()`. Isso liga um Supabase falso em memória.

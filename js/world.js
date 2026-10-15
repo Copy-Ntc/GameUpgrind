@@ -827,14 +827,14 @@ const World = {
       st.hearts = Math.max(0, (st.hearts === undefined ? 3 : st.hearts) - 1);
       if (st.hearts <= 0) {
         UI.banner('FIM DE JOGO', 'Seus três corações se foram…', 'red', 3);
-        Game.log(`<b>${st.name}</b> perdeu o último coração na zona ${W.z}. <b style="color:#ff6a6a">Fim de jogo.</b>`, 'bad');
+        Game.log(`<b>${U.esc(st.name)}</b> perdeu o último coração na zona ${W.z}. <b style="color:#ff6a6a">Fim de jogo.</b>`, 'bad');
       } else {
         UI.banner('DERROTADO', `${st.hearts} ${st.hearts > 1 ? 'corações restantes' : 'coração restante'} · recuando`, 'red', 2.8);
-        Game.log(`<b>${st.name}</b> foi derrotado na zona ${W.z} e perdeu um coração (${st.hearts} restantes).`, 'bad');
+        Game.log(`<b>${U.esc(st.name)}</b> foi derrotado na zona ${W.z} e perdeu um coração (${st.hearts} restantes).`, 'bad');
       }
     } else {
       UI.banner('DERROTADO', st.deathsInZone >= 3 && W.z > 1 ? 'Recuando para se fortalecer…' : 'Retornando à entrada da zona…', 'red', 2.8);
-      Game.log(`<b>${st.name}</b> foi derrotado na zona ${W.z}. (${st.deathsInZone}/3)`, 'bad');
+      Game.log(`<b>${U.esc(st.name)}</b> foi derrotado na zona ${W.z}. (${st.deathsInZone}/3)`, 'bad');
     }
     this.burst(W, hero.rx + 0.5, hero.ry + 0.5, '#ff4a4a', 25, 4);
     for (const e of W.ents) {

@@ -76,6 +76,28 @@ const U = {
   esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
+  // Nome digitado pelo jogador: sem caracteres de HTML nem invisíveis
+  cleanName(s, max = 16) {
+    return String(s == null ? '' : s).replace(/[<>"&`\\\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, '').trim().slice(0, max);
+  },
+  // Dados que vêm de fora (código importado, nuvem): só JSON simples, sem HTML escondido em textos,
+  // sem chaves que mexem no protótipo dos objetos e com limite de tamanho
+  cleanData(v, depth = 0, budget = { n: 0 }) {
+    if (++budget.n > 400000 || depth > 24) throw new Error('dados grandes demais');
+    if (v === null || typeof v === 'boolean') return v;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if (typeof v === 'string') return v.length > 2000 ? '' : v.replace(/[<>"&`\\]/g, '');
+    if (Array.isArray(v)) return v.map(x => U.cleanData(x, depth + 1, budget));
+    if (typeof v === 'object') {
+      const o = {};
+      for (const k of Object.keys(v)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype' || k.length > 64 || /[<>"&`\\'\s]/.test(k)) continue;
+        o[k] = U.cleanData(v[k], depth + 1, budget);
+      }
+      return o;
+    }
+    return null;
+  },
   $(sel) { return document.querySelector(sel); },
   // Cor: mistura hex
   mix(c1, c2, t) {

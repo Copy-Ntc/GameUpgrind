@@ -5,6 +5,11 @@
 // sem isso o jogo funciona igual, salvando apenas no navegador.
 // ============================================================
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js';
+// Impressão digital do arquivo acima: se o CDN entregar qualquer coisa diferente, o navegador recusa.
+// Ao trocar a versão, gere de novo (veja ONLINE.md).
+const SUPABASE_SRI = 'sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT';
+const TURNSTILE_JS = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const MIN_PASS = 8;               // senha mínima para contas novas (deixe igual à do painel do Supabase)
 const CLOUD_PUSH_EVERY = 60;   // segundos entre envios do save para a nuvem
 const SCORE_PUSH_EVERY = 120;  // segundos entre envios para o placar
 const BOARD_COLS = [
@@ -20,6 +25,7 @@ const PROFILE_SQL_HINT = 'Para guardar o perfil na nuvem, rode o arquivo online/
 const Online = {
   enabled: false, ready: false, sb: null, user: null, profile: null, error: '', profileBlocked: false,
   dirty: new Set(), pushT: 0, scoreT: 0, scoreDirty: false, busy: false, lastPush: 0, recovering: false,
+  captcha: { id: null, token: '' },
 
   configured() { return typeof ONLINE_CONFIG !== 'undefined' && !!ONLINE_CONFIG.url && !!ONLINE_CONFIG.key; },
   get loggedIn() { return !!(this.user && this.profile); },
@@ -49,18 +55,60 @@ const Online = {
     return new Promise((res, rej) => {
       const s = document.createElement('script');
       s.src = SUPABASE_CDN;
+      s.integrity = SUPABASE_SRI;
+      s.crossOrigin = 'anonymous';
       s.onload = () => res();
       s.onerror = () => rej(new Error('Falha ao carregar a biblioteca do Supabase'));
       document.head.appendChild(s);
     });
   },
 
+  // ---------------------------------------------------------- anti-robô (Cloudflare Turnstile, opcional)
+  // Liga quando ONLINE_CONFIG.turnstile tem a "site key"; o Supabase confere o token no cadastro, login e troca de senha.
+  captchaOn() { return typeof ONLINE_CONFIG !== 'undefined' && !!ONLINE_CONFIG.turnstile; },
+  loadTurnstile() {
+    if (window.turnstile) return Promise.resolve();
+    if (!this._tsLoad) this._tsLoad = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = TURNSTILE_JS; s.async = true;
+      s.onload = () => res();
+      s.onerror = () => { this._tsLoad = null; rej(new Error('Falha ao carregar a verificação anti-robô')); };
+      document.head.appendChild(s);
+    });
+    return this._tsLoad;
+  },
+  async mountCaptcha(el) {
+    if (!this.captchaOn() || !el) return;
+    this.captcha.token = '';
+    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.remove(this.captcha.id); } catch (e) { /* já saiu */ } }
+    this.captcha.id = null;
+    try { await this.loadTurnstile(); } catch (e) { el.textContent = 'Não foi possível carregar a verificação anti-robô. Verifique a internet.'; return; }
+    if (!el.isConnected) return;
+    this.captcha.id = window.turnstile.render(el, {
+      sitekey: ONLINE_CONFIG.turnstile, theme: 'dark', language: 'pt-br',
+      callback: t => { this.captcha.token = t; },
+      'expired-callback': () => { this.captcha.token = ''; },
+      'error-callback': () => { this.captcha.token = ''; },
+    });
+  },
+  captchaToken() {
+    if (!this.captchaOn()) return undefined;
+    if (!this.captcha.token) throw new Error('Confirme a verificação anti-robô (a caixa acima dos botões) e tente de novo.');
+    return this.captcha.token;
+  },
+  // Cada token vale uma vez só: depois de cada tentativa, pede outro
+  resetCaptcha() {
+    this.captcha.token = '';
+    if (this.captcha.id != null && window.turnstile) { try { window.turnstile.reset(this.captcha.id); } catch (e) { /* ok */ } }
+  },
+
   // Mensagens de erro do Supabase em português
   errText(e) {
     const m = String((e && e.message) || e || '');
+    if (/captcha/i.test(m)) return 'A verificação anti-robô falhou ou expirou. Marque a caixa de novo.';
     if (/invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
     if (/already registered|already been registered/i.test(m)) return 'Esse e-mail já tem uma conta. Use "Entrar".';
-    if (/password should be at least|weak password/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
+    if (/password should be at least|weak password/i.test(m)) { const n = (m.match(/at least (\d+)/i) || [])[1] || MIN_PASS; return `A senha precisa ter pelo menos ${n} caracteres.`; }
     if (/email not confirmed/i.test(m)) return 'Confirme seu e-mail (veja a caixa de entrada) antes de entrar.';
     if (/rate limit|too many|security purposes/i.test(m)) return 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
     if (/invalid.*email|email.*invalid|unable to validate email/i.test(m)) return 'E-mail inválido.';
@@ -80,8 +128,10 @@ const Online = {
   async signUp(email, pass, name) {
     name = (name || '').trim();
     if (!this.validName(name)) throw new Error('Apelido inválido: use de 2 a 20 letras, números, espaço, _ . ou -.');
+    if (String(pass || '').length < MIN_PASS) throw new Error(`A senha precisa ter pelo menos ${MIN_PASS} caracteres.`);
     if (await this.nameTaken(name)) throw new Error('Esse apelido já está em uso.');
-    const { data, error } = await this.sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: location.origin + location.pathname } });
+    const captchaToken = this.captchaToken();
+    const { data, error } = await this.sb.auth.signUp({ email, password: pass, options: { data: { name }, emailRedirectTo: location.origin + location.pathname, captchaToken } }).finally(() => this.resetCaptcha());
     if (error) throw error;
     if (!data.session) return 'confirm'; // o projeto exige confirmar o e-mail
     await this.afterLogin(data.user);
@@ -89,16 +139,19 @@ const Online = {
   },
 
   async signIn(email, pass) {
-    const { data, error } = await this.sb.auth.signInWithPassword({ email, password: pass });
+    const captchaToken = this.captchaToken();
+    const { data, error } = await this.sb.auth.signInWithPassword({ email, password: pass, options: { captchaToken } }).finally(() => this.resetCaptcha());
     if (error) throw error;
     await this.afterLogin(data.user);
   },
 
   async resetPassword(email) {
-    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    const captchaToken = this.captchaToken();
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname, captchaToken }).finally(() => this.resetCaptcha());
     if (error) throw error;
   },
   async setNewPassword(pass) {
+    if (String(pass || '').length < MIN_PASS) throw new Error(`A senha precisa ter pelo menos ${MIN_PASS} caracteres.`);
     const { error } = await this.sb.auth.updateUser({ password: pass });
     if (error) throw error;
     this.recovering = false;
@@ -194,8 +247,11 @@ const Online = {
     const cloud = [null, null, null];
     let cloudP = null;
     for (const r of data || []) {
-      if (r.slot === PROFILE_SLOT) cloudP = r.data;
-      else if (r.slot >= 1 && r.slot <= 3 && r.data && r.data.cls) cloud[r.slot - 1] = r.data;
+      let d = null;
+      try { d = U.cleanData(r.data); } catch (e) { console.warn('[online] save da nuvem ignorado', e); }
+      if (!d || typeof d !== 'object') continue;
+      if (r.slot === PROFILE_SLOT) cloudP = d;
+      else if (r.slot >= 1 && r.slot <= 3 && d.cls) cloud[r.slot - 1] = d;
     }
     const pick = this.pickProfile(Game.profile, cloudP, cloud.filter(x => x && x.stats), uid);
     if (pick.backup) {
