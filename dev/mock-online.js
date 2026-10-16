@@ -33,7 +33,11 @@
     },
     async signOut() { session = null; listeners.forEach(f => f('SIGNED_OUT', null)); return { error: null }; },
     async resetPasswordForEmail() { return { error: null }; },
-    async updateUser() { return { error: null }; },
+    async updateUser({ password } = {}) {
+      if (!session) return err('Auth session missing!');
+      if (password) { if (password === session.user.password) return err('New password should be different from the old password.'); session.user.password = password; }
+      return { error: null };
+    },
   };
 
   function from(table) {

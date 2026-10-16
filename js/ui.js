@@ -9,6 +9,7 @@ const ICONS = {
   gear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm6.3 3.7-.1-1.8 1.4-1.2-1.4-2.5-1.8.5-1.4-1L10.6 1H7.8l-.4 1.9-1.5.9-1.8-.5L2.7 5.8l1.4 1.3v1.8l-1.4 1.2 1.4 2.5 1.8-.5 1.5 1 .4 1.8h2.8l.4-1.9 1.4-.9 1.8.5 1.4-2.5z"/></svg>',
 };
 
+const DISCORD_URL = 'https://discord.gg/c9T9Xbyt';
 const TABS = [['equip', 'Herói'], ['talents', 'Talentos'], ['hall', 'Salão'], ['train', 'Treino'], ['forge', 'Forja'], ['asc', 'Ascensão'], ['ach', 'Conquistas']];
 
 const UI = {
@@ -39,6 +40,7 @@ const UI = {
     const el = this.$('title-screen');
     el.classList.remove('hidden');
     const P = Game.profile || Game.loadProfile();
+    Game.syncExclFound();
     const slots = [1, 2, 3].map(n => Game.peekSave(n));
     if (!this.selSlot || slots[this.selSlot - 1]) this.selSlot = Game.freeSlot();
     const un = this.titleUnlocks();
@@ -47,10 +49,11 @@ const UI = {
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
     h += `<div class="ts-logo"><img class="ts-icon" src="img/icon-192.png" alt=""><h1>OverLevelGame</h1></div>`;
     h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte, até quando você não está olhando.</div>`;
+    h += `<div class="ts-community"><a class="btn small discord" href="${DISCORD_URL}" target="_blank" rel="noopener noreferrer">💬 Discord da OverLevel</a><span>Novidades, dúvidas e o placar com a galera.</span></div>`;
     if (Online.enabled) {
       const name = Online.profile ? U.esc(Online.profile.name) : '';
       h += `<div class="ts-account">${!Online.ready ? '<span>Conectando ao servidor…</span>'
-        : Online.loggedIn ? `<span>👤 <b>${name}</b> · ☁ perfil e slots salvos na nuvem</span><button class="btn small" id="ts-board">🏆 Placar</button><button class="btn small ghost" id="ts-logout">Sair da conta</button>`
+        : Online.loggedIn ? `<span>👤 <b>${name}</b> · ☁ perfil e slots salvos na nuvem</span><button class="btn small" id="ts-board">🏆 Placar</button><button class="btn small" id="ts-pass">🔑 Trocar senha</button><button class="btn small ghost" id="ts-logout">Sair da conta</button>`
         : `<span>Entre com uma conta para salvar na nuvem e aparecer no placar.</span><button class="btn small gold" id="ts-login">Entrar / Criar conta</button><button class="btn small" id="ts-board">🏆 Placar</button>`}</div>`;
       if (Online.error) h += `<div class="ts-warn">${U.esc(Online.error)}</div>`;
     }
@@ -90,6 +93,19 @@ const UI = {
     h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(U.pick(HERO_NAMES))}" placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório">Sortear</button></div>`;
     h += `<label class="ts-hc"><input type="checkbox" id="ts-relax"><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
     if ((P.soulUpg.head || 0) > 0) h += `<label class="ts-hc ts-zero"><input type="checkbox" id="ts-zero"><div><b>Começar da zona 1</b><span>Ignora o Atalho Astral e começa a jornada do início.</span></div></label>`;
+    const found = Object.keys(P.exclFound || {}).filter(id => EXCLUSIVES[id]);
+    if (found.length) {
+      h += `<div class="ts-excl"><div class="ts-h">Armas exclusivas <span>${found.length}/${Object.keys(EXCLUSIVES).length} encontradas</span></div><div class="ex-chips">`;
+      for (const id of found) h += `<span class="ex-chip"><img src="${Sprites.itemUrl({ sprite: EXCLUSIVES[id].sprite, rarity: EXCL_RARITY, excl: id, matColor: '#ffffff' })}" alt=""><b class="c7">${EXCLUSIVES[id].name}</b></span>`;
+      h += '</div>';
+      for (const slot of EXCL_SLOTS) {
+        const opts = found.filter(id => EXCLUSIVES[id].slot === slot);
+        if (!opts.length) continue;
+        const cur = Game.exclChoice(slot);
+        h += `<label class="ex-row"><span>${slot === 'weapon' ? 'Arma principal' : 'Arma secundária'}</span><select class="sel" data-excl="${slot}"><option value="">Nenhuma (começar sem)</option>${opts.map(id => `<option value="${id}" ${cur === id ? 'selected' : ''}>${EXCLUSIVES[id].name}</option>`).join('')}</select></label>`;
+      }
+      h += '<div class="hint" style="margin:6px 0 0">O novo herói começa com o que estiver escolhido aqui. O Baú Arco-Íris nunca repete uma exclusiva que você já encontrou.</div></div>';
+    }
     h += `<div class="ts-start"><button class="btn gold big" id="ts-go" ${full ? 'disabled' : ''}>Começar Jornada</button></div>`;
     if (full) h += '<div class="hint" style="text-align:center">Os 3 slots estão ocupados. Continue um deles, ascenda ou apague um para criar outro herói.</div>';
     h += '</div></div>';
@@ -114,6 +130,8 @@ const UI = {
     el.querySelectorAll('[data-newslot]').forEach(b => b.onclick = () => { Sfx.init(); Sfx.play('click'); this.selSlot = +b.dataset.newslot; this.showTitle(); });
     if (this.$('ts-login')) this.$('ts-login').onclick = () => { Sfx.init(); this.loginModal('in'); };
     if (this.$('ts-board')) this.$('ts-board').onclick = () => { Sfx.init(); this.boardModal(); };
+    if (this.$('ts-pass')) this.$('ts-pass').onclick = () => { Sfx.init(); this.changePasswordModal(); };
+    el.querySelectorAll('[data-excl]').forEach(sel => sel.onchange = () => { Game.setExclChoice(sel.dataset.excl, sel.value || null); Sfx.play('click'); });
     if (this.$('ts-logout')) this.$('ts-logout').onclick = () => this.confirm('Sair da conta', 'Seu perfil e seus heróis continuam guardados na nuvem e voltam quando você entrar de novo. As cópias deste navegador serão removidas.', 'Sair da conta', async () => { await Online.signOut(); this.showTitle(); });
     const dice = this.$('ts-dice');
     if (dice) dice.onclick = () => { this.$('ts-name').value = U.pick(HERO_NAMES); };
@@ -1059,6 +1077,26 @@ const UI = {
     setTimeout(() => { const f = m.querySelector(up ? '#lg-name' : '#lg-email'); if (f) f.focus(); }, 30);
   },
 
+  changePasswordModal() {
+    if (!Online.loggedIn) { this.notice('Entre na conta para trocar a senha.', 'var(--red)'); return; }
+    const body = `<label class="lg-f"><span>Senha atual</span><input id="cp-cur" type="password" autocomplete="current-password"></label>
+      <label class="lg-f"><span>Nova senha (mínimo ${MIN_PASS} caracteres)</span><input id="cp-new" type="password" autocomplete="new-password"></label>
+      <label class="lg-f"><span>Repita a nova senha</span><input id="cp-new2" type="password" autocomplete="new-password"></label>
+      ${Online.captchaOn() ? '<div class="lg-captcha" id="cp-captcha"></div>' : ''}
+      <div class="lg-msg" id="cp-msg"></div>`;
+    const m = this.modal('Trocar senha', body, [{ label: 'Cancelar' }, { label: 'Salvar nova senha', cls: 'gold', close: false, fn: async (bg) => {
+      const msg = bg.querySelector('#cp-msg'), btn = bg.querySelector('.modal-f .gold');
+      const cur = bg.querySelector('#cp-cur').value, nw = bg.querySelector('#cp-new').value, nw2 = bg.querySelector('#cp-new2').value;
+      if (!cur || !nw) { msg.style.color = 'var(--red)'; msg.textContent = 'Preencha a senha atual e a nova.'; return; }
+      if (nw !== nw2) { msg.style.color = 'var(--red)'; msg.textContent = 'As duas senhas novas não são iguais.'; return; }
+      btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'Salvando…';
+      try { await Online.changePassword(cur, nw); this.closeModal(); this.notice('Senha alterada!', 'var(--green)'); }
+      catch (e) { msg.style.color = 'var(--red)'; msg.textContent = Online.errText(e); btn.disabled = false; }
+    } }]);
+    Online.mountCaptcha(m.querySelector('#cp-captcha'));
+    setTimeout(() => { const f = m.querySelector('#cp-cur'); if (f) f.focus(); }, 30);
+  },
+
   newPasswordModal() {
     const m = this.modal('Nova senha', `<label class="lg-f"><span>Digite a nova senha (mínimo ${MIN_PASS} caracteres)</span><input id="np-pass" type="password" autocomplete="new-password"></label><div class="lg-msg" id="np-msg"></div>`,
       [{ label: 'Salvar senha', cls: 'gold', close: false, fn: async (bg) => {
@@ -1112,7 +1150,7 @@ const UI = {
       ${tog('autoTalent', 'Talentos automáticos', 'Distribui pontos de talento sozinho')}
       <div class="set-row"><div><div class="l">Salvamento</div><div class="d">Exporte para guardar um backup ou jogar em outro navegador</div></div><div style="display:flex;gap:6px"><button class="btn small" data-x="export">Exportar</button><button class="btn small" data-x="import">Importar</button></div></div>
       ${Online.enabled ? `<div class="set-h">Conta e placar</div>
-      <div class="set-row"><div><div class="l">${Online.loggedIn ? `Conectado como <b>${U.esc(Online.profile.name)}</b>` : 'Sem conta'}</div><div class="d">${Online.loggedIn ? `Os slots são enviados para a nuvem a cada minuto e ao sair.${Online.lastPush ? ' Último envio: ' + new Date(Online.lastPush).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : ''}${Online.error ? ' <span style="color:var(--red)">' + U.esc(Online.error) + '</span>' : ''}` : 'Saia para o menu e entre com uma conta para salvar na nuvem e entrar no placar.'}</div></div><div style="display:flex;gap:6px">${Online.loggedIn ? '<button class="btn small" data-x="sync">Salvar agora</button>' : ''}<button class="btn small" data-x="board">🏆 Placar</button></div></div>` : ''}
+      <div class="set-row"><div><div class="l">${Online.loggedIn ? `Conectado como <b>${U.esc(Online.profile.name)}</b>` : 'Sem conta'}</div><div class="d">${Online.loggedIn ? `Os slots são enviados para a nuvem a cada minuto e ao sair.${Online.lastPush ? ' Último envio: ' + new Date(Online.lastPush).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.' : ''}${Online.error ? ' <span style="color:var(--red)">' + U.esc(Online.error) + '</span>' : ''}` : 'Saia para o menu e entre com uma conta para salvar na nuvem e entrar no placar.'}</div></div><div style="display:flex;gap:6px">${Online.loggedIn ? '<button class="btn small" data-x="sync">Salvar agora</button><button class="btn small" data-x="pass">Trocar senha</button>' : ''}<button class="btn small" data-x="board">🏆 Placar</button></div></div>` : ''}
       <div class="set-row"><div><div class="l">Sair para o menu</div><div class="d">Salva e volta para a tela de slots (até 3 heróis)</div></div><button class="btn small" data-x="exit">Sair</button></div>
       <div class="set-row"><div><div class="l" style="color:var(--red)">Apagar este slot</div><div class="d">Apaga o herói do slot ${Game.slot} e todo o progresso dele (irreversível)</div></div><button class="btn small danger" data-x="reset">Apagar</button></div>`;
     const m = this.modal('Configurações', body, [{ label: 'Fechar', cls: 'gold' }]);
@@ -1135,6 +1173,8 @@ const UI = {
         this.modal('Importar progresso', `<p class="hint">Cole o código exportado. O perfil e os 3 slots deste navegador serão substituídos.</p><textarea id="imp-code"></textarea>`, [{ label: 'Cancelar' }, { label: 'Importar', cls: 'gold', close: false, fn: (bg) => {
           try { Game.importSave(bg.querySelector('#imp-code').value); location.reload(); } catch (err) { this.notice('Código inválido.', 'var(--red)'); }
         } }]);
+      } else if (x.dataset.x === 'pass') {
+        this.changePasswordModal();
       } else if (x.dataset.x === 'sync') {
         Game.save(); Online.scoreDirty = true;
         Online.flush().then(() => this.notice(Online.error ? U.esc(Online.error) : '☁ Progresso enviado para a nuvem!', Online.error ? 'var(--red)' : 'var(--green)'));

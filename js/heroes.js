@@ -6,12 +6,15 @@ const HERO_RARITY = [
   { name: 'Rara', color: '#4fa3ff', mult: 1.27, spMult: 1.09 },
   { name: 'Épica', color: '#b874ff', mult: 1.45, spMult: 1.15 },
   { name: 'Lendária', color: '#ff9a2e', mult: 1.7, spMult: 1.22 },
+  { name: 'Mítica', color: '#ff4d6d', mult: 1.85, spMult: 1.26 },
   { name: 'Celestial', color: '#7af0ff', mult: 2.0, spMult: 1.3 },
 ];
 
 STAT_INFO.dr = { name: 'Redução de Dano', pct: true };
 STAT_INFO.regenPct = { name: 'Regeneração (% Vida/s)', pct: true };
 
+const HERO_MYTHIC = 5;
+const HERO_CELESTIAL = 6;
 const P = v => `${Math.round(v * 100)}%`;
 
 const WEAPON_BASES = {
@@ -175,6 +178,16 @@ const WEAPON_BASES = {
     { id: 'sn_sword', name: 'Espada de Aprendiz', g: 'f', mat: 'metal', sprite: 'i_sword', atk: 1.08, spd: 0 },
     { id: 'sn_staff', name: 'Cajado de Iniciante', g: 'm', mat: 'wood', sprite: 'i_staff', atk: 1.12, spd: -4 },
   ],
+  kagerou: [
+    { id: 'kg_katana', name: 'Katana Flamejante', g: 'f', mat: 'metal', sprite: 'i_katana', atk: 1.08, spd: 4 },
+    { id: 'kg_fuuma', name: 'Shuriken Fuuma', g: 'f', mat: 'metal', sprite: 'i_shuriken', atk: 1.05, spd: 0, extra: { crit: 2 } },
+    { id: 'kg_kunai', name: 'Kunais Gêmeas', g: 'fp', mat: 'metal', sprite: 'i_dagger', atk: 0.9, spd: 12 },
+  ],
+  rebellion: [
+    { id: 'rb_revolver', name: 'Revólver de Platina', g: 'm', mat: 'metal', sprite: 'i_gun', atk: 1.0, spd: 6 },
+    { id: 'rb_gatling', name: 'Metralhadora', g: 'f', mat: 'metal', sprite: 'i_gun', atk: 1.1, spd: 4 },
+    { id: 'rb_launcher', name: 'Lança-Granadas', g: 'm', mat: 'metal', sprite: 'i_gun', atk: 1.25, spd: -10 },
+  ],
 };
 const WEAPON_INDEX = {};
 for (const c in WEAPON_BASES) for (const b of WEAPON_BASES[c]) WEAPON_INDEX[b.id] = b;
@@ -307,6 +320,8 @@ const RELICS = {
   staremperor: { name: 'Manoplas do Firmamento', per: { atkSpd: 3, critDmg: 8 }, powers: ['thunder', 'echo'] },
   soulreaper: { name: 'Foice do Ceifador Eterno', per: { lifesteal: 0.6, minion: 10 }, powers: ['vampire', 'executioner'] },
   supernovice: { name: 'Faca do Eterno Iniciante', per: { goldPct: 8, xpPct: 8 }, powers: ['echo', 'midas'] },
+  kagerou: { name: 'Katana do Dragão Fantasma', per: { crit: 2, critDmg: 7 }, powers: ['executioner', 'thunder'] },
+  rebellion: { name: 'Revólver do Fim da Lei', per: { critDmg: 9, crit: 1 }, powers: ['thunder', 'berserk'] },
 };
 
 const CLASSES = {
@@ -527,7 +542,7 @@ const CLASSES = {
     skills: ['sg_sun', 'sg_moon', 'sg_comfort', 'sg_star'], passives: ['sg_heat', 'sg_grace', 'sg_shine', 'sg_union'],
   },
   runeknight: {
-    name: 'Cavaleiro Rúnico', title: 'Guardião das Runas', color: '#8ad8ff', rarity: 4, unlock: { t: 'class', cls: 'knight', stat: 'best', goal: 130, asc: 15 }, armor: 'plate',
+    name: 'Cavaleiro Rúnico', title: 'Guardião das Runas', color: '#8ad8ff', rarity: 5, unlock: { t: 'class', cls: 'knight', stat: 'best', goal: 150, asc: 18 }, armor: 'plate',
     desc: 'Cavaleiro que grava runas antigas na lâmina: explosões rúnicas, escudos de pedra e o sopro do dragão.',
     sprite: 'h_runeknight',
     base: { hp: 175, atk: 12.5, def: 7, atkSpd: 1.0, crit: 7, critDmg: 165, dodge: 2, block: 8, lifesteal: 2, range: 1.5 },
@@ -536,7 +551,7 @@ const CLASSES = {
     skills: ['rk_ignite', 'rk_stone', 'rk_storm', 'rk_dragon'], passives: ['rk_ward', 'rk_blade', 'rk_life', 'rk_fury'],
   },
   archbishop: {
-    name: 'Arcebispo', title: 'Voz dos Céus', color: '#fff2a0', rarity: 4, unlock: { t: 'stat', stat: 'shrines', goal: 800, asc: 15 }, armor: 'cloth',
+    name: 'Arcebispo', title: 'Voz dos Céus', color: '#fff2a0', rarity: 5, unlock: { t: 'stat', stat: 'shrines', goal: 1000, asc: 19 }, armor: 'cloth',
     desc: 'O mais alto sacerdote: luz sagrada que fere os monstros, curas poderosas e o julgamento do Judex.',
     sprite: 'h_archbishop', proj: 'holy',
     base: { hp: 130, atk: 11, def: 5, atkSpd: 0.9, crit: 6, critDmg: 160, dodge: 3, block: 2, lifesteal: 2, range: 4.2 },
@@ -545,7 +560,7 @@ const CLASSES = {
     skills: ['ab_adoramus', 'ab_heal', 'ab_lauda', 'ab_judex'], passives: ['ab_faith', 'ab_light', 'ab_grace', 'ab_prayer'],
   },
   shura: {
-    name: 'Shura', title: 'Punho do Asura', color: '#ff6a3a', rarity: 4, unlock: { t: 'class', cls: 'monk', stat: 'best', goal: 140, asc: 16 }, armor: 'monk',
+    name: 'Shura', title: 'Punho do Asura', color: '#ff6a3a', rarity: 5, unlock: { t: 'class', cls: 'monk', stat: 'best', goal: 160, asc: 20 }, armor: 'monk',
     desc: 'Monge que abriu todos os chakras. Socos em sequência e o devastador Punho do Asura.',
     sprite: 'h_shura',
     base: { hp: 150, atk: 12, def: 4, atkSpd: 1.45, crit: 10, critDmg: 175, dodge: 10, block: 0, lifesteal: 2, range: 1.5 },
@@ -554,7 +569,7 @@ const CLASSES = {
     skills: ['sh_tiger', 'sh_chakra', 'sh_rampage', 'sh_asura'], passives: ['sh_iron', 'sh_fury', 'sh_wind', 'sh_vital'],
   },
   guillotine: {
-    name: 'Cruz Sombria', title: 'Assassino Supremo', color: '#b04aff', rarity: 4, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 140, asc: 16 }, armor: 'leather',
+    name: 'Cruz Sombria', title: 'Assassino Supremo', color: '#b04aff', rarity: 5, unlock: { t: 'class', cls: 'rogue', stat: 'best', goal: 160, asc: 20 }, armor: 'leather',
     desc: 'O assassino perfeito: venenos mortais, furtividade avançada e lâminas que giram como uma guilhotina.',
     sprite: 'h_guillotine',
     base: { hp: 125, atk: 11, def: 3, atkSpd: 1.6, crit: 18, critDmg: 190, dodge: 12, block: 0, lifesteal: 1, range: 1.5 },
@@ -563,7 +578,7 @@ const CLASSES = {
     skills: ['gc_cross', 'gc_venom', 'gc_hide', 'gc_rolling'], passives: ['gc_lethal', 'gc_toxin', 'gc_shadow', 'gc_exec'],
   },
   dragonknight: {
-    name: 'Cavaleiro Dragão', title: 'Montador de Dragões', color: '#ff5a3a', rarity: 5, unlock: { t: 'stat', stat: 'maxZone', goal: 260, asc: 25 }, armor: 'plate',
+    name: 'Cavaleiro Dragão', title: 'Montador de Dragões', color: '#ff5a3a', rarity: 6, unlock: { t: 'stat', stat: 'maxZone', goal: 260, asc: 25 }, armor: 'plate',
     desc: 'Cavaleiro que fez pacto com os dragões: sopro flamejante, escamas impenetráveis e dragonetes aliados.',
     sprite: 'h_dragonknight',
     base: { hp: 190, atk: 14, def: 8, atkSpd: 1.0, crit: 8, critDmg: 175, dodge: 3, block: 8, lifesteal: 3, range: 1.6 },
@@ -572,7 +587,7 @@ const CLASSES = {
     skills: ['dk_breath', 'dk_whelp', 'dk_scales', 'dk_dive'], passives: ['dk_heart', 'dk_fury', 'dk_hide', 'dk_roar'],
   },
   staremperor: {
-    name: 'Imperador Estelar', title: 'Soberano dos Astros', color: '#ffe08a', rarity: 5, unlock: { t: 'class', cls: 'stargladiator', stat: 'best', goal: 220, asc: 25 }, armor: 'monk',
+    name: 'Imperador Estelar', title: 'Soberano dos Astros', color: '#ffe08a', rarity: 6, unlock: { t: 'class', cls: 'stargladiator', stat: 'best', goal: 220, asc: 25 }, armor: 'monk',
     desc: 'O Lutador Estelar que governa o céu: explosões solares, eclipses e uma chuva de estrelas.',
     sprite: 'h_staremperor',
     base: { hp: 165, atk: 13.5, def: 5, atkSpd: 1.4, crit: 12, critDmg: 180, dodge: 10, block: 0, lifesteal: 2, range: 1.5 },
@@ -581,7 +596,7 @@ const CLASSES = {
     skills: ['se_solar', 'se_eclipse', 'se_guard', 'se_rain'], passives: ['se_sun', 'se_moon', 'se_star', 'se_cosmos'],
   },
   soulreaper: {
-    name: 'Ceifador de Almas', title: 'Ceifeiro do Além', color: '#9a7aff', rarity: 5, unlock: { t: 'class', cls: 'soullinker', stat: 'best', goal: 220, asc: 25 }, armor: 'cloth',
+    name: 'Ceifador de Almas', title: 'Ceifeiro do Além', color: '#9a7aff', rarity: 6, unlock: { t: 'class', cls: 'soullinker', stat: 'best', goal: 220, asc: 25 }, armor: 'cloth',
     desc: 'O Espiritualista que atravessou para o outro lado: foices espirituais, almas errantes e a Ceifa Final.',
     sprite: 'h_soulreaper', proj: 'spirit',
     base: { hp: 140, atk: 13.5, def: 4, atkSpd: 0.95, crit: 8, critDmg: 175, dodge: 4, block: 0, lifesteal: 3, range: 4.2 },
@@ -590,13 +605,31 @@ const CLASSES = {
     skills: ['sr_scythe', 'sr_souls', 'sr_curse', 'sr_reap'], passives: ['sr_pact', 'sr_master', 'sr_power', 'sr_fatal'],
   },
   supernovice: {
-    name: 'Super Aprendiz', title: 'O Eterno Iniciante', color: '#ff9ad8', rarity: 5, unlock: { t: 'stat', stat: 'ascensions', goal: 40, asc: 30 }, armor: 'leather',
+    name: 'Super Aprendiz', title: 'O Eterno Iniciante', color: '#ff9ad8', rarity: 6, unlock: { t: 'stat', stat: 'ascensions', goal: 40, asc: 30 }, armor: 'leather',
     desc: 'Nunca escolheu um caminho e por isso aprendeu todos. Começa fraco e cresce mais que qualquer outro.',
     sprite: 'h_supernovice',
     base: { hp: 120, atk: 10, def: 4, atkSpd: 1.1, crit: 8, critDmg: 160, dodge: 5, block: 3, lifesteal: 1, range: 1.5 },
     ranged: false, bars: { Vida: 3, Dano: 3, Defesa: 3, Velocidade: 3, Alcance: 1 },
     innate: { name: 'Potencial Infinito', desc: '+2,2% de Dano, +1,2% de Vida, +0,8% de Armadura e +0,5% de Ouro e de XP por nível. Habilidades têm 15% de chance de recarregar na hora.', per: { dmgPct: 2.2, hpPct: 1.2, defPct: 0.8, goldPct: 0.5, xpPct: 0.5 }, flags: ['encore'] },
     skills: ['sn_bash', 'sn_fire', 'sn_heal', 'sn_angel'], passives: ['sn_luck', 'sn_talent', 'sn_persist', 'sn_learn'],
+  },
+  kagerou: {
+    name: 'Kagerou', title: 'Mestre Ninja das Chamas', color: '#ff5a8a', rarity: 4, unlock: { t: 'class', cls: 'ninja', stat: 'best', goal: 110, asc: 13 }, armor: 'leather',
+    desc: 'O Ninja que dominou as chamas fantasmas: shurikens cruzadas, ilusões e cortes em sequência.',
+    sprite: 'h_kagerou',
+    base: { hp: 135, atk: 11, def: 3, atkSpd: 1.55, crit: 16, critDmg: 185, dodge: 14, block: 0, lifesteal: 1, range: 1.5 },
+    ranged: false, bars: { Vida: 3, Dano: 5, Defesa: 2, Velocidade: 5, Alcance: 2 },
+    innate: { name: 'Ninjutsu Supremo', desc: '+1,3% de Dano, +0,15% de Chance Crítica e +0,1% de Esquiva por nível. 10% de chance ao acertar de liberar uma explosão arcana.', per: { dmgPct: 1.3, crit: 0.15, dodge: 0.1 }, flags: ['surge'] },
+    skills: ['kg_cross', 'kg_illusion', 'kg_flame', 'kg_slash'], passives: ['kg_speed', 'kg_instinct', 'kg_feet', 'kg_blade'],
+  },
+  rebellion: {
+    name: 'Rebelde', title: 'Pistoleiro Fora da Lei', color: '#c8c8d8', rarity: 4, unlock: { t: 'class', cls: 'gunslinger', stat: 'best', goal: 110, asc: 14 }, armor: 'leather',
+    desc: 'O Pistoleiro que virou lenda: tiros explosivos, metralhadora e a Fúria do Dragão.',
+    sprite: 'h_rebellion', proj: 'bullet',
+    base: { hp: 125, atk: 13, def: 3, atkSpd: 1.2, crit: 12, critDmg: 190, dodge: 6, block: 0, lifesteal: 1, range: 5 },
+    ranged: true, bars: { Vida: 3, Dano: 5, Defesa: 2, Velocidade: 4, Alcance: 5 },
+    innate: { name: 'Fora da Lei', desc: '+1,3% de Dano, +0,1% de Chance Crítica e +0,7% de Dano Crítico por nível. O primeiro golpe em cada inimigo causa dano dobrado.', per: { dmgPct: 1.3, crit: 0.1, critDmg: 0.7 }, flags: ['charge'] },
+    skills: ['rb_blast', 'rb_gatling', 'rb_altar', 'rb_dragon'], passives: ['rb_aim', 'rb_silver', 'rb_reload', 'rb_caliber'],
   },
 };
 const CLASS_ORDER = Object.keys(CLASSES).sort((a, b) => CLASSES[a].rarity - CLASSES[b].rarity);
@@ -1282,6 +1315,46 @@ const SKILLS = {
   sp_sunray: { name: 'Raio de Sol', type: 'chain', racial: true, cd: 10, icon: 'sk_holy', color: '#ffd04a',
     mult: r => 2.6 + 0.26 * (r - 1), jumps: r => 5,
     desc(r) { return `Um raio de sol que salta entre 6 inimigos com <b>${P(this.mult(r))}</b> de dano.`; } },
+  kg_cross: { name: 'Shuriken Cruzada', type: 'multi', unlock: 1, cd: 6, max: 10, icon: 'sk_multi', color: '#ff8aaa',
+    proj: 'shuriken', count: r => 4 + Math.floor(r / 4), mult: r => 1.2 + 0.12 * (r - 1),
+    desc(r) { return `Arremessa <b>${this.count(r)}</b> shurikens em inimigos diferentes com <b>${P(this.mult(r))}</b> de dano.`; } },
+  kg_illusion: { name: 'Sombra Ilusória', type: 'buff', unlock: 5, cd: 18, max: 10, icon: 'sk_cloak', color: '#ff5a8a',
+    dur: 5, buff: r => ({ dodge: 45, dmg: 0.3 + 0.03 * (r - 1) }),
+    desc(r) { return `Ilusões confundem os inimigos: +45% de Esquiva e <b>+${P(this.buff(r).dmg)}</b> de dano por 5s.`; } },
+  kg_flame: { name: 'Chamas Fantasmas', type: 'plague', unlock: 12, cd: 10, max: 10, icon: 'sk_fire', color: '#ff5a8a',
+    radius: 2.4, dps: r => 1 + 0.1 * (r - 1), dur: 5, dotColor: '#ff5a8a',
+    desc(r) { return `Chamas rosadas queimam a área: <b>${P(this.dps(r))}</b> do dano por segundo durante 5s.`; } },
+  kg_slash: { name: 'Corte Cruzado Mortal', type: 'strike', unlock: 25, cd: 22, max: 10, icon: 'sk_dagger', color: '#ff3a6a', ult: true,
+    hits: 4, forceCrit: true, mult: r => 2 + 0.2 * (r - 1),
+    desc(r) { return `Quatro cortes críticos garantidos, cada um com <b>${P(this.mult(r))}</b> de dano.`; } },
+  kg_speed: pas('Velocidade Oculta', 3, 'sk_wind', '#7ad070', 'atkSpd', 3),
+  kg_instinct: pas('Instinto Assassino', 8, 'sk_star', '#ffd04a', 'crit', 2),
+  kg_feet: pas('Pés de Sombra', 15, 'sk_cloak', '#8a5aff', 'dodge', 2),
+  kg_blade: pas('Lâmina Flamejante', 20, 'sk_fire', '#ff8a2a', 'dmgPct', 6),
+
+  rb_blast: { name: 'Tiro Explosivo', type: 'proj', unlock: 1, cd: 5, max: 10, icon: 'sk_fire', color: '#ffb02a',
+    proj: 'bullet', splash: 1.4, mult: r => 2.8 + 0.28 * (r - 1), burn: 0.3,
+    desc(r) { return `Uma bala explosiva: <b>${P(this.mult(r))}</b> de dano em área e queimadura.`; } },
+  rb_gatling: { name: 'Metralhadora', type: 'multi', unlock: 5, cd: 8, max: 10, icon: 'sk_multi', color: '#ffe8a0',
+    sameTarget: true, proj: 'bullet', count: r => 6 + Math.floor(r / 3), mult: r => 0.6 + 0.06 * (r - 1),
+    desc(r) { return `Uma rajada de <b>${this.count(r)}</b> tiros no mesmo alvo com <b>${P(this.mult(r))}</b> de dano cada.`; } },
+  rb_altar: { name: 'Altar de Platina', type: 'buff', unlock: 12, cd: 18, max: 10, icon: 'sk_coin', color: '#d8d8e8',
+    dur: 7, buff: r => ({ dmg: 0.3 + 0.03 * (r - 1), crit: 15, atkSpd: 0.15 }),
+    desc(r) { return `Moedas de platina abençoam as armas: <b>+${P(this.buff(r).dmg)}</b> de dano, +15% de crítico e +15% de Vel. de Ataque por 7s.`; } },
+  rb_dragon: { name: 'Fúria do Dragão', type: 'rain', unlock: 25, cd: 26, max: 10, icon: 'sk_meteor', color: '#ff8a2a', ult: true,
+    kind: 'bombs', radius: 3, ticks: 5, mult: r => 2.4 + 0.24 * (r - 1),
+    desc(r) { return `Cinco granadas explodem na área, cada uma com <b>${P(this.mult(r))}</b> de dano.`; } },
+  rb_aim: pas('Mira Fria', 3, 'sk_eye', '#ffd04a', 'crit', 1.5),
+  rb_silver: pas('Bala de Prata', 8, 'sk_star', '#ff5aa0', 'critDmg', 12),
+  rb_reload: pas('Recarga Veloz', 15, 'sk_wind', '#7ad070', 'atkSpd', 3),
+  rb_caliber: pas('Calibre de Guerra', 20, 'sk_sword', '#ff7a4a', 'dmgPct', 6),
+
+  sp_foxfire: { name: 'Chamas das Nove Caudas', type: 'multi', racial: true, cd: 10, icon: 'sk_fire', color: '#ff9a3a',
+    proj: 'fire', count: r => 5 + Math.floor(r / 3), mult: r => 1.1 + 0.11 * (r - 1),
+    desc(r) { return `Lança <b>${this.count(r)}</b> fogos-fátuos sobre os inimigos, cada um com <b>${P(this.mult(r))}</b> de dano.`; } },
+  sp_skyblow: { name: 'Golpe do Céu', type: 'strike', racial: true, cd: 12, icon: 'sk_holy', color: '#ffe680',
+    mult: r => 3.5 + 0.35 * (r - 1), stun: 1, stunDur: 1.2,
+    desc(r) { return `Um golpe gigante e iluminado: <b>${P(this.mult(r))}</b> de dano e atordoa por 1,2s.`; } },
 };
 for (const id in SKILLS) { if (SKILLS[id].racial) { SKILLS[id].unlock = 1; SKILLS[id].max = 10; } }
 
@@ -1464,11 +1537,11 @@ const SPECIES = {
     desc: 'Elefantes humanoides sábios e pacíficos, de força descomunal.',
     traits: [['Memória de Elefante', '+15% de Experiência'], ['Couro Grosso', '+25% de Vida e +15% de Armadura'], ['Pisoteio', 'Habilidade ativa']],
     stats: { xpPct: 15, hpPct: 25, defPct: 15 }, skill: 'sp_stomp' },
-  aesir: { name: 'Aesir', rarity: 4, unlock: { t: 'stat', stat: 'bosses', goal: 1500, asc: 15 }, skin: '#f4d8c0', hair: '#e8c060', eyes: '#5ab0ff', cloak: '#3a5a9a', acc: ['beard'], accColor: '#e8c060',
+  aesir: { name: 'Aesir', rarity: 5, unlock: { t: 'stat', stat: 'bosses', goal: 1800, asc: 18 }, skin: '#f4d8c0', hair: '#e8c060', eyes: '#5ab0ff', cloak: '#3a5a9a', acc: ['beard'], accColor: '#e8c060',
     desc: 'Guerreiros nórdicos dos salões dos deuses, honrados e belicosos.',
     traits: [['Sangue de Asgard', '+30% de Dano e +20% de Vida'], ['Honra em Batalha', '+15% de Dano a Chefes'], ['Martelo do Trovão', 'Habilidade ativa']],
     stats: { dmgPct: 30, hpPct: 20, bossDmg: 15 }, skill: 'sp_thunder' },
-  half_demon: { name: 'Semidemônio', rarity: 4, unlock: { t: 'stat', stat: 'kills', goal: 150000, asc: 16 }, skin: '#a83a4a', hair: '#1a0a1a', eyes: '#ffd04a', cloak: '#2a0a1a', acc: ['bighorns', 'tail', 'wings'], accColor: '#3a0a1a',
+  half_demon: { name: 'Semidemônio', rarity: 5, unlock: { t: 'stat', stat: 'kills', goal: 150000, asc: 20 }, skin: '#a83a4a', hair: '#1a0a1a', eyes: '#ffd04a', cloak: '#2a0a1a', acc: ['bighorns', 'tail', 'wings'], accColor: '#3a0a1a',
     desc: 'Filhos de demônios: criam tentáculos de sombra e queimam quem os fere.',
     traits: [['Chama Infernal', 'Quem te ataca tem 20% de chance de pegar fogo'], ['Poder Abissal', '+35% de Dano e +10% de Dano Crítico'], ['Tentáculos Sombrios', 'Habilidade ativa']],
     stats: { dmgPct: 35, critDmg: 10 }, flags: ['hellish'], skill: 'sp_tentacles' },
@@ -1476,22 +1549,30 @@ const SPECIES = {
     desc: 'Mulheres-pássaro que dominam o vento e atacam do alto.',
     traits: [['Voo', '+20% de Vel. de Movimento e +10% de Esquiva'], ['Rajadas de Vento', '+25% de Vel. de Ataque'], ['Tempestade de Penas', 'Habilidade ativa']],
     stats: { atkSpd: 25, moveSpd: 20, dodge: 10 }, flags: ['flying'], skill: 'sp_feathers' },
-  dohtroh: { name: 'Dohtroh', rarity: 5, unlock: { t: 'stat', stat: 'lordsKilled', goal: 1000, asc: 25 }, skin: '#d8b070', hair: '#c83a2a', eyes: '#ff8a2a', cloak: '#8a1a1a', acc: ['crest', 'tail'], accColor: '#c83a2a',
+  dohtroh: { name: 'Dohtroh', rarity: 6, unlock: { t: 'stat', stat: 'lordsKilled', goal: 1000, asc: 25 }, skin: '#d8b070', hair: '#c83a2a', eyes: '#ff8a2a', cloak: '#8a1a1a', acc: ['crest', 'tail'], accColor: '#c83a2a',
     desc: 'Dragões ancestrais renascidos em corpo humano. A alma dracônica ainda cospe fogo e gelo.',
     traits: [['Alma de Dragão', '+50% de Dano, +40% de Vida e 8% menos dano recebido'], ['Escamas Ocultas', '+25% de Armadura e golpes que incendeiam'], ['Sopro Duplo', 'Habilidade ativa de fogo e gelo']],
     stats: { dmgPct: 50, hpPct: 40, dr: 8, defPct: 25 }, flags: ['burnHit'], skill: 'sp_dualbreath' },
-  seraph: { name: 'Serafim', rarity: 5, unlock: { t: 'stat', stat: 'shrines', goal: 3000, asc: 25 }, skin: '#fff0e0', hair: '#fff2a0', eyes: '#7af0ff', cloak: '#e8e0ff', acc: ['halo', 'wings'], accColor: '#ffffff',
+  seraph: { name: 'Serafim', rarity: 6, unlock: { t: 'stat', stat: 'shrines', goal: 3000, asc: 25 }, skin: '#fff0e0', hair: '#fff2a0', eyes: '#7af0ff', cloak: '#e8e0ff', acc: ['halo', 'wings'], accColor: '#ffffff',
     desc: 'Descendentes dos anjos: voam com asas de luz e curam com um toque.',
     traits: [['Asas de Luz', 'Voa pelo campo de batalha'], ['Graça Angelical', '+40% de Vida, +30% de Dano e regenera 0,5% da Vida por segundo'], ['Mãos Curativas', 'Uma vez por zona, ao cair abaixo de 30% de Vida, cura 35%'], ['Julgamento Celeste', 'Habilidade ativa']],
     stats: { hpPct: 40, dmgPct: 30, regenPct: 0.5 }, flags: ['flying', 'healingHands'], skill: 'sp_judgment' },
-  giant: { name: 'Gigante Primordial', rarity: 5, unlock: { t: 'stat', stat: 'maxZone', goal: 300, asc: 28 }, skin: '#c89a7a', hair: '#8a6a4a', eyes: '#3a2a1a', cloak: '#6a5a4a', acc: ['beard'], accColor: '#8a6a4a',
+  giant: { name: 'Gigante Primordial', rarity: 6, unlock: { t: 'stat', stat: 'maxZone', goal: 300, asc: 28 }, skin: '#c89a7a', hair: '#8a6a4a', eyes: '#3a2a1a', cloak: '#6a5a4a', acc: ['beard'], accColor: '#8a6a4a',
     desc: 'Os primeiros filhos da terra, de força descomunal e passos lentos.',
     traits: [['Força Titânica', '+60% de Dano'], ['Corpo Colossal', '+60% de Vida e +20% de Armadura'], ['Passos Lentos', '15% menos Vel. de Ataque'], ['Terremoto', 'Habilidade ativa']],
     stats: { dmgPct: 60, hpPct: 60, defPct: 20, atkSpd: -15 }, skill: 'sp_quake' },
-  sun_elf: { name: 'Elfo da Luz', rarity: 5, unlock: { t: 'stat', stat: 'celestials', goal: 25, asc: 25 }, skin: '#fff0d0', hair: '#ffe080', eyes: '#ffb02a', cloak: '#e8c040', acc: ['ears', 'halo'], accColor: '#fff0d0',
+  sun_elf: { name: 'Elfo da Luz', rarity: 6, unlock: { t: 'stat', stat: 'celestials', goal: 25, asc: 25 }, skin: '#fff0d0', hair: '#ffe080', eyes: '#ffb02a', cloak: '#e8c040', acc: ['ears', 'halo'], accColor: '#fff0d0',
     desc: 'Elfos abençoados pelo sol, que manipulam a luz e falam com os animais do dia.',
     traits: [['Heliocinese', '+40% de Dano, +15% de Chance Crítica e +30% de Dano Crítico'], ['Luz Cegante', '+15% de Esquiva'], ['Raio de Sol', 'Habilidade ativa']],
     stats: { dmgPct: 40, crit: 15, critDmg: 30, dodge: 15 }, skill: 'sp_sunray' },
+  kitsune: { name: 'Kitsune', rarity: 5, unlock: { t: 'encounter', minZone: 140, biomes: ['jungle', 'celestial'], asc: 19 }, skin: '#f4d8c0', hair: '#ff9a3a', eyes: '#ffd04a', cloak: '#c83a2a', acc: ['catears', 'tail'], accColor: '#ff9a3a',
+    desc: 'Espíritos-raposa de muitas caudas, mestres do fogo e da ilusão.',
+    traits: [['Fogo de Raposa', '+35% de Dano, +15% de Dano Crítico e golpes que incendeiam'], ['Ilusão', '+15% de Esquiva'], ['Chamas das Nove Caudas', 'Habilidade ativa']],
+    stats: { dmgPct: 35, critDmg: 15, dodge: 15 }, flags: ['burnHit'], skill: 'sp_foxfire' },
+  nephilim: { name: 'Nefilim', rarity: 5, unlock: { t: 'stat', stat: 'maxZone', goal: 220, asc: 20 }, skin: '#f0d8b8', hair: '#e8e0c0', eyes: '#ffe080', cloak: '#c8b070', acc: ['halo'], accColor: '#ffe680',
+    desc: 'Filhos de anjos e gigantes: enormes, fortes e iluminados.',
+    traits: [['Herança Gigante', '+40% de Vida e +20% de Armadura'], ['Luz Ancestral', '+30% de Dano e regenera 0,5% da Vida por segundo'], ['Golpe do Céu', 'Habilidade ativa']],
+    stats: { hpPct: 40, defPct: 20, dmgPct: 30, regenPct: 0.5 }, skill: 'sp_skyblow' },
 };
 const SPECIES_ORDER = Object.keys(SPECIES).sort((a, b) => SPECIES[a].rarity - SPECIES[b].rarity);
 

@@ -355,8 +355,8 @@ const ACHIEVEMENTS = [
   { id: 'mimic1k', name: 'Caçador de Mímicos', desc: 'Derrote 1.000 Mímicos', stat: 'mimics', goal: 1000, reward: { mf: 5 } },
   { id: 'leg5k', name: 'Arsenal Lendário', desc: 'Encontre 5.000 itens Lendários', stat: 'legendaries', goal: 5000, reward: { mf: 10 } },
   { id: 'myth1k', name: 'Panteão', desc: 'Encontre 1.000 itens Míticos', stat: 'mythics', goal: 1000, reward: { mf: 12 } },
-  { id: 'excl1', name: 'Toque do Arco-Íris', desc: 'Tenha uma arma exclusiva', val: st => achExclusives(st), goal: 1, reward: { mf: 5 } },
-  { id: 'exclAll', name: 'Coleção Arco-Íris', desc: 'Tenha todas as armas exclusivas', val: st => achExclusives(st), get goal() { return Object.keys(EXCLUSIVES).length; }, reward: { dmgPct: 10 } },
+  { id: 'excl1', name: 'Toque do Arco-Íris', desc: 'Encontre uma arma exclusiva', val: st => achExclusives(st), goal: 1, reward: { mf: 5 } },
+  { id: 'exclAll', name: 'Coleção Arco-Íris', desc: 'Encontre todas as armas exclusivas', val: st => achExclusives(st), get goal() { return Object.keys(EXCLUSIVES).length; }, reward: { dmgPct: 10 } },
   { id: 'allCls', name: 'Todas as Classes', desc: 'Desbloqueie todas as classes', val: () => Game.sharedUnlocks().classes.length, get goal() { return CLASS_ORDER.length; }, reward: { xpPct: 10 } },
   { id: 'allSp', name: 'Todas as Espécies', desc: 'Desbloqueie todas as espécies', val: () => Game.sharedUnlocks().species.length, get goal() { return SPECIES_ORDER.length; }, reward: { hpPct: 10 } },
   { id: 'master8', name: 'Mestre de Armas', desc: 'Domine 8 classes (zona 50 numa jornada iniciada com cada uma)', val: st => CLASS_ORDER.filter(c => Stats.mastered(st, c)).length, goal: 8, reward: { dmgPct: 8 } },
@@ -370,14 +370,15 @@ const ACHIEVEMENTS = [
   { id: 'time100', name: 'Vida de Aventureiro', desc: 'Jogue por 100 horas', stat: 'playTime', goal: 100 * 3600, time: true, reward: { xpPct: 10 } },
   { id: 'celest1', name: 'Luz Celestial', desc: 'Encontre um item Celestial', stat: 'celestials', goal: 1, reward: { mf: 8 } },
   { id: 'celest100', name: 'Constelação', desc: 'Encontre 100 itens Celestiais', stat: 'celestials', goal: 100, reward: { dmgPct: 12 } },
-  { id: 'chosen', name: 'Escolhido dos Céus', desc: 'Desbloqueie uma classe ou espécie Celestial', val: () => { const u = Game.sharedUnlocks(); return u.classes.filter(c => CLASSES[c].rarity === 5).length + u.species.filter(x => SPECIES[x].rarity === 5).length; }, goal: 1, reward: { xpPct: 12 } },
+  { id: 'chosen', name: 'Escolhido dos Céus', desc: 'Desbloqueie uma classe ou espécie Celestial', val: () => { const u = Game.sharedUnlocks(); return u.classes.filter(c => CLASSES[c].rarity === HERO_CELESTIAL).length + u.species.filter(x => SPECIES[x].rarity === HERO_CELESTIAL).length; }, goal: 1, reward: { xpPct: 12 } },
   { id: 'newlords', name: 'Caçador de Lendas', desc: 'Derrote a Quimera, o Kraken, Fenrir, o Titã e o Serafim Caído', val: st => ['chimera', 'kraken', 'fenrir', 'titan', 'seraph_lord'].filter(k => (st.stats['lord_' + k] || 0) > 0).length, goal: 5, reward: { bossDmg: 15 } },
 ];
 function achExclusiveIds(st) {
-  const ids = new Set();
+  const ids = new Set(Object.keys(st.exclFound || {}).filter(id => EXCLUSIVES[id]));
   for (const it of [...(st.vault || []), ...Object.values(st.equip || {}), ...(st.inv || [])]) if (it && it.excl) ids.add(it.excl);
   return ids;
 }
+function exclMissing(st) { const own = achExclusiveIds(st); return Object.keys(EXCLUSIVES).filter(id => !own.has(id)); }
 function achExclusives(st) { return achExclusiveIds(st).size; }
 
 const HERO_NAMES = ['Aldric', 'Bryndis', 'Caelum', 'Darius', 'Elara', 'Fenrir', 'Gwendal', 'Hakon', 'Isolde', 'Jorund', 'Kaelen', 'Lyra', 'Morwen', 'Nyx', 'Orin', 'Perseu', 'Ragnar', 'Seraphine', 'Thalia', 'Ulric', 'Valen', 'Wren', 'Ysolde', 'Zephyr', 'Tupã', 'Iara', 'Jaci', 'Rudá', 'Ceci', 'Ubirajara'];

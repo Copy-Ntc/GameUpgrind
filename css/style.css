@@ -492,6 +492,16 @@ input[type=range] { accent-color: var(--gold); }
 .relic-card .ds { font-size: 11px; color: #cfc4de; line-height: 1.4; }
 .relic-card .btn { margin-top: 6px; }
 
+.ts-community { max-width: 1040px; margin: -4px auto 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; font-size: 12px; color: #b8acc8; }
+.btn.discord { background: #5865f2; border-color: #7a85ff; color: #fff; text-decoration: none; }
+.btn.discord:hover { background: #6b77ff; }
+.ts-excl { background: #1c1426; border: 1px solid #5a3a7a; border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+.ts-excl .ts-h { margin: 0 0 8px; }
+.ex-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ex-chip { display: flex; align-items: center; gap: 6px; background: #120d1a; border: 1px solid #3c3056; border-radius: 8px; padding: 3px 8px 3px 4px; font-size: 12px; }
+.ex-chip img { width: 28px; height: 28px; image-rendering: pixelated; }
+.ex-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; font-size: 12px; color: #d8cfe6; }
+.ex-row .sel { min-width: 170px; }
 .ts-account { max-width: 1040px; margin: -10px auto 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; font-size: 13px; color: #d8cfe6; }
 .ts-account b { color: var(--gold); }
 .ts-warn { max-width: 1040px; margin: 0 auto 14px; background: #2a1418; border: 1px solid #6a2a3a; border-radius: 10px; padding: 9px 12px; font-size: 12px; color: #ffc8d0; text-align: center; }

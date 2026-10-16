@@ -95,6 +95,7 @@ const Online = {
   errText(e) {
     const m = String((e && e.message) || e || '');
     if (/captcha/i.test(m)) return 'A verificação anti-robô falhou ou expirou. Marque a caixa de novo.';
+    if (/should be different/i.test(m)) return 'A nova senha precisa ser diferente da atual.';
     if (/invalid login credentials/i.test(m)) return 'E-mail ou senha incorretos.';
     if (/already registered|already been registered/i.test(m)) return 'Esse e-mail já tem uma conta. Use "Entrar".';
     if (/password should be at least|weak password/i.test(m)) { const n = (m.match(/at least (\d+)/i) || [])[1] || MIN_PASS; return `A senha precisa ter pelo menos ${n} caracteres.`; }
@@ -144,6 +145,17 @@ const Online = {
     const { error } = await this.sb.auth.updateUser({ password: pass });
     if (error) throw error;
     this.recovering = false;
+  },
+
+  async changePassword(cur, next) {
+    if (!this.loggedIn) throw new Error('Entre na conta primeiro.');
+    if (String(next || '').length < MIN_PASS) throw new Error(`A nova senha precisa ter pelo menos ${MIN_PASS} caracteres.`);
+    if (cur === next) throw new Error('A nova senha precisa ser diferente da atual.');
+    const captchaToken = this.captchaToken();
+    const chk = await this.sb.auth.signInWithPassword({ email: this.user.email, password: cur, options: { captchaToken } }).finally(() => this.resetCaptcha());
+    if (chk.error) throw /invalid login/i.test(chk.error.message) ? new Error('A senha atual está incorreta.') : chk.error;
+    const { error } = await this.sb.auth.updateUser({ password: next });
+    if (error) throw error;
   },
 
   async afterLogin(user) {

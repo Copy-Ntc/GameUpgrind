@@ -173,7 +173,7 @@ const World = {
     for (const c of W.chests) {
       if (!c.seen && !c.opened && W.vis[c.y * W.w + c.x]) {
         c.seen = true;
-        if (c.tier === 4) { Game.log('🌈 Você avistou o <b class="c7">Baú Arco-Íris</b>!', 'loot'); UI.banner('BAÚ ARCO-ÍRIS', 'Pode conter uma arma exclusiva', 'purple', 2.4); }
+        if (c.tier === 4) { Game.log('🌈 Você avistou o <b class="c7">Baú Arco-Íris</b>!', 'loot'); UI.banner('BAÚ ARCO-ÍRIS', exclMissing(Game.state).length ? 'Pode conter uma arma exclusiva' : 'Pode conter um item raríssimo', 'purple', 2.4); }
         else if (c.tier >= 2) Game.log(`Você avistou um <span class="c${c.tier + 1}">${CHEST_TIERS[c.tier].name}</span>!`, 'loot');
       }
     }
@@ -1403,7 +1403,7 @@ const World = {
     const st = Game.state, S = Game.stats, z = W.z, T = CHEST_TIERS[4];
     const got = Game.gainGold(15 * zoneScale(z) * T.gold * U.rand(0.9, 1.1));
     Game.gainShards(2, c.x, c.y);
-    const missing = Object.keys(EXCLUSIVES).filter(id => !achExclusiveIds(st).has(id));
+    const missing = exclMissing(st);
     if (missing.length && Math.random() < EXCL_CHANCE) {
       Game.dropItem(Items.makeExclusive(U.pick(missing), st.maxZone), c.x, c.y);
     } else {

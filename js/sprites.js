@@ -2074,3 +2074,47 @@ Object.assign(HERO_PALS, {
   soulreaper: { a: '#2a2238', b: '#16121e', e: '#c8a8ff', s: '#c8d0c0', m: '#c8d0e0', h: '#4a3a5a', p: '#9a7aff' },
   supernovice: { h: '#ff9ad8', a: '#e8d8a0', b: '#b8a060', w: '#ffffff', s: '#f1c9a0', e: '#1c1a26', k: '#6a4a2a', m: '#d8e0ea' },
 });
+
+Object.assign(SPR, {
+  h_kagerou: [
+    '................',
+    '.....aaaa.......',
+    '....aaaaaa......',
+    '....aaaaaa...m..',
+    '....aseesa...m..',
+    '....aaaaaa..m...',
+    '.....rrrr..m....',
+    '....aarrrah.....',
+    '...aaaaaaas.....',
+    '..sa.aaaaa......',
+    '.....abbba......',
+    '.....aaaaa......',
+    '.....aa.aa......',
+    '.....aa.aa......',
+    '.....bb.bb......',
+    '....bbb.bbb.....',
+  ],
+  h_rebellion: [
+    '................',
+    '.....cccccc.....',
+    '.....cccccc.....',
+    '...ccddddddcc...',
+    '.....sesess.....',
+    '.....ssssss.....',
+    '......wwww......',
+    '....aawwwwaa....',
+    '...aaawwwwaaa...',
+    '..mas.wwww.sam..',
+    '.mm.a.aaaa.a.mm.',
+    '....a.aaaa.a....',
+    '.....aa..aa.....',
+    '.....aa..aa.....',
+    '.....kk..kk.....',
+    '....kkk..kkk....',
+  ],
+});
+
+Object.assign(HERO_PALS, {
+  kagerou: { a: '#8a2a3a', b: '#4a1220', r: '#ffd04a', s: '#f1c9a0', e: '#1c1a26', m: '#e8e0ea', h: '#3a1a10' },
+  rebellion: { c: '#2a2a34', d: '#c83a3a', a: '#e8e4ec', b: '#a8a4b8', w: '#3a3a4a', s: '#f1c9a0', e: '#1c1a26', m: '#c8c8d8', k: '#2a1a10' },
+});

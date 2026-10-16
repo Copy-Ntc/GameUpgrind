@@ -6,8 +6,9 @@ const BACKUP_PREFIX = 'upgrind_backup_';
 const UNLOCK_KEY = 'upgrind_unlocks';
 const PROFILE_KEY = 'upgrind_profile';
 const META_KEYS = ['souls', 'soulUpg', 'stats', 'ach', 'settings', 'unlocks', 'encPity', 'classStats', 'speciesStats',
-  'relics', 'shards', 'relicPity', 'fusions', 'vault', 'fusionPref'];
+  'relics', 'shards', 'relicPity', 'fusions', 'vault', 'fusionPref', 'exclFound', 'exclPick'];
 const META_SET = new Set(META_KEYS);
+const EXCL_SLOTS = ['weapon', 'offhand'];
 
 const Store = {
   mem: {}, ok: true,
@@ -70,7 +71,7 @@ const Game = {
       runCls: cls, runSp: species, relics: {}, shards: 0, relicPity: 0, parked: false,
       talents: { [CLASSES[cls].skills[0]]: 1 },
       equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null, offhand: null },
-      fusions: {}, autoFarmed: false, startZone: 1, vault: [], fusionPref: {},
+      fusions: {}, autoFarmed: false, startZone: 1, vault: [], fusionPref: {}, exclFound: {}, exclPick: null,
       inv: [], training: {}, soulUpg: {},
       zone: 1, maxZone: 1, mode: 'advance', retreatLeft: 0, deathsInZone: 0, potions: 3,
       unlocks: { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() }, encPity: 0,
@@ -112,16 +113,52 @@ const Game = {
     fresh.startZone = sz;
     const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
     if (pref && pref !== cls && nw && !nw.excl && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
-    for (const it of P.vault.splice(0)) {
-      Items.retune(it, sz);
-      const cur = fresh.equip[it.slot];
-      if (!cur || Stats.compareItem(it, fresh) > 0) { fresh.equip[it.slot] = it; if (cur) fresh.inv.push(cur); this.recalc(); }
-      else fresh.inv.push(it);
+    if (!P.exclPick) {
+      for (const it of P.vault.splice(0)) {
+        Items.retune(it, sz);
+        const cur = fresh.equip[it.slot];
+        if (!cur || Stats.compareItem(it, fresh) > 0) { fresh.equip[it.slot] = it; if (cur) fresh.inv.push(cur); this.recalc(); }
+        else fresh.inv.push(it);
+      }
+    } else {
+      for (const slot of EXCL_SLOTS) {
+        const id = P.exclPick[slot];
+        if (!id || !EXCLUSIVES[id] || EXCLUSIVES[id].slot !== slot || !P.exclFound[id]) continue;
+        const vi = P.vault.findIndex(v => v.excl === id);
+        const it = vi >= 0 ? P.vault.splice(vi, 1)[0] : Items.makeExclusive(id, sz);
+        Items.retune(it, sz); it.isNew = false;
+        const cur = fresh.equip[slot];
+        fresh.equip[slot] = it;
+        if (cur) fresh.inv.push(cur);
+      }
+      this.recalc();
     }
     this.recalc();
     fresh.potions = this.stats.potionMax;
     if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
     this.save();
+  },
+
+  syncExclFound() {
+    const P = this.profile;
+    if (!P) return;
+    let changed = false;
+    const mark = it => { if (it && it.excl && EXCLUSIVES[it.excl] && !P.exclFound[it.excl]) { P.exclFound[it.excl] = true; changed = true; } };
+    for (const it of P.vault) mark(it);
+    for (let n = 1; n <= SLOT_COUNT; n++) { const sv = this.peekSave(n); if (sv) for (const it of [...EQUIP_SLOTS.map(k => sv.equip && sv.equip[k]), ...(sv.inv || [])]) mark(it); }
+    if (changed) this.saveProfile();
+  },
+  exclChoice(slot) {
+    const P = this.profile, found = Object.keys(P.exclFound || {}).filter(id => EXCLUSIVES[id] && EXCLUSIVES[id].slot === slot);
+    if (P.exclPick) return found.includes(P.exclPick[slot]) ? P.exclPick[slot] : null;
+    return found[0] || null;
+  },
+  setExclChoice(slot, id) {
+    const P = this.profile;
+    if (!P.exclPick) P.exclPick = Object.fromEntries(EXCL_SLOTS.map(s => [s, this.exclChoice(s)]));
+    P.exclPick[slot] = id && EXCLUSIVES[id] && P.exclFound[id] ? id : null;
+    if (this.state) this.state.exclPick = P.exclPick;
+    this.saveProfile();
   },
 
   giveStarter() {
@@ -152,6 +189,7 @@ const Game = {
     const all = [...EQUIP_SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
     for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
     for (const it of all) if (it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
+    for (const it of all) if (it.excl && EXCLUSIVES[it.excl]) s.exclFound[it.excl] = true;
     return s;
   },
 
@@ -186,6 +224,8 @@ const Game = {
     for (const k in d.settings) if (p.settings[k] === undefined) p.settings[k] = d.settings[k];
     if (!Array.isArray(p.vault)) p.vault = [];
     for (const it of p.vault) if (it && it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
+    if (!p.exclFound || typeof p.exclFound !== 'object') p.exclFound = {};
+    for (const it of p.vault) if (it && it.excl && EXCLUSIVES[it.excl]) p.exclFound[it.excl] = true;
     p.unlocks = this.mergeUnlocks(p.unlocks);
     return p;
   },
@@ -213,6 +253,7 @@ const Game = {
         for (const k in x[map][id]) a[k] = Math.max(a[k] || 0, x[map][id][k] || 0);
       }
       for (const it of x.vault || []) if (!p.vault.some(v => v.uid === it.uid)) p.vault.push(it);
+      for (const k in x.exclFound || {}) if (x.exclFound[k]) (p.exclFound = p.exclFound || {})[k] = true;
     }
     return this.normalizeProfile(p);
   },
@@ -478,8 +519,9 @@ const Game = {
     UI.banner(`Zona ${z}`, sub + (this.W.isLord ? ' · Covil do Senhor' : ''), this.W.isLord ? 'purple' : '', 2.4);
     this.log(`Entrando na <b>Zona ${z}</b>: ${sub}.`, '');
     if (this.W.chests.some(c => c.tier === 4)) {
-      this.log('🌈 <b class="c7">Um Baú Arco-Íris está escondido nesta zona!</b> Ele pode guardar uma arma exclusiva.', 'loot');
-      UI.toastText('🌈 Baú Arco-Íris nesta zona!', 'Pode conter uma arma exclusiva', '#ff7ae0');
+      const sub = exclMissing(this.state).length ? 'Pode conter uma arma exclusiva' : 'Pode conter um item raríssimo';
+      this.log(`🌈 <b class="c7">Um Baú Arco-Íris está escondido nesta zona!</b> ${sub}.`, 'loot');
+      UI.toastText('🌈 Baú Arco-Íris nesta zona!', sub, '#ff7ae0');
     }
     const af = st.settings.autoFarmZone;
     if (af > 0 && !st.autoFarmed && st.mode === 'advance' && z >= af) {
@@ -834,6 +876,7 @@ const Game = {
     }
     if (item.excl) {
       item.locked = true;
+      st.exclFound[item.excl] = true;
       Sfx.play('legendary'); setTimeout(() => Sfx.play('ascend'), 400);
       UI.banner(item.name, `ARMA EXCLUSIVA! Criada por ${EXCLUSIVES[item.excl].by}`, 'purple', 4);
       this.log(`🌈 <b class="c7">${U.esc(item.name)}</b> é uma arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');

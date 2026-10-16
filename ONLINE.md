@@ -80,6 +80,44 @@ Impede robôs de criar contas em massa e de testar senhas no login.
 
 Nessa ordem. Se ligar no Supabase antes de o site ter a Site Key, ninguém consegue entrar até o passo 2 ficar pronto. A Secret Key é a única informação que **nunca** vai para o código.
 
+### E-mail de recuperação de senha (Gmail, grátis, sem domínio)
+
+O e-mail gratuito do Supabase só entrega para a equipe do projeto, então o "Esqueci minha senha" não chega para os jogadores. Com um Gmail do jogo ele passa a funcionar para todos (limite de uns 500 e-mails por dia).
+
+1. Crie um Gmail só para o jogo (ex.: `overlevelgame@gmail.com`) e ligue a **verificação em duas etapas** nele.
+2. Na conta Google desse Gmail, abra **Segurança → Senhas de app** (ou procure "Senhas de app" na busca da conta), crie uma com o nome `Supabase` e copie a senha de 16 letras. Ela só aparece uma vez.
+3. No Supabase, abra **Authentication → Emails → SMTP Settings** e ligue **Enable Custom SMTP**:
+   - **Sender email:** o Gmail do jogo
+   - **Sender name:** `OverLevelGame`
+   - **Host:** `smtp.gmail.com`
+   - **Port:** `465`
+   - **Username:** o Gmail do jogo
+   - **Password:** a senha de app de 16 letras
+4. Ainda em **Authentication → Emails**, na aba **Templates**, abra **Reset Password** e troque por:
+   - **Subject:** `Recupere sua senha do OverLevelGame`
+   - **Body:**
+     ```html
+     <h2>Recuperar senha</h2>
+     <p>Alguém pediu para trocar a senha da sua conta no OverLevelGame.</p>
+     <p><a href="{{ .ConfirmationURL }}">Clique aqui para criar uma senha nova</a></p>
+     <p>Abra o link no mesmo navegador em que você joga. Se não foi você, ignore este e-mail: sua senha continua a mesma.</p>
+     ```
+5. Teste com a sua própria conta: **Entrar → Esqueci minha senha**. O link abre o jogo já pedindo a senha nova.
+
+A senha de app fica só no painel do Supabase. Não coloque no código nem mande para ninguém. Se vazar, apague-a em **Senhas de app** e crie outra.
+
+### Trocar a senha estando logado
+
+Na tela inicial (botão **🔑 Trocar senha**) ou em **Configurações**, o jogador digita a senha atual e a nova. A senha atual é conferida antes da troca. Se o jogador esqueceu a senha e o e-mail não chega, o dono do jogo pode definir uma provisória pelo SQL Editor:
+
+```sql
+update auth.users
+set encrypted_password = extensions.crypt('SenhaProvisoria123!', extensions.gen_salt('bf'))
+where email = 'email.do.jogador@exemplo.com';
+```
+
+Confirme antes, por outro canal, que é mesmo o dono da conta pedindo. Depois ele entra com a provisória e troca pelo botão **Trocar senha**.
+
 ### Contas do dono do jogo
 
 Quem controla o GitHub ou o Supabase controla o jogo. Ligue a verificação em duas etapas (2FA) no **GitHub** (*Settings → Password and authentication*), no **Supabase** (*Account → Security*) e no e-mail usado nos dois.
