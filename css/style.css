@@ -515,9 +515,12 @@ table.lb td.hero small { color: var(--muted); }
 table.lb td.val { text-align: right; font: 600 13px var(--pixel); color: var(--gold); white-space: nowrap; }
 table.lb tr.me td { background: rgba(242,194,91,.08); }
 
-.c6 { background: linear-gradient(90deg, #ff5a5a, #ffb84a, #ffe95a, #5aff8a, #5ac8ff, #b874ff, #ff7ae0, #ff5a5a); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: rainbowText 3s linear infinite; }
+.c6 { color: #7af0ff; text-shadow: 0 0 6px rgba(122,240,255,.55); }
+.c7 { background: linear-gradient(90deg, #ff5a5a, #ffb84a, #ffe95a, #5aff8a, #5ac8ff, #b874ff, #ff7ae0, #ff5a5a); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: rainbowText 3s linear infinite; }
 @keyframes rainbowText { to { background-position: 200% 0; } }
-.item.r6 { border-color: #ff7ae0; background: radial-gradient(circle at 50% 60%, rgba(255,122,224,.3), #100c16 70%); animation: rainbowGlow 3s linear infinite; }
+.item.r6 { border-color: #7af0ff; background: radial-gradient(circle at 50% 60%, rgba(122,240,255,.32), #100c16 70%); box-shadow: 0 0 12px rgba(122,240,255,.5); animation: celestGlow 2.4s infinite; }
+@keyframes celestGlow { 50% { box-shadow: 0 0 18px rgba(200,250,255,.75); border-color: #e8fdff; } }
+.item.r7 { border-color: #ff7ae0; background: radial-gradient(circle at 50% 60%, rgba(255,122,224,.3), #100c16 70%); animation: rainbowGlow 3s linear infinite; }
 @keyframes rainbowGlow { 0%, 100% { border-color: #ff5a5a; box-shadow: 0 0 10px rgba(255,90,90,.6); } 25% { border-color: #ffe95a; box-shadow: 0 0 10px rgba(255,233,90,.6); } 50% { border-color: #5ac8ff; box-shadow: 0 0 10px rgba(90,200,255,.6); } 75% { border-color: #b874ff; box-shadow: 0 0 10px rgba(184,116,255,.6); } }
 .tt-lore { margin-top: 6px; font-style: italic; color: #cfc4de; font-size: 11px; }
 .tt-by { margin-top: 4px; font-size: 11px; color: var(--muted); }

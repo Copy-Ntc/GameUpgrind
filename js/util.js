@@ -30,7 +30,7 @@ const U = {
     return (h >>> 0) / 4294967296;
   },
 
-  SUFFIX: ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd', 'Td'],
+  SUFFIX: ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd', 'Td', 'Qad', 'Qid', 'Sxd', 'Spd', 'Ocd', 'Nod', 'Vg', 'Uvg', 'Dvg', 'Tvg', 'Qavg', 'Qivg', 'Sxvg', 'Spvg', 'Ocvg', 'Novg', 'Tg'],
   fmt(n) {
     if (n === undefined || n === null || isNaN(n)) return '0';
     if (!isFinite(n)) return '∞';
@@ -48,6 +48,7 @@ const U = {
     }
     return (neg ? '-' : '') + s;
   },
+  fmtMult(pct) { const m = 1 + pct / 100; return m < 100 ? U.fmtNum(m, 2) : U.fmt(m); },
   fmtInt(n) { return Math.floor(n).toLocaleString('pt-BR'); },
   fmtPct(v, d = 1) {
     const r = Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
@@ -109,7 +110,9 @@ const U = {
 };
 
 const SCALE = { item: 1.175, ehp: 1.25, eatk: 1.24, soul: 1.05 };
+const SCALE_LATE = { from: 200, ehp: 1.238, eatk: 1.228 };
+function lateScale(z, early, late) { return z <= SCALE_LATE.from ? Math.pow(early, z - 1) : Math.pow(early, SCALE_LATE.from - 1) * Math.pow(late, z - SCALE_LATE.from); }
 function zoneScale(z) { return Math.pow(SCALE.item, z - 1); }
-function enemyScale(z) { return Math.pow(SCALE.ehp, z - 1); }
-function enemyAtkScale(z) { return Math.pow(SCALE.eatk, z - 1); }
+function enemyScale(z) { return lateScale(z, SCALE.ehp, SCALE_LATE.ehp); }
+function enemyAtkScale(z) { return lateScale(z, SCALE.eatk, SCALE_LATE.eatk); }
 function enemyPowScale(z) { return Math.sqrt(enemyScale(z) * enemyAtkScale(z)); }

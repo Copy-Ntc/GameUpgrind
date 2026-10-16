@@ -1,7 +1,7 @@
 'use strict';
 const MapGen = {
   biomeOf(z) { return BIOMES[Math.floor((z - 1) / 5) % BIOMES.length]; },
-  cycleOf(z) { return Math.floor((z - 1) / 40); },
+  cycleOf(z) { return Math.floor((z - 1) / (BIOMES.length * 5)); },
 
   generate(z, encounter) {
     const biome = this.biomeOf(z);

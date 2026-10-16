@@ -44,6 +44,7 @@ const Stats = {
     return { def, r, ilvl, stats, powers, base };
   },
 
+  trainVal(t, r) { return t.comp ? this.soulVal(t, r) : r * t.per; },
   soulVal(u, r) { return u.comp ? (Math.pow(1 + u.per / 100, r) - 1) * 100 : r * u.per; },
 
   compute(st, override) {
@@ -65,7 +66,7 @@ const Stats = {
       hp: base.hp * g, atk: base.atk * g, def: base.def * g, regen: 0,
       atkSpd: 0, crit: base.crit, critDmg: base.critDmg, dodge: base.dodge, block: base.block, lifesteal: base.lifesteal,
       moveSpd: 0, goldPct: 0, xpPct: 0, mf: 0, cdr: 0, dmgPct: 0, hpPct: 0, defPct: 0, bossDmg: 0, minion: 0, potionPct: 0,
-      soulDmg: 0, soulHp: 0, soulDef: 0, talentPts: 0, invSlots: 0, startZone: 0, soulPct: 0, offline: 0, dr: 0, regenPct: 0,
+      soulDmg: 0, soulHp: 0, soulDef: 0, trainDmg: 0, trainHp: 0, trainDef: 0, talentPts: 0, invSlots: 0, startZone: 0, soulPct: 0, offline: 0, dr: 0, regenPct: 0,
     };
     const flags = new Set(sp.flags || []);
     for (const k in sp.stats) s[k] = (s[k] || 0) + sp.stats[k];
@@ -99,7 +100,7 @@ const Stats = {
       for (const p of rel.powers) powers.add(p);
     }
     if (c2) { const rel2 = this.relicInfo(st, c2id); if (rel2) s.dmgPct += rel2.stats.dmgPct * 0.5; }
-    for (const t of TRAINING) { const r = st.training[t.id] || 0; if (r) s[t.stat] += r * t.per; }
+    for (const t of TRAINING) { const r = st.training[t.id] || 0; if (r) s[t.stat] += this.trainVal(t, r); }
     for (const id of this.passiveIds(st, c2id)) { const r = st.talents[id] || 0; if (r) s[SKILLS[id].stat] += r * SKILLS[id].per; }
     for (const m of MAESTRIA) {
       const r = st.talents[m.id] || 0;
@@ -121,9 +122,9 @@ const Stats = {
 
     const rm = HERO_RARITY[rar].mult * HERO_RARITY[spRar].spMult;
     const out = {
-      maxHp: Math.max(1, s.hp * (1 + s.hpPct / 100) * (1 + s.soulHp / 100) * rm),
-      atk: s.atk * (1 + s.dmgPct / 100) * (1 + s.soulDmg / 100) * rm,
-      def: s.def * (1 + s.defPct / 100) * (1 + s.soulDef / 100) * HERO_RARITY[rar].mult,
+      maxHp: Math.max(1, s.hp * (1 + s.hpPct / 100) * (1 + s.soulHp / 100) * (1 + s.trainHp / 100) * rm),
+      atk: s.atk * (1 + s.dmgPct / 100) * (1 + s.soulDmg / 100) * (1 + s.trainDmg / 100) * rm,
+      def: s.def * (1 + s.defPct / 100) * (1 + s.soulDef / 100) * (1 + s.trainDef / 100) * HERO_RARITY[rar].mult,
       atkSpd: Math.max(0.2, b.atkSpd * (1 + s.atkSpd / 100)),
       crit: U.clamp(s.crit, 0, 75),
       critDmg: s.critDmg,

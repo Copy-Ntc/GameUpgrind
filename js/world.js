@@ -173,7 +173,7 @@ const World = {
     for (const c of W.chests) {
       if (!c.seen && !c.opened && W.vis[c.y * W.w + c.x]) {
         c.seen = true;
-        if (c.tier === 4) { Game.log('🌈 Você avistou o <b class="c6">Baú Arco-Íris</b>!', 'loot'); UI.banner('BAÚ ARCO-ÍRIS', 'Pode conter uma arma exclusiva', 'purple', 2.4); }
+        if (c.tier === 4) { Game.log('🌈 Você avistou o <b class="c7">Baú Arco-Íris</b>!', 'loot'); UI.banner('BAÚ ARCO-ÍRIS', 'Pode conter uma arma exclusiva', 'purple', 2.4); }
         else if (c.tier >= 2) Game.log(`Você avistou um <span class="c${c.tier + 1}">${CHEST_TIERS[c.tier].name}</span>!`, 'loot');
       }
     }
@@ -1403,18 +1403,19 @@ const World = {
     const st = Game.state, S = Game.stats, z = W.z, T = CHEST_TIERS[4];
     const got = Game.gainGold(15 * zoneScale(z) * T.gold * U.rand(0.9, 1.1));
     Game.gainShards(2, c.x, c.y);
-    if (Math.random() < EXCL_CHANCE) {
-      const ids = Object.keys(EXCLUSIVES);
-      Game.dropItem(Items.makeExclusive(U.pick(ids), st.maxZone), c.x, c.y);
+    const missing = Object.keys(EXCLUSIVES).filter(id => !achExclusiveIds(st).has(id));
+    if (missing.length && Math.random() < EXCL_CHANCE) {
+      Game.dropItem(Items.makeExclusive(U.pick(missing), st.maxZone), c.x, c.y);
     } else {
-      Game.dropItem(Items.generate(z + 1, { cls: st.cls, rarity: 5, mf: S.mf }), c.x, c.y);
-      Game.log('O Baú Arco-Íris trouxe um item <b class="c5">Mítico</b>. A arma exclusiva fica para a próxima!', 'loot');
+      const r = z >= RARITIES[6].minZone ? 6 : 5;
+      Game.dropItem(Items.generate(z + 1, { cls: st.cls, rarity: r, mf: S.mf }), c.x, c.y);
+      Game.log(`O Baú Arco-Íris trouxe um item <b class="c${r}">${RARITIES[r].name}</b>.${missing.length ? ' A arma exclusiva fica para a próxima!' : ''}`, 'loot');
     }
     const cols = ['#ff5a5a', '#ffb84a', '#ffe95a', '#5aff8a', '#5ac8ff', '#b874ff', '#ff7ae0'];
     for (let i = 0; i < 40; i++) this.part(W, c.x + 0.5, c.y + 0.5, U.rand(-3, 3), U.rand(-5, -1), cols[i % cols.length], 1.2, 2.5, 8);
     this.fx(W, 'ring', c.x + 0.5, c.y + 0.5, { r: 3, color: '#ff7ae0', life: 1 });
     Sfx.play('legendary');
-    Game.log(`Você abriu o <b class="c6">Baú Arco-Íris</b> (+${U.fmt(got)} ouro).`, 'gold');
+    Game.log(`Você abriu o <b class="c7">Baú Arco-Íris</b> (+${U.fmt(got)} ouro).`, 'gold');
   },
 
   freeRecruit(W, R) {
@@ -1477,4 +1478,5 @@ const World = {
 };
 
 const PROJ_COLORS = { arrow: '#e8e0c8', bigarrow: '#fff6c0', arcane: '#9ad8ff', fire: '#ff8a2a', shadow: '#b874ff', drain: '#ff4a6a', ice: '#9ad8ff', spit: '#9aff5a', beam: '#ff4aa0',
-  holy: '#fff2a0', note: '#ff7ad0', thorn: '#7ad070', chaos: '#ff5aa0', eldritch: '#c070ff', bullet: '#ffe8a0', cannon: '#ffb02a' };
+  holy: '#fff2a0', note: '#ff7ad0', thorn: '#7ad070', chaos: '#ff5aa0', eldritch: '#c070ff', bullet: '#ffe8a0', cannon: '#ffb02a',
+  acid: '#9aff5a', coin: '#ffd04a', shuriken: '#d8e0ea', spirit: '#c8a8ff' };

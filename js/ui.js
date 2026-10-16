@@ -559,7 +559,7 @@ const UI = {
       const q = this.qtyInfo(x => Stats.trainCost(t, x), r, t.max, st.gold);
       h += `<div class="up-row"><div class="ic"><img src="${Sprites.skillUrl(t.icon, t.color, 44)}" alt=""></div>
         <div><div class="nm">${t.name}<span class="rk">Nv ${r}${t.max ? '/' + t.max : ''}</span></div>
-        <div class="ds">Atual: <b>${r ? t.desc(r * t.per, r) : 'nenhum'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${t.desc((r + q.n) * t.per, r + q.n)}</span>`}</div></div>
+        <div class="ds">Atual: <b>${r ? t.desc(Stats.trainVal(t, r), r) : 'nenhum'}</b>${maxed ? '' : `<br><span class="nx">${q.n > 1 ? `+${q.n} níveis` : 'Próximo'}: ${t.desc(Stats.trainVal(t, r + q.n), r + q.n)}</span>`}</div></div>
         <div class="act">${maxed ? '<span class="tag">MÁXIMO</span>' : `<div class="cost" data-cost="${q.first}" style="color:${q.can ? 'var(--gold)' : 'var(--red)'}">${gold}${U.fmt(q.cost)}</div>
         <button class="btn small gold" data-act="train" data-id="${t.id}" data-cost="${q.first}" ${q.can ? '' : 'disabled'}>Comprar${q.n > 1 ? ' ×' + q.n : ''}</button>`}</div></div>`;
     }
@@ -569,7 +569,7 @@ const UI = {
   tab_forge() {
     const st = Game.state;
     let h = `<div class="sec"><div class="sec-h"><h3>Forja</h3><span class="sub">Aprimore seu equipamento</span></div>
-      <div class="hint">Cada nível de aprimoramento aumenta os atributos principais do item em 8%. A partir de +5 a forja pode falhar (o ouro é perdido, o item não).</div>
+      <div class="hint">Cada nível de aprimoramento multiplica os atributos principais do item por 1,08 (acumulativo: +10 dá ×2,16 e +20 dá ×4,66). A partir de +5 a forja pode falhar (o ouro é perdido, o item não).</div>
       <div class="forge-sel">`;
     for (const s of EQUIP_SLOTS) {
       const it = st.equip[s];

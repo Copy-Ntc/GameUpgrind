@@ -151,6 +151,7 @@ const Game = {
     if (!s.classStats[s.cls]) s.classStats[s.cls] = { best: s.maxZone || 1, kills: 0, bosses: 0 };
     const all = [...EQUIP_SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
     for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
+    for (const it of all) if (it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
     return s;
   },
 
@@ -184,6 +185,7 @@ const Game = {
     for (const k in d.stats) if (p.stats[k] === undefined) p.stats[k] = d.stats[k];
     for (const k in d.settings) if (p.settings[k] === undefined) p.settings[k] = d.settings[k];
     if (!Array.isArray(p.vault)) p.vault = [];
+    for (const it of p.vault) if (it && it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
     p.unlocks = this.mergeUnlocks(p.unlocks);
     return p;
   },
@@ -476,7 +478,7 @@ const Game = {
     UI.banner(`Zona ${z}`, sub + (this.W.isLord ? ' · Covil do Senhor' : ''), this.W.isLord ? 'purple' : '', 2.4);
     this.log(`Entrando na <b>Zona ${z}</b>: ${sub}.`, '');
     if (this.W.chests.some(c => c.tier === 4)) {
-      this.log('🌈 <b class="c6">Um Baú Arco-Íris está escondido nesta zona!</b> Ele pode guardar uma arma exclusiva.', 'loot');
+      this.log('🌈 <b class="c7">Um Baú Arco-Íris está escondido nesta zona!</b> Ele pode guardar uma arma exclusiva.', 'loot');
       UI.toastText('🌈 Baú Arco-Íris nesta zona!', 'Pode conter uma arma exclusiva', '#ff7ae0');
     }
     const af = st.settings.autoFarmZone;
@@ -810,6 +812,7 @@ const Game = {
     if (item.rarity === 3) st.stats.epics++;
     if (item.rarity === 4) st.stats.legendaries++;
     if (item.rarity === 5) st.stats.mythics++;
+    if (item.rarity === 6) st.stats.celestials = (st.stats.celestials || 0) + 1;
     if (W) W.zoneItems++;
     const col = RARITIES[item.rarity].color;
     const diff = Stats.compareItem(item);
@@ -829,12 +832,13 @@ const Game = {
         World.text(W, x + 0.5, y - 0.6, RARITIES[item.rarity].name.toUpperCase() + '!', col, 13, 1.6, -0.8, true);
       }
     }
-    if (item.rarity >= 6) {
+    if (item.excl) {
       item.locked = true;
       Sfx.play('legendary'); setTimeout(() => Sfx.play('ascend'), 400);
       UI.banner(item.name, `ARMA EXCLUSIVA! Criada por ${EXCLUSIVES[item.excl].by}`, 'purple', 4);
-      this.log(`🌈 <b class="c6">${U.esc(item.name)}</b> é uma arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
-    } else if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
+      this.log(`🌈 <b class="c7">${U.esc(item.name)}</b> é uma arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
+    } else if (item.rarity === 6) { item.locked = true; Sfx.play('legendary'); setTimeout(() => Sfx.play('rare'), 300); UI.banner(item.name, 'Item CELESTIAL encontrado!', 'purple', 3.5); }
+    else if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
     else if (item.rarity === 4) { Sfx.play('legendary'); UI.banner(item.name, 'Item Lendário encontrado!', '', 2.2); }
     else if (item.rarity === 3) Sfx.play('epic');
     else if (item.rarity === 2) Sfx.play('rare');
@@ -917,7 +921,7 @@ const Game = {
   },
   bulkFilters() {
     const notUp = it => Stats.compareItem(it) <= 0.002;
-    const f = RARITIES.map(R => ({ id: 'r' + R.id, label: `Todos os itens ${R.name.endsWith('m') ? R.name.slice(0, -1) + 'ns' : R.name + 's'}`, color: R.color, pred: it => it.rarity === R.id, confirm: R.id >= 3 }));
+    const f = RARITIES.map(R => ({ id: 'r' + R.id, label: `Todos os itens ${R.name.endsWith('m') ? R.name.slice(0, -1) + 'ns' : R.name.endsWith('l') ? R.name.slice(0, -1) + 'is' : R.name + 's'}`, color: R.color, pred: it => it.rarity === R.id, confirm: R.id >= 3 }));
     f.push({ id: 'junk', label: 'Tudo que não é melhoria', color: '#ece4d4', pred: it => notUp(it) && it.plus === 0 && it.rarity < 4, confirm: true });
     f.push({ id: 'all', label: 'Toda a mochila', color: '#ff8a8a', pred: () => true, confirm: true });
     return f;
@@ -1160,6 +1164,7 @@ const Game = {
       if (it.rarity === 3) st.stats.epics++;
       if (it.rarity === 4) st.stats.legendaries++;
       if (it.rarity === 5) st.stats.mythics++;
+      if (it.rarity === 6) st.stats.celestials = (st.stats.celestials || 0) + 1;
       const d = Stats.compareItem(it);
       if (st.settings.autoEquip && d > 0.002) { const old = st.equip[it.slot]; this.equip(it, true); if (old) this.addToInv(old); }
       else this.addToInv(it);

@@ -64,18 +64,18 @@ const Items = {
 
     const pkeys = Object.keys(POWERS).filter(k => !POWERS[k].excl);
     if (rarity >= 4) item.powers.push(U.pick(pkeys));
-    if (rarity >= 5) { let p; do { p = U.pick(pkeys); } while (item.powers.includes(p)); item.powers.push(p); }
+    for (let k = 5; k <= Math.min(rarity, 6); k++) { let p; do { p = U.pick(pkeys); } while (item.powers.includes(p)); item.powers.push(p); }
 
     item.name = this.makeName(item);
     return item;
   },
 
   makeExclusive(id, ilvl) {
-    const D = EXCLUSIVES[id], R = RARITIES[6], S = zoneScale(Math.max(1, ilvl));
+    const D = EXCLUSIVES[id], R = RARITIES[EXCL_RARITY], S = zoneScale(Math.max(1, ilvl));
     const item = {
       uid: U.uid(), slot: D.slot, base: id, bname: D.bname, g: D.g, sprite: D.sprite, excl: id, by: D.by,
       mat: 'metal', tier: 0, matName: '', matColor: D.pal.m,
-      rarity: 6, ilvl: Math.max(1, Math.round(ilvl)), main: {}, affixes: [], powers: D.powers.slice(), plus: 0, locked: true, isNew: true, name: D.name,
+      rarity: EXCL_RARITY, ilvl: Math.max(1, Math.round(ilvl)), main: {}, affixes: [], powers: D.powers.slice(), plus: 0, locked: true, isNew: true, name: D.name,
     };
     if (D.slot === 'weapon') { item.main.atk = SLOT_MAIN.weapon.atk * S * R.mult * D.bmult; item.bmult = D.bmult; }
     for (const k in D.main) item.main[k] = STAT_INFO[k].pct ? D.main[k] : D.main[k] * S * R.mult;
@@ -127,6 +127,7 @@ const Items = {
 
   makeName(item) {
     if (item.excl) return EXCLUSIVES[item.excl].name;
+    if (item.rarity === 6) return U.pick(CELESTIAL_NAMES);
     if (item.rarity === 5) return U.pick(MYTHIC_NAMES);
     if (item.rarity === 4) return U.pick(LEGEND_NAMES[item.slot]);
     let n = item.bname;
@@ -147,12 +148,12 @@ const Items = {
 
   stats(item) {
     const out = {};
-    const pm = 1 + 0.08 * item.plus;
+    const pm = Math.pow(1.08, item.plus);
     for (const k in item.main) {
       const flat = !STAT_INFO[k].pct;
       out[k] = (out[k] || 0) + (flat ? item.main[k] * pm : item.main[k]);
     }
-    for (const a of item.affixes) out[a.k] = (out[a.k] || 0) + (a.flat ? a.v * (1 + 0.03 * item.plus) : a.v);
+    for (const a of item.affixes) out[a.k] = (out[a.k] || 0) + (a.flat ? a.v * Math.pow(1.03, item.plus) : a.v);
     return out;
   },
 

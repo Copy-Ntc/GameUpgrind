@@ -7,11 +7,12 @@ const RARITIES = [
   { id: 3, name: 'Épico', color: '#b874ff', mult: 1.85, affixes: 3, weight: 12, sell: 12 },
   { id: 4, name: 'Lendário', color: '#ff9a2e', mult: 2.35, affixes: 4, weight: 0.8, sell: 30, minZone: 4 },
   { id: 5, name: 'Mítico', color: '#ff4d6d', mult: 3.1, affixes: 5, weight: 0.08, sell: 80, minZone: 12 },
-  { id: 6, name: 'Exclusivo', color: '#ff7ae0', mult: 4.0, affixes: 0, weight: 0, sell: 200, excl: true },
+  { id: 6, name: 'Celestial', color: '#7af0ff', mult: 4.1, affixes: 6, weight: 0.006, sell: 220, minZone: 150 },
+  { id: 7, name: 'Exclusivo', color: '#ff7ae0', mult: 4.8, affixes: 0, weight: 0, sell: 300, excl: true },
 ];
 const RARITY_ADJ = [
   ['Comum', 'Comum'], ['Incomum', 'Incomum'], ['Raro', 'Rara'], ['Épico', 'Épica'], ['Lendário', 'Lendária'], ['Mítico', 'Mítica'],
-  ['Exclusivo', 'Exclusiva'],
+  ['Celestial', 'Celestial'], ['Exclusivo', 'Exclusiva'],
 ];
 
 const MATERIALS = {
@@ -106,9 +107,9 @@ const POWERS = {
   bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
 };
 
-const RAINBOW_ZONE = 10;
-const RAINBOW_CHANCE = 0.02;
-const EXCL_CHANCE = 0.22;
+const RAINBOW_ZONE = 40;
+const RAINBOW_CHANCE = 0.012;
+const EXCL_CHANCE = 0.12;
 const EXCLUSIVES = {
   dagon: {
     name: 'Dagon', bname: 'Adaga', g: 'f', slot: 'weapon', sprite: 'i_dagon', by: 'PIRADO DA CABEÇA',
@@ -139,6 +140,8 @@ const LEGEND_NAMES = {
   ring: ['Anel do Eclipse', 'Elo Infinito', 'Olho de Tigre', 'Selo de Salomão', 'Anel dos Nibelungos'],
   amulet: ['Coração da Montanha', 'Lágrima de Estrela', 'Amuleto de Anúbis', 'Relicário Sagrado', 'Olho de Hórus'],
 };
+const EXCL_RARITY = 7;
+const CELESTIAL_NAMES = ['Aurora Eterna', 'Firmamento', 'Coroa das Estrelas', 'Lança do Zênite', 'Véu Celeste', 'Juízo Astral', 'Luz Primordial', 'Canto das Esferas', 'Asa do Serafim', 'Horizonte Infinito', 'Brilho do Éter', 'Nova Ardente'];
 const MYTHIC_NAMES = ['Ira dos Deuses', 'Fim dos Tempos', 'Alvorada Divina', 'Ruína Eterna', 'Coração do Abismo', 'Voz do Vazio', 'Lâmina do Destino', 'Promessa Celestial', 'Eco da Criação', 'Último Suspiro'];
 
 const ENEMIES = {
@@ -170,6 +173,26 @@ const ENEMIES = {
   horror: { name: 'Horror Abissal', g: 'm', sprite: 'demon', pal: { a: '#4a2a8a', b: '#1a0a2a', e: '#40ffd0', t: '#c0ffe8', w: '#2a1a4a' }, hp: 1.6, atk: 1.25, spd: 0.9, move: 2.6 },
   mimic: { name: 'Mímico', g: 'm', sprite: 'mimic', pal: { a: '#8a5a2a', b: '#4a3020', g: '#e8b33a', t: '#f8f0d8', k: '#2a0a0a', e: '#ffe040', r: '#d83a5a' }, hp: 3.5, atk: 1.6, spd: 1.1, move: 3.0 },
   minion_skel: { name: 'Esqueleto', g: 'm', sprite: 'skeleton', pal: { a: '#c8ffd8', k: '#0a3a1a', m: '#4dff8a', h: '#2a6a3a' }, hp: 1, atk: 1, spd: 1.1, move: 3.6 },
+  gorka: { name: 'Gorka', g: 'm', sprite: 'ape', pal: { a: '#4a3a3a', b: '#2a1e1e', w: '#8a7a6a', e: '#ffd04a' }, hp: 1.5, atk: 1.25, spd: 0.9, move: 2.8 },
+  gnoll_hunter: { name: 'Gnoll Caçador', g: 'm', sprite: 'goblin', pal: { a: '#b89a5a', b: '#4a3020', e: '#ff3a3a', t: '#f0f0e0', h: '#6a4a2a', m: '#8a6a3a' }, hp: 0.9, atk: 1.1, spd: 1.0, move: 3.0, range: 4.2, proj: 'arrow' },
+  harpy: { name: 'Harpia', g: 'f', sprite: 'harpy', pal: { h: '#8a5a3a', s: '#e0b890', e: '#ff3a3a', c: '#a87a4a', a: '#c8a070', y: '#ffd04a' }, hp: 0.8, atk: 1.15, spd: 1.3, move: 3.8, fly: true, dodge: 0.1 },
+  basilisk: { name: 'Basilisco', g: 'm', sprite: 'snake', pal: { a: '#5a8a4a', b: '#3a5a2a', e: '#ffe040', t: '#ff3a5a' }, hp: 1.3, atk: 1.15, spd: 0.9, move: 2.6, armor: 0.15, poison: 0.25 },
+  sahuagin: { name: 'Sahuagin', g: 'm', sprite: 'frog', pal: { a: '#3a8a6a', b: '#c8e0b0', e: '#ff5a3a', r: '#1a4a3a', m: '#8a9aa0' }, hp: 1.1, atk: 1.15, spd: 1.1, move: 3.0 },
+  giant_crab: { name: 'Caranguejo Gigante', g: 'm', sprite: 'crab', pal: { a: '#d8503a', b: '#8a2a1a', e: '#1b1424', w: '#ffb08a' }, hp: 1.6, atk: 1.1, spd: 0.8, move: 2.4, armor: 0.3 },
+  siren: { name: 'Sereia', g: 'f', sprite: 'cultist', pal: { h: '#2a8a9a', s: '#7ac8c8', e: '#5affff', t: '#ffffff', a: '#2a6a8a', w: '#c8e8f0', r: '#1a4a6a', b: '#0a2a3a', k: '#0a1a24' }, hp: 0.9, atk: 1.2, spd: 0.9, move: 2.6, range: 4.5, proj: 'ice' },
+  angler: { name: 'Peixe-Lanterna', g: 'm', sprite: 'eye', pal: { a: '#1a3a4a', w: '#d8f0f0', i: '#ffe040', k: '#0a0a0a', b: '#0a2a3a' }, hp: 1.0, atk: 1.25, spd: 0.8, move: 2.2, range: 4.5, proj: 'beam', fly: true },
+  warg: { name: 'Warg', g: 'm', sprite: 'wolf', pal: { a: '#3a3440', b: '#1e1a24', w: '#8a8090', e: '#ff3a3a' }, hp: 1.1, atk: 1.3, spd: 1.25, move: 3.8 },
+  wendigo: { name: 'Wendigo', g: 'm', sprite: 'ape', pal: { a: '#c8c0b8', b: '#6a6058', w: '#e8e0d8', e: '#5affd0' }, hp: 1.5, atk: 1.35, spd: 1.0, move: 3.0, lifesteal: 0.2 },
+  draugr: { name: 'Draugr', g: 'm', sprite: 'skeleton', pal: { a: '#9ab0c8', k: '#0a1a2a', m: '#4a6a8a', h: '#2a3a4a' }, hp: 1.4, atk: 1.2, spd: 0.9, move: 2.6, armor: 0.2 },
+  wraith: { name: 'Espectro da Névoa', g: 'm', sprite: 'ghost', pal: { a: '#6a6a8a', b: '#3a3a5a', k: '#c8c8ff' }, hp: 1.0, atk: 1.3, spd: 1.1, move: 2.8, fly: true, dodge: 0.25 },
+  cyclops: { name: 'Ciclope', g: 'm', sprite: 'cyclops', pal: { a: '#c89a7a', b: '#6a4a2a', w: '#ffffff', k: '#1b1424', t: '#f0e8d8', m: '#7a5a3a' }, hp: 2.0, atk: 1.4, spd: 0.7, move: 2.2 },
+  medusa: { name: 'Medusa', g: 'f', sprite: 'snake', pal: { a: '#6a9a5a', b: '#3a6a3a', e: '#ffe040', t: '#c83aff' }, hp: 1.1, atk: 1.3, spd: 1.0, move: 2.6, range: 4, proj: 'spit' },
+  cerberus: { name: 'Cérbero', g: 'm', sprite: 'wolf', pal: { a: '#5a1a1a', b: '#2a0a0a', w: '#ff8a3a', e: '#ffe040' }, hp: 1.4, atk: 1.35, spd: 1.2, move: 3.6 },
+  satyr: { name: 'Sátiro', g: 'm', sprite: 'goblin', pal: { a: '#c89a6a', b: '#5a3a2a', e: '#ffd04a', t: '#f0f0e0', h: '#6a4a2a', m: '#e0c08a' }, hp: 1.0, atk: 1.2, spd: 1.2, move: 3.2 },
+  valkyrie: { name: 'Valquíria', g: 'f', sprite: 'cultist', pal: { h: '#ffe080', s: '#f4d8c0', e: '#5ab0ff', t: '#ffffff', a: '#d8d8e8', w: '#ffd04a', r: '#9aa8c8', b: '#5a6888', k: '#1b1424' }, hp: 1.3, atk: 1.35, spd: 1.0, move: 3.0 },
+  griffin: { name: 'Grifo', g: 'm', sprite: 'harpy', pal: { h: '#f0f0f0', s: '#ffe080', e: '#1b1424', c: '#c89a5a', a: '#e8d8b0', y: '#ffb02a' }, hp: 1.3, atk: 1.35, spd: 1.15, move: 3.8, fly: true },
+  thunderbird: { name: 'Pássaro-Trovão', g: 'm', sprite: 'bat', pal: { a: '#3a6ad8', b: '#ffe040', e: '#ffffff' }, hp: 1.0, atk: 1.3, spd: 1.3, move: 4.0, fly: true, range: 4.5, proj: 'arcane' },
+  fallen_angel: { name: 'Anjo Caído', g: 'm', sprite: 'demon', pal: { a: '#e8e0f0', b: '#2a2238', e: '#ff3a3a', t: '#ffffff', w: '#5a4a6a' }, hp: 1.6, atk: 1.45, spd: 1.0, move: 3.0 },
 };
 
 const LORDS = {
@@ -181,6 +204,11 @@ const LORDS = {
   dragon: { name: 'Dragão Ígneo', sprite: 'dragon', pal: { a: '#c83a1a', b: '#2a1a1a', e: '#ffe040', w: '#8a2a1a', c: '#ffb04a', t: '#ff8a2a' }, abil: ['volley', 'slam'], proj: 'fire' },
   lich: { name: 'Lich Supremo', sprite: 'skeleton', pal: { a: '#b8a0e8', k: '#4dff8a', m: '#6a3aaa', h: '#2a1a4a' }, abil: ['summon', 'volley'], proj: 'shadow', summon: 'skeleton' },
   devourer: { name: 'Devorador de Mundos', sprite: 'eye', pal: { a: '#2a1a5a', w: '#ffe8f0', i: '#ff3aa0', k: '#0a0a0a', b: '#4a1a8a' }, abil: ['volley', 'slam', 'summon'], proj: 'beam', summon: 'horror' },
+  chimera: { name: 'Quimera Ancestral', sprite: 'dragon', pal: { a: '#c88a3a', b: '#3a2a1a', e: '#ff3a3a', w: '#6a8a3a', c: '#ffd04a', t: '#ff8a2a' }, abil: ['slam', 'volley'], proj: 'fire' },
+  kraken: { name: 'O Kraken', sprite: 'kraken', pal: { a: '#8a3a6a', b: '#4a1a3a', w: '#ffe8f0', e: '#1b1424' }, abil: ['slam', 'summon', 'volley'], proj: 'ice', summon: 'giant_crab' },
+  fenrir: { name: 'Fenrir', sprite: 'wolf', pal: { a: '#4a5a7a', b: '#1a2234', w: '#c8d8ff', e: '#5affff' }, abil: ['slam', 'summon'], summon: 'warg' },
+  titan: { name: 'Titã Primordial', sprite: 'cyclops', pal: { a: '#d8b070', b: '#8a5a2a', w: '#ffffff', k: '#ff3a1a', t: '#f0e8d8', m: '#ffd04a' }, abil: ['slam', 'volley'], proj: 'fire' },
+  seraph_lord: { name: 'Serafim Caído', sprite: 'demon', pal: { a: '#fff2d0', b: '#c8a040', e: '#7af0ff', t: '#ffffff', w: '#ffe080' }, abil: ['volley', 'summon', 'slam'], proj: 'holy', summon: 'valkyrie' },
 };
 
 const ELITE_ADJ = [['Feroz', 'Feroz'], ['Furioso', 'Furiosa'], ['Sombrio', 'Sombria'], ['Brutal', 'Brutal'], ['Raivoso', 'Raivosa'], ['Vil', 'Vil']];
@@ -211,6 +239,21 @@ const BIOMES = [
   { id: 'void', name: 'Abismo Astral', wall: 'crystal', organic: 0.55, dark: 0.38,
     pal: { floor: '#221a3a', floor2: '#281e44', speck: ['#3a2a5a', '#1a1230', '#8a5aff'], wallTop: '#0e0a1a', wallTop2: '#160f28', wallHi: '#3a2a6a', face: '#2a1e4a', faceDark: '#140e28', bg: '#030208', fog: '#020105' },
     decor: ['crystal', 'star', 'crystal', 'rock', 'ember'], enemies: ['eye', 'demon', 'horror', 'cultist'], lord: 'devourer' },
+  { id: 'jungle', name: 'Selva Esmeralda', wall: 'trees', organic: 0.75, dark: 0.18,
+    pal: { floor: '#3a6a3a', floor2: '#407440', speck: ['#4e8a4a', '#2e5a2e', '#6aa05a'], wallTop: '#0e2a12', wallTop2: '#163a1a', wallHi: '#2a6a2e', face: '#3a2a1a', faceDark: '#22180e', bg: '#040e06', fog: '#030803' },
+    decor: ['grass', 'flower', 'bush', 'mushroom', 'lily', 'grass'], enemies: ['gorka', 'gnoll_hunter', 'harpy', 'basilisk'], lord: 'chimera' },
+  { id: 'sea', name: 'Recife Afogado', wall: 'rock', organic: 0.6, dark: 0.32,
+    pal: { floor: '#2a4a5a', floor2: '#2e5262', speck: ['#3a6272', '#1e3a48', '#5ac8d8'], wallTop: '#0e2230', wallTop2: '#14303e', wallHi: '#2a5a6a', face: '#1e4250', faceDark: '#122a36', bg: '#020a10', fog: '#01060a', puddle: '#2a7a8a' },
+    decor: ['puddle', 'crystal', 'rock', 'bones', 'lily'], enemies: ['sahuagin', 'giant_crab', 'siren', 'angler'], lord: 'kraken' },
+  { id: 'shadow', name: 'Terras Sombrias', wall: 'rock', organic: 0.45, dark: 0.5,
+    pal: { floor: '#2a2630', floor2: '#2e2a36', speck: ['#3a3444', '#1e1a24', '#6a4a8a'], wallTop: '#0e0c12', wallTop2: '#16131c', wallHi: '#2a2434', face: '#24202c', faceDark: '#16131c', bg: '#030205', fog: '#020103' },
+    decor: ['bones', 'skull', 'cobweb', 'tomb', 'rock'], enemies: ['warg', 'wendigo', 'draugr', 'wraith'], lord: 'fenrir', torches: true },
+  { id: 'titans', name: 'Ruínas dos Titãs', wall: 'sandstone', organic: 0.3, dark: 0,
+    pal: { floor: '#c8c0b0', floor2: '#d0c8b8', speck: ['#dcd4c4', '#b0a898', '#e8e0d0'], wallTop: '#8a8478', wallTop2: '#9a9488', wallHi: '#c8c0b0', face: '#aaa294', faceDark: '#7a7468', bg: '#1a1814', fog: '#0e0d0a' },
+    decor: ['rock', 'pebbles', 'bones', 'skull', 'tomb'], enemies: ['cyclops', 'medusa', 'cerberus', 'satyr'], lord: 'titan' },
+  { id: 'celestial', name: 'Cidadela Celeste', wall: 'crystal', organic: 0.5, dark: 0,
+    pal: { floor: '#e8e0f0', floor2: '#f0e8f8', speck: ['#ffffff', '#d0c8e0', '#ffe8a0'], wallTop: '#a898c8', wallTop2: '#b8a8d8', wallHi: '#f0e8ff', face: '#c8b8e8', faceDark: '#9888b8', bg: '#2a2440', fog: '#1a1628' },
+    decor: ['star', 'crystal', 'flower', 'snow'], enemies: ['valkyrie', 'griffin', 'thunderbird', 'fallen_angel'], lord: 'seraph_lord' },
 ];
 
 const CHEST_TIERS = [
@@ -230,9 +273,9 @@ const SHRINES = {
 };
 
 const TRAINING = [
-  { id: 'str', name: 'Treino de Força', stat: 'dmgPct', per: 5, base: 25, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `+${U.fmtNum(v)}% de Dano Total` },
-  { id: 'vit', name: 'Treino de Vitalidade', stat: 'hpPct', per: 5, base: 25, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `+${U.fmtNum(v)}% de Vida` },
-  { id: 'end', name: 'Treino de Resistência', stat: 'defPct', per: 5, base: 35, growth: 1.25, icon: 'sk_shield', color: '#9aa3ad', desc: v => `+${U.fmtNum(v)}% de Armadura` },
+  { id: 'str', name: 'Treino de Força', stat: 'trainDmg', per: 2, comp: true, base: 25, growth: 1.25, icon: 'sk_sword', color: '#ff7a4a', desc: v => `Dano ×${U.fmtMult(v)} (cada nível ×1,02)` },
+  { id: 'vit', name: 'Treino de Vitalidade', stat: 'trainHp', per: 2, comp: true, base: 25, growth: 1.25, icon: 'sk_heart', color: '#ff5a62', desc: v => `Vida ×${U.fmtMult(v)} (cada nível ×1,02)` },
+  { id: 'end', name: 'Treino de Resistência', stat: 'trainDef', per: 2, comp: true, base: 35, growth: 1.25, icon: 'sk_shield', color: '#9aa3ad', desc: v => `Armadura ×${U.fmtMult(v)} (cada nível ×1,02)` },
   { id: 'agi', name: 'Treino de Agilidade', stat: 'atkSpd', per: 1.5, base: 80, growth: 1.3, max: 50, icon: 'sk_wind', color: '#7ad070', desc: v => `+${U.fmtNum(v)}% de Vel. de Ataque` },
   { id: 'pre', name: 'Treino de Precisão', stat: 'crit', per: 0.5, base: 100, growth: 1.3, max: 50, icon: 'sk_eye', color: '#ffd04a', desc: v => `+${U.fmtNum(v)}% de Chance Crítica` },
   { id: 'fer', name: 'Golpes Ferozes', stat: 'critDmg', per: 4, base: 120, growth: 1.28, icon: 'sk_star', color: '#ff5aa0', desc: v => `+${U.fmtNum(v)}% de Dano Crítico` },
@@ -292,8 +335,12 @@ const ACHIEVEMENTS = [
   { id: 'zone150', name: 'Coração das Trevas', desc: 'Alcance a zona 150', stat: 'maxZone', goal: 150, reward: { hpPct: 10 } },
   { id: 'zone200', name: 'Além do Limite', desc: 'Alcance a zona 200', stat: 'maxZone', goal: 200, reward: { dmgPct: 15 } },
   { id: 'zone250', name: 'OverLevel', desc: 'Alcance a zona 250', stat: 'maxZone', goal: 250, reward: { dmgPct: 20 } },
+  { id: 'zone300', name: 'Senhor das Masmorras', desc: 'Alcance a zona 300', stat: 'maxZone', goal: 300, reward: { hpPct: 20 } },
+  { id: 'zone400', name: 'Além do Horizonte', desc: 'Alcance a zona 400', stat: 'maxZone', goal: 400, reward: { dmgPct: 25 } },
+  { id: 'zone500', name: 'Fim da Jornada', desc: 'Alcance a zona 500', stat: 'maxZone', goal: 500, reward: { dmgPct: 30, hpPct: 30 } },
   { id: 'lvl300', name: 'Avatar', desc: 'Alcance o nível 300', stat: 'maxLevel', goal: 300, reward: { xpPct: 10 } },
   { id: 'lvl450', name: 'Transcendente', desc: 'Alcance o nível 450', stat: 'maxLevel', goal: 450, reward: { xpPct: 15 } },
+  { id: 'lvl800', name: 'Divindade', desc: 'Alcance o nível 800', stat: 'maxLevel', goal: 800, reward: { xpPct: 20 } },
   { id: 'asc10', name: 'Roda do Destino', desc: 'Ascenda 10 vezes', stat: 'ascensions', goal: 10, reward: { dmgPct: 5 } },
   { id: 'asc25', name: 'Eterno Retorno', desc: 'Ascenda 25 vezes', stat: 'ascensions', goal: 25, reward: { hpPct: 8 } },
   { id: 'asc50', name: 'Além da Morte', desc: 'Ascenda 50 vezes', stat: 'ascensions', goal: 50, reward: { dmgPct: 10 } },
@@ -303,7 +350,7 @@ const ACHIEVEMENTS = [
   { id: 'lord250', name: 'Domador de Senhores', desc: 'Derrote 250 Senhores de bioma', stat: 'lordsKilled', goal: 250, reward: { bossDmg: 10 } },
   { id: 'lord1k', name: 'Senhor dos Senhores', desc: 'Derrote 1.000 Senhores de bioma', stat: 'lordsKilled', goal: 1000, reward: { bossDmg: 15 } },
   { id: 'hit21', name: 'Golpe Devastador', desc: 'Cause 1 sextilhão de dano num só golpe', stat: 'highestHit', goal: 1e21, reward: { dmgPct: 5 } },
-  { id: 'hit25', name: 'Fúria Cósmica', desc: 'Cause 10 septilhões de dano num só golpe', stat: 'highestHit', goal: 1e25, reward: { dmgPct: 10 } },
+  { id: 'hit42', name: 'Fúria Cósmica', desc: 'Cause 1 tredecilhão (1 seguido de 42 zeros) de dano num só golpe', stat: 'highestHit', goal: 1e42, reward: { dmgPct: 10 } },
   { id: 'chest25k', name: 'Rei dos Baús', desc: 'Abra 25.000 baús', stat: 'chests', goal: 25000, reward: { goldPct: 15 } },
   { id: 'mimic1k', name: 'Caçador de Mímicos', desc: 'Derrote 1.000 Mímicos', stat: 'mimics', goal: 1000, reward: { mf: 5 } },
   { id: 'leg5k', name: 'Arsenal Lendário', desc: 'Encontre 5.000 itens Lendários', stat: 'legendaries', goal: 5000, reward: { mf: 10 } },
@@ -321,11 +368,16 @@ const ACHIEVEMENTS = [
   { id: 'shrine5k', name: 'Peregrino', desc: 'Ative 5.000 santuários', stat: 'shrines', goal: 5000, reward: { xpPct: 8 } },
   { id: 'time24', name: 'Dedicação', desc: 'Jogue por 24 horas', stat: 'playTime', goal: 24 * 3600, time: true, reward: { goldPct: 10 } },
   { id: 'time100', name: 'Vida de Aventureiro', desc: 'Jogue por 100 horas', stat: 'playTime', goal: 100 * 3600, time: true, reward: { xpPct: 10 } },
+  { id: 'celest1', name: 'Luz Celestial', desc: 'Encontre um item Celestial', stat: 'celestials', goal: 1, reward: { mf: 8 } },
+  { id: 'celest100', name: 'Constelação', desc: 'Encontre 100 itens Celestiais', stat: 'celestials', goal: 100, reward: { dmgPct: 12 } },
+  { id: 'chosen', name: 'Escolhido dos Céus', desc: 'Desbloqueie uma classe ou espécie Celestial', val: () => { const u = Game.sharedUnlocks(); return u.classes.filter(c => CLASSES[c].rarity === 5).length + u.species.filter(x => SPECIES[x].rarity === 5).length; }, goal: 1, reward: { xpPct: 12 } },
+  { id: 'newlords', name: 'Caçador de Lendas', desc: 'Derrote a Quimera, o Kraken, Fenrir, o Titã e o Serafim Caído', val: st => ['chimera', 'kraken', 'fenrir', 'titan', 'seraph_lord'].filter(k => (st.stats['lord_' + k] || 0) > 0).length, goal: 5, reward: { bossDmg: 15 } },
 ];
-function achExclusives(st) {
+function achExclusiveIds(st) {
   const ids = new Set();
   for (const it of [...(st.vault || []), ...Object.values(st.equip || {}), ...(st.inv || [])]) if (it && it.excl) ids.add(it.excl);
-  return ids.size;
+  return ids;
 }
+function achExclusives(st) { return achExclusiveIds(st).size; }
 
 const HERO_NAMES = ['Aldric', 'Bryndis', 'Caelum', 'Darius', 'Elara', 'Fenrir', 'Gwendal', 'Hakon', 'Isolde', 'Jorund', 'Kaelen', 'Lyra', 'Morwen', 'Nyx', 'Orin', 'Perseu', 'Ragnar', 'Seraphine', 'Thalia', 'Ulric', 'Valen', 'Wren', 'Ysolde', 'Zephyr', 'Tupã', 'Iara', 'Jaci', 'Rudá', 'Ceci', 'Ubirajara'];
