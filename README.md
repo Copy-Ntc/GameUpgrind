@@ -31,15 +31,14 @@ Com um projeto gratuito no Supabase, os jogadores criam conta, os 3 slots ficam 
 
 ## Duração e escala
 
-Não há limite de zona nem de nível. A escala foi calibrada com `dev/career.js` para a **zona 200** ser a meta de longo prazo:
+Não há limite de zona nem de nível. A escala foi calibrada com `dev/career.js` (horas simuladas na velocidade 1x) para a **zona 500** ser a meta de longo prazo:
 
-- a primeira jornada costuma acabar perto da zona 30, em cerca de 1 hora;
-- Classes e espécies Lendárias aparecem depois de umas 35 horas de jogo otimizado;
-- a zona 200 exige 70 horas ou mais.
+- a primeira jornada costuma passar da zona 100;
+- a zona 200 chega perto das 20 horas, e daí em diante cada zona custa mais;
+- a zona 400 fica perto das 100 horas e a zona 500 perto das 180 a 200 horas;
+- classes e espécies Celestiais pedem de 25 a 30 ascensões.
 
-Com tudo isso, a duração fica igual ou maior que a de completar o Vampire Survivors.
-
-Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24%. Essa diferença é a "parede" do grind. Raridade, Arma Ancestral, Altar, Maestria, multiclasse e mestiçagem são multiplicadores que empurram a parede, e cada um vale várias zonas.
+Itens e ouro crescem 17,5% por zona; a Vida dos inimigos cresce 25% e o Dano, 24% até a zona 200, e depois 23,8% e 22,8%. Essa diferença é a "parede" do grind. Treino, Forja e Altar multiplicam, e raridade, Arma Ancestral, Maestria, multiclasse e mestiçagem empurram a parede, cada um valendo várias zonas.
 
 ## Sistemas
 
