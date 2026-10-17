@@ -287,6 +287,7 @@ const RELIC_COST = [0, 15, 40, 90, 200, 450, 1200];
 const RELIC_DMG = [15, 30, 50, 75, 110, 160, 240];
 const RELIC_ATK = 0.7;
 const RELIC_RNAME = ['Comum', 'Incomum', 'Rara', 'Épica', 'Lendária', 'Mítica', 'Celestial'];
+const RELIC_MAX = RELIC_RNAME.length - 1;
 const RELICS = {
   fighter: { name: 'Lâmina do Campeão Eterno', per: { critDmg: 6, hpPct: 3 }, powers: ['berserk', 'slayer'] },
   mage: { name: 'Cajado do Primeiro Arcano', per: { cdr: 1.5, critDmg: 5 }, powers: ['echo', 'thunder'] },

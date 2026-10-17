@@ -9,7 +9,7 @@ const ICONS = {
   gear: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zm6.3 3.7-.1-1.8 1.4-1.2-1.4-2.5-1.8.5-1.4-1L10.6 1H7.8l-.4 1.9-1.5.9-1.8-.5L2.7 5.8l1.4 1.3v1.8l-1.4 1.2 1.4 2.5 1.8-.5 1.5 1 .4 1.8h2.8l.4-1.9 1.4-.9 1.8.5 1.4-2.5z"/></svg>',
 };
 
-const DISCORD_URL = 'https://discord.gg/c9T9Xbyt';
+const DISCORD_URL = 'https://discord.gg/xjde9TyeYN';
 const TABS = [['equip', 'Herói'], ['talents', 'Talentos'], ['hall', 'Salão'], ['train', 'Treino'], ['forge', 'Forja'], ['asc', 'Ascensão'], ['ach', 'Conquistas']];
 
 const UI = {
@@ -492,8 +492,8 @@ const UI = {
     h += `<div class="inv-tools"><button class="btn small" data-act="bulkMenu" data-keepmenu>Vender ▾</button>
       <button class="btn small${sel ? ' gold' : ''}" data-act="selectMode">${sel ? 'Concluir seleção' : 'Selecionar p/ vender'}</button>
       <button class="btn small" data-act="sortInv">Ordenar</button>
-      <select class="sel" data-set="autoSell" title="Vende automaticamente itens até essa raridade que não sejam melhorias (nunca vende itens travados ou forjados)">
-        ${['Auto-venda: desligada', 'Auto-venda: Comuns', 'Auto-venda: até Incomuns', 'Auto-venda: até Raros', 'Auto-venda: até Épicos', 'Auto-venda: até Lendários'].map((t, i) => `<option value="${i}" ${st.settings.autoSell === i ? 'selected' : ''}>${t}</option>`).join('')}
+      <select class="sel" data-set="autoSell" title="Vende automaticamente itens até essa raridade que não sejam melhorias (nunca vende exclusivas, itens travados ou forjados)">
+        ${['Auto-venda: desligada', 'Auto-venda: Comuns', 'Auto-venda: até Incomuns', 'Auto-venda: até Raros', 'Auto-venda: até Épicos', 'Auto-venda: até Lendários', 'Auto-venda: até Míticos', 'Auto-venda: até Celestiais'].map((t, i) => `<option value="${i}" ${st.settings.autoSell === i ? 'selected' : ''}>${t}</option>`).join('')}
       </select>
       <label class="chk"><input type="checkbox" data-set="autoEquip" ${st.settings.autoEquip ? 'checked' : ''}> Auto-equipar</label></div>`;
     if (sel) {
@@ -523,12 +523,12 @@ const UI = {
     const R = RARITIES[info.r];
     const lines = Object.entries(info.stats).map(([k, v]) => k === 'atk' ? `+${U.fmt(v)} Dano (cresce com a zona recorde)` : Items.statLine(k, v)).join(' · ');
     const pw = info.powers.map(p => `<b style="color:var(--orange)">✦ ${POWERS[p].name}</b>`).join(' ');
-    const nx = info.r < 5 ? RARITIES[info.r + 1] : null;
+    const nx = info.r < RELIC_MAX ? RARITIES[info.r + 1] : null;
     const block = Game.relicBlock(cls);
     let act = '';
     if (!compact && nx) act = `<button class="btn small purple" data-act="awaken" data-id="${cls}" ${block ? 'disabled' : ''}>Despertar → <span style="color:${nx.color}">${RELIC_RNAME[info.r + 1]}</span></button><div class="hint" style="margin:4px 0 0">${block || `Custa ${RELIC_COST[info.r + 1]} Fragmentos`}</div>`;
     else if (compact && nx) act = `<div class="hint" style="margin:4px 0 0">Próxima raridade: ${block || '<b style="color:var(--green)">pronta para despertar no Salão!</b>'}</div>`;
-    return `<div class="relic-card" style="--rc:${R.color}"><div class="item r${info.r}"><img src="${Sprites.relicUrl(cls, info.r)}" alt=""></div><div class="info"><div class="lbl">Arma Ancestral · ${CLASSES[cls].name}${st.cls !== cls ? '' : ''}</div><div class="nm" style="color:${R.color}">${def.name} <span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${RELIC_RNAME[info.r]}</span></div><div class="ds">${lines}${pw ? '<br>' + pw : ''}${info.r < 3 ? `<br><span style="color:var(--muted)">Ganha o poder ${POWERS[def.powers[0]].name} ao despertar para Épica e ${POWERS[def.powers[1]].name} em Mítica.</span>` : info.r < 5 ? `<br><span style="color:var(--muted)">Ganha ${POWERS[def.powers[1]].name} em Mítica.</span>` : ''}</div>${act}</div></div>`;
+    return `<div class="relic-card" style="--rc:${R.color}"><div class="item r${info.r}"><img src="${Sprites.relicUrl(cls, info.r)}" alt=""></div><div class="info"><div class="lbl">Arma Ancestral · ${CLASSES[cls].name}${st.cls !== cls ? '' : ''}</div><div class="nm" style="color:${R.color}">${def.name} <span class="rtag" style="color:${R.color};border-color:${U.rgba(R.color, 0.5)}">${RELIC_RNAME[info.r]}</span></div><div class="ds">${lines}${pw ? '<br>' + pw : ''}${info.r < 3 ? `<br><span style="color:var(--muted)">Ganha o poder ${POWERS[def.powers[0]].name} ao despertar para Épica e ${POWERS[def.powers[1]].name} em Mítica.</span>` : info.r < 5 ? `<br><span style="color:var(--muted)">Ganha ${POWERS[def.powers[1]].name} em Mítica.</span>` : info.r < RELIC_MAX ? '<br><span style="color:var(--muted)">Em Celestial, o dano da arma e todos os bônus dela crescem ainda mais.</span>' : ''}</div>${act}</div></div>`;
   },
 
   tab_talents() {
@@ -897,7 +897,7 @@ const UI = {
       <div class="card multi-card"><div class="hint" style="margin:0 0 6px">Combine duas espécies dominadas: a segunda soma ${Math.round(MULTI_SP_SHARE * 100)}% dos atributos dela (sem os poderes), vale a raridade mais alta e dá +${MULTI_SP_SYNERGY}% de Dano e Vida. Em troca, cada nível exige ${Math.round((MULTI_SP_XP - 1) * 100)}% mais XP (acumula com a multiclasse).</div><div style="font-size:12px">${sHint}</div></div></div>`;
     const nr = Object.keys(st.relics || {}).length;
     h += `<div class="sec"><div class="sec-h"><h3>Armas Ancestrais</h3><span class="sub">${nr}/${CLASS_ORDER.length} · <b style="color:var(--gold)">${Math.floor(st.shards || 0)}</b> Fragmentos</span></div>
-      <div class="hint">Cada classe tem uma arma exclusiva, encontrada uma única vez no <b>Cofre Ancestral</b> (aparece jogando com a classe a partir da zona ${RELIC_ZONE}). Ela acompanha a classe em todas as jornadas e pode ser despertada de Comum até Mítica com <b style="color:var(--gold)">Fragmentos Ancestrais</b> e recordes cada vez maiores com a classe. Os fragmentos caem dos Senhores de bioma e, às vezes, de chefes e Mímicos.</div>
+      <div class="hint">Cada classe tem uma arma exclusiva, encontrada uma única vez no <b>Cofre Ancestral</b> (aparece jogando com a classe a partir da zona ${RELIC_ZONE}). Ela acompanha a classe em todas as jornadas e pode ser despertada de Comum até Celestial com <b style="color:var(--gold)">Fragmentos Ancestrais</b> e recordes cada vez maiores com a classe. Os fragmentos caem dos Senhores de bioma e, às vezes, de chefes e Mímicos.</div>
       <div class="relic-list">${[st.cls, ...CLASS_ORDER.filter(c => c !== st.cls)].map(c => this.relicCard(c, false)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Classes</h3><span class="sub">${nc}/${CLASS_ORDER.length}</span></div><div class="hall-grid">${CLASS_ORDER.map(id => card('class', id)).join('')}</div></div>`;
     h += `<div class="sec"><div class="sec-h"><h3>Espécies</h3><span class="sub">${ns}/${SPECIES_ORDER.length}</span></div><div class="hall-grid">${SPECIES_ORDER.map(id => card('species', id)).join('')}</div></div>`;

@@ -71,7 +71,7 @@ const Game = {
       runCls: cls, runSp: species, relics: {}, shards: 0, relicPity: 0, parked: false,
       talents: { [CLASSES[cls].skills[0]]: 1 },
       equip: { weapon: null, helm: null, chest: null, gloves: null, boots: null, ring: null, amulet: null, offhand: null },
-      fusions: {}, autoFarmed: false, startZone: 1, vault: [], fusionPref: {}, exclFound: {}, exclPick: null,
+      fusions: {}, autoFarmed: false, startZone: 1, vault: [], fusionPref: {}, exclFound: {}, exclPick: null, celestFree: true,
       inv: [], training: {}, soulUpg: {},
       zone: 1, maxZone: 1, mode: 'advance', retreatLeft: 0, deathsInZone: 0, potions: 3,
       unlocks: { classes: DEFAULT_CLASSES(), species: DEFAULT_SPECIES() }, encPity: 0,
@@ -171,6 +171,7 @@ const Game = {
   },
 
   migrate(s) {
+    const lockedCelest = s.celestFree === undefined;
     if (!CLASSES[s.cls]) s.cls = 'fighter';
     const d = this.defaultState(s.cls, s.species, s.name || 'Herói', false);
     for (const k in d) if (s[k] === undefined) s[k] = d[k];
@@ -190,6 +191,7 @@ const Game = {
     for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
     for (const it of all) if (it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
     for (const it of all) if (it.excl && EXCLUSIVES[it.excl]) s.exclFound[it.excl] = true;
+    if (lockedCelest) for (const it of all) if (it.rarity === 6 && !it.excl) it.locked = false;
     return s;
   },
 
@@ -721,7 +723,7 @@ const Game = {
   relicBlock(cls) {
     const st = this.state, R = st.relics[cls];
     if (!R) return 'Ainda não encontrada';
-    if (R.r >= 5) return 'Raridade máxima';
+    if (R.r >= RELIC_MAX) return 'Raridade máxima';
     const nx = R.r + 1, best = ((st.classStats[cls] || {}).best || 0);
     if (best < RELIC_REQ[nx]) return `Requer zona ${RELIC_REQ[nx]} com ${CLASSES[cls].name} (recorde ${best})`;
     if (st.shards < RELIC_COST[nx]) return `Requer ${RELIC_COST[nx]} Fragmentos (você tem ${Math.floor(st.shards)})`;
@@ -880,7 +882,7 @@ const Game = {
       Sfx.play('legendary'); setTimeout(() => Sfx.play('ascend'), 400);
       UI.banner(item.name, `ARMA EXCLUSIVA! Criada por ${EXCLUSIVES[item.excl].by}`, 'purple', 4);
       this.log(`🌈 <b class="c7">${U.esc(item.name)}</b> é uma arma exclusiva criada por <b>${U.esc(EXCLUSIVES[item.excl].by)}</b>! Ela fica com você em todas as jornadas.`, 'loot');
-    } else if (item.rarity === 6) { item.locked = true; Sfx.play('legendary'); setTimeout(() => Sfx.play('rare'), 300); UI.banner(item.name, 'Item CELESTIAL encontrado!', 'purple', 3.5); }
+    } else if (item.rarity === 6) { Sfx.play('legendary'); setTimeout(() => Sfx.play('rare'), 300); UI.banner(item.name, 'Item CELESTIAL encontrado!', 'purple', 3.5); }
     else if (item.rarity >= 5) { Sfx.play('legendary'); UI.banner(item.name, 'Item Mítico encontrado!', 'red', 2.5); }
     else if (item.rarity === 4) { Sfx.play('legendary'); UI.banner(item.name, 'Item Lendário encontrado!', '', 2.2); }
     else if (item.rarity === 3) Sfx.play('epic');
@@ -899,7 +901,7 @@ const Game = {
   },
 
   isJunk(item, lvl = this.state.settings.autoSell) {
-    return lvl > 0 && item.rarity < lvl && !item.locked && item.plus === 0 && Stats.compareItem(item) <= 0;
+    return lvl > 0 && item.rarity < lvl && !item.excl && !item.locked && item.plus === 0 && Stats.compareItem(item) <= 0;
   },
 
   addToInv(item) {
