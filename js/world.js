@@ -11,7 +11,7 @@ const World = {
     const n = M.w * M.h;
     const W = Object.assign(M, {
       explored: new Uint8Array(n), vis: new Uint8Array(n), occ: new Int32Array(n), flow: new Int32Array(n).fill(-1),
-      ents: [], proj: [], fx: [], parts: [], texts: [], timers: [],
+      ents: [], proj: [], fx: [], parts: [], texts: [], timers: [], sings: [],
       boss: null, killed: 0, total: 0, t: 0, phoenix: false, shake: 0,
       mapDirty: true, fogDirty: true, flowKey: -1, blacklist: new Set(), stuckT: 0,
       chestsOpened: 0, zoneGold: 0, zoneXp: 0, zoneItems: 0, completed: false, bossAnnounced: false, relentless: false,
@@ -292,8 +292,9 @@ const World = {
         if (e.life <= 0) { this.killMinion(W, e); continue; }
         if (!e.moving) this.minionThink(W, e, dt);
       }
-      const frozen = e.effects.freeze > 0 || e.effects.stun > 0;
-      if (!frozen) this.updateMove(W, e, dt, e.move * (e.effects.slow > 0 ? 0.6 : 1));
+      const pulled = e.effects.pull > 0;
+      const frozen = !pulled && (e.effects.freeze > 0 || e.effects.stun > 0);
+      if (!frozen) this.updateMove(W, e, dt, pulled ? Math.max(5, e.move) : e.move * (e.effects.slow > 0 ? 0.6 : 1));
     }
     W.ents = W.ents.filter(e => !(e.dead && e.deathT <= 0 && e.kind !== 'hero'));
 
@@ -314,6 +315,7 @@ const World = {
       } else { p.x += dx / d * step; p.y += dy / d * step; p.ang = Math.atan2(dy, dx); }
     }
     W.proj = W.proj.filter(p => !p.done);
+    if (W.sings && W.sings.length) this.updateSings(W, dt);
 
     if (W.timers.length) {
       for (const t of W.timers) { t.t -= dt; if (t.t <= 0 && !t.done) { t.done = true; t.fn(); } }
@@ -381,6 +383,10 @@ const World = {
         if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.5, color: '#5ac8ff', life: 0.4 });
       }
     }
+    if (S.powers.has('predator')) this.updatePrey(W, hero, dt);
+    if (S.powers.has('spin')) this.updateSpin(W, hero, dt);
+    if (S.powers.has('devour')) this.updateDevour(W, hero, dt);
+    this.exclAura(W, hero, dt);
     if (S.powers.has('heaven') && !hero.dead) this.updateHeaven(W, hero);
     else if (W.heaven && !W.heaven.dead) { this.killMinion(W, W.heaven); W.heaven = null; }
     if (S.flags.has('starfall')) {
@@ -597,6 +603,7 @@ const World = {
       hero.spikeN = (hero.spikeN || 0) + 1;
       if (hero.spikeN >= 4) { hero.spikeN = 0; this.spikeSlam(W, tgt); }
     }
+    if (S.powers.has('spin')) this.fx(W, 'spiral', tgt.rx + 0.5, tgt.ry + 0.5, { life: 0.3, ang: Math.atan2(tgt.y - hero.y, tgt.x - hero.x) });
     if (cls.ranged) {
       const spd = cls.proj === 'arrow' || cls.proj === 'bullet' ? 13 : 10;
       this.shoot(W, hero, tgt, cls.proj, (t) => this.heroHit(W, t, 1), { speed: spd });
@@ -635,6 +642,7 @@ const World = {
     if (S.powers.has('executioner') && t.hp < t.maxHp * 0.3) dmg *= 1.5;
     if (t.boss || t.elite) { dmg *= 1 + S.bossDmg / 100; if (S.powers.has('slayer')) dmg *= 1.4; }
     if (t.effects.hex > 0) dmg *= 1.2;
+    if (t.effects.halt > 0) dmg *= 1 + SPIN_HALT_DMG;
     dmg *= (1 + W.harvest / 100) * (1 + W.frenzy * 0.02);
     if (S.flags.has('charge') && !t.charged && !o.dot) { t.charged = true; dmg *= 2; }
     const crit = o.forceCrit || (!o.noCrit && Math.random() < (S.crit + bm.crit + (o.critBonus || 0)) / 100);
@@ -789,7 +797,7 @@ const World = {
       hero.hp = hero.maxHp * 0.6;
       this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 3, color: '#8a8aa8', life: 0.8 });
       this.burst(W, hero.rx + 0.5, hero.ry + 0.5, '#2a2a3a', 30, 5);
-      Game.log('<b style="color:#c8c8ff">Fôlego da Rainha Corvo!</b> Você retorna das sombras.', 'good');
+      Game.log('<b style="color:#c8c8ff">Fôlego do Corvo!</b> Você retorna das sombras.', 'good');
       Sfx.play('legendary');
       return;
     }
@@ -1207,9 +1215,133 @@ const World = {
     }
   },
 
-  heavenMult(S) {
-    const it = Game.state.equip.offhand, plus = it && it.excl === 'heights' ? it.plus : 0;
-    return HEAVEN_BASE * (1 + HEAVEN_PLUS * plus) * (S.moveSpd / 3.2);
+  heavenMult(S, it) {
+    it = it || Game.state.equip.offhand;
+    const plus = it && it.excl === 'heights' ? it.plus : 0;
+    return HEAVEN_BASE * (1 + HEAVEN_PLUS * plus) * Math.max(0.2, 1 + S.raw.moveSpd / 100);
+  },
+  feedHunger(W) {
+    const h = W.hero, b = h.buffs.find(x => x.id === 'hunger'), n = Math.min(PRED_MAX, (b ? b.n : 0) + 1);
+    const mods = { gold: n * PRED_STEP, xp: n * PRED_STEP };
+    if (b) Object.assign(b, { n, t: PRED_T, max: PRED_T, mods, name: `Fome ×${n}` });
+    else h.buffs.push({ id: 'hunger', n, name: `Fome ×${n}`, color: '#8aff7a', t: PRED_T, max: PRED_T, mods });
+    h._bm = null;
+    return n;
+  },
+  updatePrey(W, hero, dt) {
+    if (W.prey && W.prey.dead) W.prey = null;
+    hero.preyT = (hero.preyT === undefined ? 3 : hero.preyT) - dt;
+    if (W.prey || hero.preyT > 0) return;
+    let best = null, bd = 1e9;
+    for (const e of W.ents) {
+      if (e.kind !== 'enemy' || e.dead || e.boss || e.hidden || e.summoned || !W.vis[e.y * W.w + e.x]) continue;
+      const d = this.dist(hero, e);
+      if (d <= 8 && d < bd) { bd = d; best = e; }
+    }
+    if (!best) { hero.preyT = 1; return; }
+    hero.preyT = PRED_PREY_CD;
+    best.prey = true; W.prey = best;
+    this.text(W, best.rx + 0.5, best.ry - 0.6, 'Presa!', '#8aff7a', 11);
+    this.fx(W, 'ring', best.rx + 0.5, best.ry + 0.5, { r: 1, color: '#8aff7a', life: 0.5 });
+  },
+  spinGain(W, it, n) {
+    const L0 = spinLevel(it.spin);
+    it.spin = (it.spin || 0) + n;
+    const L = spinLevel(it.spin);
+    if (L <= L0) return;
+    Game.recalc();
+    const h = W.hero;
+    this.text(W, h.rx + 0.5, h.ry - 1, `Rotação nível ${L}!`, '#ff8ad8', 12, 1.2, -1, true);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; this.part(W, h.rx + 0.5, h.ry + 0.5, Math.cos(a) * 2.5, Math.sin(a) * 1.5, i % 2 ? '#ff8ad8' : '#5ac8ff', 0.6, 2, 0); }
+    if (L === SPIN_HALT_LVL) Game.log('<b style="color:#ff8ad8">A Rotação chegou ao nível 10!</b> Agora ela consegue parar o universo.', 'loot');
+  },
+  updateSpin(W, hero, dt) {
+    const it = Game.state.equip.weapon, L = it && it.excl === 'spin' ? spinLevel(it.spin) : 0;
+    if (L < SPIN_HALT_LVL) return;
+    hero.spinT = (hero.spinT === undefined ? 5 : hero.spinT) - dt;
+    if (hero.spinT > 0) return;
+    const near = this.enemiesNear(W, hero.rx, hero.ry, SPIN_HALT_R);
+    if (!near.length) { hero.spinT = 0.5; return; }
+    hero.spinT = Math.max(SPIN_HALT_MIN, SPIN_HALT_CD - 0.2 * (L - SPIN_HALT_LVL));
+    for (const e of near) {
+      const d = e.boss ? 1 : 2;
+      e.effects.stun = Math.max(e.effects.stun || 0, d);
+      e.effects.halt = Math.max(e.effects.halt || 0, d);
+    }
+    this.fx(W, 'halt', hero.rx + 0.5, hero.ry + 0.5, { life: 2, r: SPIN_HALT_R });
+    this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: SPIN_HALT_R, color: '#ff8ad8', life: 0.8 });
+    this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: SPIN_HALT_R * 0.55, color: '#5ac8ff', life: 0.6 });
+    this.text(W, hero.rx + 0.5, hero.ry - 1, 'O universo parou!', '#ff8ad8', 13, 1.4, -1, true);
+    if (Game.state.settings.shake) W.shake = Math.max(W.shake, 0.3);
+    Sfx.play('summon');
+  },
+  devourPow(it, stacks) {
+    const plus = it && it.excl === 'devour' ? it.plus : 0;
+    return DEVOUR_MULT * (1 + DEVOUR_PLUS * plus) * (1 + DEVOUR_STACK * stacks);
+  },
+  updateDevour(W, hero, dt) {
+    hero.devT = (hero.devT === undefined ? 2 : hero.devT) - dt;
+    if (W.devStacks) { W.devStackT -= dt; if (W.devStackT <= 0) W.devStacks = 0; }
+    if (hero.devT > 0) return;
+    const cand = W.ents.filter(e => e.kind === 'enemy' && !e.dead && !e.hidden && W.vis[e.y * W.w + e.x] && this.dist(hero, e) <= 7);
+    let best = null, bn = 0;
+    for (const e of cand) {
+      let n = 0;
+      for (const o of cand) if (U.dist(o.x, o.y, e.x, e.y) <= DEVOUR_R) n++;
+      if (n > bn) { bn = n; best = e; }
+    }
+    if (!best) { hero.devT = 0.5; return; }
+    hero.devT = DEVOUR_CD * (1 - Game.stats.cdr / 100);
+    const st = W.devStacks || 0;
+    W.devStacks = 0;
+    const pow = this.devourPow(Game.state.equip.offhand, st), r = DEVOUR_R + 0.12 * st;
+    this.shoot(W, hero, best, 'void', (t, p) => this.addSing(W, p.x - 0.5, p.y - 0.45, pow, r), { speed: 9, size: 1.3 + st * 0.07, aoe: true });
+    Sfx.play('magic', 80);
+  },
+  addSing(W, x, y, pow, r) {
+    (W.sings || (W.sings = [])).push({ x, y, t: 0, life: DEVOUR_PULL, pow, r, pullT: 0, caught: new Set() });
+    Sfx.play('zap', 80);
+  },
+  updateSings(W, dt) {
+    for (const s of W.sings) {
+      s.t += dt; s.pullT -= dt;
+      if (s.t < s.life) {
+        if (Math.random() < dt * 30) { const a = Math.random() * Math.PI * 2; this.part(W, s.x + 0.5 + Math.cos(a) * s.r, s.y + 0.5 + Math.sin(a) * s.r * 0.7, -Math.cos(a) * s.r * 2.2, -Math.sin(a) * s.r * 1.5, Math.random() < 0.6 ? '#b874ff' : '#7ae8ff', 0.45, 1.8, 0); }
+        if (s.pullT > 0) continue;
+        s.pullT = 0.12;
+        const cx = Math.round(s.x), cy = Math.round(s.y);
+        for (const e of this.enemiesNear(W, s.x, s.y, s.r)) {
+          if (e.boss) continue;
+          s.caught.add(e);
+          if (e.moving || e.casting || !e.move) continue;
+          e.effects.pull = 0.3;
+          const dx = Math.sign(cx - e.x), dy = Math.sign(cy - e.y);
+          if (!dx && !dy) continue;
+          if (!this.startMove(W, e, e.x + dx, e.y + dy) && !(dx && this.startMove(W, e, e.x + dx, e.y))) { if (dy) this.startMove(W, e, e.x, e.y + dy); }
+        }
+        continue;
+      }
+      s.done = true;
+      for (const e of this.enemiesNear(W, s.x, s.y, s.r + 0.3)) this.heroHit(W, e, s.pow, { noProc: true, noDodge: true, color: '#c89aff' });
+      const n = [...s.caught].filter(e => e.kind === 'enemy').length;
+      if (n) { W.devStacks = Math.min(DEVOUR_MAX, (W.devStacks || 0) + n); W.devStackT = DEVOUR_STACK_T; }
+      this.fx(W, 'ring', s.x + 0.5, s.y + 0.5, { r: s.r + 0.3, color: '#b874ff', life: 0.5 });
+      this.fx(W, 'ring', s.x + 0.5, s.y + 0.5, { r: s.r * 0.5, color: '#7ae8ff', life: 0.35 });
+      this.burst(W, s.x + 0.5, s.y + 0.5, '#b874ff', 18, 5);
+      if (n) this.text(W, s.x + 0.5, s.y - 0.4, `Devorou ${n}!`, '#d9b8ff', 11, 0.9, -1, true);
+      if (Game.state.settings.shake) W.shake = Math.max(W.shake, 0.25);
+      Sfx.play('boom', 120);
+    }
+    W.sings = W.sings.filter(s => !s.done);
+  },
+  exclAura(W, hero, dt) {
+    const S = Game.stats, x = hero.rx + 0.5, y = hero.ry + 0.6, r = U.rand, P = (c, p) => Math.random() < p ? c[0] : c[1];
+    if (S.powers.has('dagon') && Math.random() < dt * 8) this.part(W, x + r(-0.5, 0.5), y + r(-0.2, 0.3), r(-0.2, 0.2), r(-1.6, -0.8), P(['#ff7a2a', '#ffe08a'], 0.5), 0.7, 1.6, 0);
+    if (S.powers.has('spike') && Math.random() < dt * 5) this.part(W, x + r(-0.6, 0.6), y + 0.35, r(-0.3, 0.3), r(-1.2, -0.5), P(['#8a6a4a', '#ff9a3a'], 0.6), 0.6, 1.8, 3);
+    if (S.powers.has('heaven') && Math.random() < dt * 8) this.part(W, x + r(-0.8, 0.8), y + r(-0.6, 0.3), r(-0.6, 0.6), r(-1, -0.3), P(['#ffffff', '#ff9ad8'], 0.5), 0.5, 1.5, 0);
+    if (S.powers.has('predator') && Math.random() < dt * 6) { const leaf = Math.random() < 0.55; this.part(W, x + r(-0.7, 0.7), y + r(-0.9, -0.4), r(-0.4, 0.4), leaf ? r(0.2, 0.6) : r(-1, -0.4), leaf ? P(['#3aa84a', '#8aff7a'], 0.5) : '#ffd04a', 0.9, 1.6, 0); }
+    if (S.powers.has('spin') && Math.random() < dt * 8) { const a = W.t * 6; this.part(W, x + Math.cos(a) * 0.7, y + Math.sin(a) * 0.3, -Math.sin(a) * 1.2, Math.cos(a) * 0.5 - 0.4, P(['#ff8ad8', '#5ac8ff'], 0.6), 0.5, 1.5, 0); }
+    if (S.powers.has('devour') && Math.random() < dt * 10) { const a = Math.random() * Math.PI * 2; this.part(W, x + Math.cos(a) * 1.6, y + Math.sin(a) * 0.9, -Math.cos(a) * 2.2, -Math.sin(a) * 1.3, P(['#b874ff', '#7ae8ff'], 0.6), 0.6, 1.5, 0); }
   },
   updateHeaven(W, hero) {
     const S = Game.stats;
@@ -1242,7 +1374,7 @@ const World = {
   },
 
   enemyThink(W, e, dt) {
-    if (e.effects.stun > 0 || e.effects.freeze > 0 || e.hidden) return;
+    if (e.effects.stun > 0 || e.effects.freeze > 0 || e.effects.pull > 0 || e.hidden) return;
     const hero = W.hero;
     if (!e.aggro) {
       if (!hero.dead) {
@@ -1394,8 +1526,12 @@ const World = {
     const xp = 8 * Math.pow(1.16, z - 1) * e.xpMult;
     const goldMult = e.boss ? (e.lord ? 25 : 12) : e.elite ? 4 : e.type === 'mimic' ? 30 : 1;
     const gold = 4 * sc * U.rand(0.8, 1.2) * goldMult;
-    Game.gainXp(xp);
-    const got = Game.gainGold(gold);
+    const prey = !!(e.prey && S.powers.has('predator'));
+    const hunger = S.powers.has('predator') ? this.feedHunger(W) : 0;
+    const sw = st.equip.weapon;
+    if (sw && sw.excl === 'spin' && !e.summoned) this.spinGain(W, sw, e.boss ? 5 : 1);
+    Game.gainXp(xp * (prey ? PRED_PREY_MULT : 1));
+    const got = Game.gainGold(gold * (prey ? PRED_PREY_MULT : 1));
     if (st.settings.dmgNumbers) this.text(W, e.rx + 0.5, e.ry - 0.35, '+' + U.fmt(got), '#ffd04a', 10, 0.9, -1);
     if (S.powers.has('midas')) for (let i = 0; i < 8; i++) this.part(W, e.rx + 0.5, e.ry + 0.5, U.rand(-2, 2), U.rand(-4, -1), '#ffd04a', 0.8, 2.5, 9);
     if (S.powers.has('vampire')) this.healHero(W, W.hero.maxHp * 0.04);
@@ -1404,7 +1540,13 @@ const World = {
     else if (e.type === 'mimic') { n = 3; minR = 2; boost = 0.5; ilvl = z + 1; st.stats.mimics++; }
     else if (e.elite) { n = Math.random() < 0.45 ? 1 : 0; minR = 1; boost = 0.15; ilvl = z; }
     else if (!e.summoned && Math.random() < 0.04) n = 1;
-    for (let i = 0; i < n; i++) Game.dropItem(Items.generate(ilvl, { cls: st.cls, minR, mf: S.mf, boost }), e.rx, e.ry);
+    for (let i = 0; i < n; i++) Game.dropItem(Items.generate(ilvl, { cls: st.cls, minR, mf: S.mf + hunger, boost }), e.rx, e.ry);
+    if (prey) {
+      W.prey = null;
+      Game.dropItem(Items.generate(ilvl, { cls: st.cls, minR: 2, mf: S.mf + hunger, boost: 0.2 }), e.rx, e.ry);
+      this.text(W, e.rx + 0.5, e.ry - 0.8, 'Presa abatida!', '#8aff7a', 12, 1.2, -1, true);
+      for (let i = 0; i < 10; i++) this.part(W, e.rx + 0.5, e.ry + 0.5, U.rand(-2, 2), U.rand(-4, -1), i % 2 ? '#ffd04a' : '#8aff7a', 0.9, 2.5, 9);
+    }
     if (!e.summoned && Math.random() < (e.boss ? 1 : e.elite ? 0.2 : 0.035)) Game.gainPotion(e.rx, e.ry);
     if (e.lord) Game.gainShards(1 + Math.floor(z / 25), e.rx, e.ry);
     else if (e.boss && Math.random() < 0.2) Game.gainShards(1, e.rx, e.ry);
@@ -1536,4 +1678,4 @@ const World = {
 
 const PROJ_COLORS = { arrow: '#e8e0c8', bigarrow: '#fff6c0', arcane: '#9ad8ff', fire: '#ff8a2a', shadow: '#b874ff', drain: '#ff4a6a', ice: '#9ad8ff', spit: '#9aff5a', beam: '#ff4aa0',
   holy: '#fff2a0', note: '#ff7ad0', thorn: '#7ad070', chaos: '#ff5aa0', eldritch: '#c070ff', bullet: '#ffe8a0', cannon: '#ffb02a',
-  acid: '#9aff5a', coin: '#ffd04a', shuriken: '#d8e0ea', spirit: '#c8a8ff' };
+  acid: '#9aff5a', coin: '#ffd04a', shuriken: '#d8e0ea', spirit: '#c8a8ff', void: '#b874ff' };

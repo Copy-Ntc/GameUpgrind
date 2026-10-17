@@ -1,4 +1,13 @@
 'use strict';
+const EXCL_AURAS = {
+  bluefire: { n: 3, r: 0.9, spd: 2.6, kind: 'flame', c: ['#3a8aff', '#bff4ff'] },
+  heaven: { n: 4, r: 0.95, spd: 5, kind: 'feather', c: ['#ffffff', '#ff9ad8'] },
+  devour: { n: 3, r: 0.95, spd: -1.4, kind: 'void', c: ['#05030a', '#b874ff'] },
+  dagon: { n: 3, r: 0.62, spd: 2, kind: 'ember', c: ['#ff7a2a', '#ffe08a'] },
+  spike: { n: 3, r: 0.66, spd: 1.2, kind: 'rock', c: ['#8a6a4a', '#5a4030'] },
+  predator: { n: 4, r: 0.62, spd: 1.6, kind: 'coin', c: ['#ffd04a', '#3aa84a'] },
+  spin: { n: 10, r: 0.6, spd: 3, kind: 'spin', c: ['#ff8ad8', '#b8448f'] },
+};
 const Render = {
   canvas: null, ctx: null, mini: null, mctx: null,
   dpr: 1, zoom: 2, unit: 2, TS: 32,
@@ -285,10 +294,13 @@ const Render = {
       return true;
     }).sort((a, b) => a.ry - b.ry);
     for (const e of ents) this.drawShadow((e.rx + 0.5) * TS, (e.ry + 1) * TS - u * 2, e.scale * (e.kind === 'hero' ? 0.85 : 0.8), e.fly);
+    this.drawAura(W, false);
     for (const e of ents) this.drawEnt(W, e);
+    this.drawAura(W, true);
 
     for (const p of W.proj) if (p.delay <= 0) this.drawProj(p);
 
+    for (const s of W.sings || []) this.drawSing(s);
     for (const f of W.fx) if (f.type !== 'telegraph' && f.type !== 'cloud') this.drawFx(W, f);
 
     for (const p of W.parts) {
@@ -410,9 +422,19 @@ const Render = {
       ctx.globalAlpha = 1;
     }
 
+    if (e.prey && !e.dead && Game.stats && Game.stats.powers.has('predator')) {
+      const gx = (e.rx + 0.5) * TS, gy = (e.ry + 1) * TS - u * 2, ex = TS * 0.48 * scale, ey = TS * 0.18 * scale;
+      ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 6);
+      ctx.strokeStyle = '#8aff7a'; ctx.lineWidth = u;
+      ctx.beginPath(); ctx.ellipse(gx, gy, ex, ey, 0, 0, 7); ctx.stroke();
+      ctx.fillStyle = '#ffd04a';
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + t * 2; ctx.fillRect(Math.round(gx + Math.cos(a) * ex - u), Math.round(gy + Math.sin(a) * ey - u), u * 2, u * 2); }
+      ctx.globalAlpha = 1;
+    }
     const spr = Sprites.get(e.sprite, e.pal);
     let tint = null;
     if (e.effects.freeze > 0) tint = { c: '#7ad0ff', a: 0.55 };
+    else if (e.effects.halt > 0) tint = { c: '#ff8ad8', a: 0.4 };
     else if (e.dots && e.dots.length) tint = { c: e.dots[0].color, a: 0.18 + 0.1 * Math.sin(t * 8) };
     else if (e.kind === 'minion') tint = { c: '#4dff8a', a: 0.12 };
     if (e.type === 'ghost') alpha *= 0.75;
@@ -439,6 +461,90 @@ const Render = {
       ctx.fillText('!', cx, by - 18 * Math.max(1, Math.round(u * scale)));
       ctx.globalAlpha = 1;
     }
+  },
+
+  drawAura(W, front) {
+    const h = W.hero, S = Game.stats;
+    if (!h || h.dead || !S || !S.powers) return;
+    const TS = this.TS, t = this.time, cx = (h.rx + 0.5) * TS, cy = (h.ry + 0.62) * TS;
+    for (const id in EXCL_AURAS) {
+      if (!S.powers.has(id)) continue;
+      const A = EXCL_AURAS[id];
+      let sp = A.spd;
+      if (id === 'spin') { const w = Game.state.equip.weapon; sp += Math.min(5, spinLevel(w && w.spin) * 0.08); }
+      for (let i = 0; i < A.n; i++) {
+        const a = t * sp + i * Math.PI * 2 / A.n, sn = Math.sin(a);
+        if ((sn > 0) !== front) continue;
+        this.auraMote(A, i, cx + Math.cos(a) * A.r * TS, cy + sn * A.r * TS * 0.38, a);
+      }
+    }
+    this.ctx.globalAlpha = 1;
+    this.ctx.globalCompositeOperation = 'source-over';
+  },
+  auraMote(A, i, x, y, a) {
+    const ctx = this.ctx, u = this.unit, t = this.time, R = Math.round;
+    switch (A.kind) {
+      case 'flame': {
+        const fl = 1 + 0.35 * Math.sin(t * 18 + i * 2);
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.9;
+        ctx.fillStyle = A.c[0]; ctx.fillRect(R(x - u), R(y - u * 3 * fl), u * 2, R(u * 3 * fl));
+        ctx.fillStyle = A.c[1]; ctx.fillRect(R(x - u * 0.5), R(y - u * 1.5), Math.ceil(u), Math.ceil(u));
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      }
+      case 'ember': {
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.85 + 0.15 * Math.sin(t * 14 + i);
+        ctx.fillStyle = A.c[0]; ctx.fillRect(R(x - u), R(y - u), u * 2, u * 2);
+        ctx.fillStyle = A.c[1]; ctx.fillRect(R(x - u * 0.5), R(y - u * 0.5), Math.ceil(u), Math.ceil(u));
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      }
+      case 'rock': {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = A.c[1]; ctx.fillRect(R(x - u), R(y - u), u * 2, u * 2);
+        ctx.fillStyle = A.c[0]; ctx.fillRect(R(x - u), R(y - u), Math.ceil(u), Math.ceil(u));
+        break;
+      }
+      case 'feather': {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = A.c[0]; ctx.fillRect(R(x - u * 1.5), R(y - u * 0.5), u * 3, Math.ceil(u));
+        ctx.fillStyle = A.c[1]; ctx.fillRect(R(x + u * 1.5), R(y - u * 0.5), Math.ceil(u), Math.ceil(u));
+        break;
+      }
+      case 'coin': {
+        ctx.globalAlpha = 1;
+        if (i % 2) { ctx.fillStyle = A.c[1]; ctx.fillRect(R(x - u), R(y - u * 0.5), u * 2, Math.ceil(u)); ctx.fillStyle = '#8aff7a'; ctx.fillRect(R(x - u), R(y - u * 0.5), Math.ceil(u), Math.ceil(u)); }
+        else { ctx.fillStyle = A.c[0]; ctx.fillRect(R(x - u), R(y - u), u * 2, u * 2); ctx.fillStyle = '#fff6c0'; ctx.fillRect(R(x - u), R(y - u), Math.ceil(u), Math.ceil(u)); }
+        break;
+      }
+      case 'spin': {
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = A.c[i % 2];
+        ctx.fillRect(R(x - u * 0.75), R(y + Math.sin(a * 3) * u * 3 - u * 0.75), Math.ceil(u * 1.5), Math.ceil(u * 1.5));
+        break;
+      }
+      case 'void': {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = A.c[0]; ctx.beginPath(); ctx.arc(x, y, u * 1.6, 0, 7); ctx.fill();
+        ctx.strokeStyle = A.c[1]; ctx.lineWidth = Math.max(1, u * 0.8); ctx.stroke();
+        break;
+      }
+    }
+  },
+  drawSing(s) {
+    const ctx = this.ctx, TS = this.TS, u = this.unit, t = this.time;
+    const x = (s.x + 0.5) * TS, y = (s.y + 0.5) * TS, k = Math.min(1, s.t / s.life);
+    ctx.globalAlpha = 0.16; ctx.fillStyle = '#b874ff';
+    ctx.beginPath(); ctx.arc(x, y, s.r * TS * (1 - 0.3 * k), 0, 7); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.75; ctx.lineWidth = u * 1.2;
+    for (let i = 0; i < 3; i++) {
+      const rr = TS * (0.55 + 0.25 * i) * (1 - 0.4 * k), a0 = -t * (4 + i) + i * 2;
+      ctx.strokeStyle = i === 1 ? '#7ae8ff' : '#b874ff';
+      ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.45, 0, a0, a0 + 3.6); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = '#05030a'; ctx.beginPath(); ctx.arc(x, y, TS * (0.22 + 0.18 * k), 0, 7); ctx.fill();
+    ctx.strokeStyle = '#d9b8ff'; ctx.lineWidth = u * 0.8; ctx.stroke();
   },
 
   bar(cx, y, w, h, frac, col, back = 'rgba(10,6,14,0.85)') {
@@ -710,6 +816,26 @@ const Render = {
         ctx.globalCompositeOperation = 'source-over';
         break;
       }
+      case 'spiral': {
+        ctx.globalAlpha = 1 - p;
+        const ca = Math.cos(f.ang), sa = Math.sin(f.ang), L = TS * 0.9;
+        ctx.strokeStyle = '#5ac8ff'; ctx.lineWidth = u;
+        ctx.beginPath(); ctx.moveTo(x - ca * L * 0.6, y - sa * L * 0.6); ctx.lineTo(x + ca * L * 0.4, y + sa * L * 0.4); ctx.stroke();
+        for (let i = 0; i < 14; i++) {
+          const k = i / 13, ph = k * Math.PI * 6 + f.t * 30, along = k - 0.6, off = Math.sin(ph) * TS * 0.22;
+          ctx.fillStyle = Math.cos(ph) > 0 ? '#ff8ad8' : '#b8448f';
+          ctx.fillRect(Math.round(x + ca * L * along - sa * off - u), Math.round(y + sa * L * along + ca * off - u), Math.ceil(u * 1.5), Math.ceil(u * 1.5));
+        }
+        break;
+      }
+      case 'halt': {
+        const a = p < 0.1 ? p / 0.1 : p > 0.75 ? (1 - p) / 0.25 : 1;
+        ctx.globalAlpha = a * 0.14; ctx.fillStyle = '#8a7aff';
+        ctx.fillRect(x - TS * 30, y - TS * 20, TS * 60, TS * 40);
+        ctx.globalAlpha = a * 0.55; ctx.strokeStyle = '#ff8ad8'; ctx.lineWidth = u;
+        for (let i = 0; i < 2; i++) { const d = i ? -1 : 1; ctx.beginPath(); ctx.arc(x, y, f.r * TS * (0.5 + 0.5 * i), f.t * d * 2, f.t * d * 2 + 5); ctx.stroke(); }
+        break;
+      }
       case 'rain': {
         ctx.strokeStyle = '#e8e0c8'; ctx.lineWidth = u;
         ctx.globalAlpha = p > 0.85 ? (1 - p) / 0.15 : 1;
@@ -748,6 +874,7 @@ const Render = {
     for (const t of W.torches) if (W.explored[t.y * W.w + t.x]) hole(t.x + 0.5, t.y + 0.6, 2.8 + Math.sin(this.time * 9 + t.ph) * 0.12, 0.9);
     if (W.portal.active) hole(W.portal.x + 0.5, W.portal.y + 0.3, 3.5, 0.9);
     for (const p of W.proj) if (p.kind !== 'arrow') hole(p.x, p.y, 1.6, 0.7);
+    for (const s3 of W.sings || []) hole(s3.x + 0.5, s3.y + 0.5, s3.r + 0.5, 0.6);
     for (const f of W.fx) if (f.type === 'ring' || f.type === 'holy' || f.type === 'meteor') hole(f.x, f.y, (f.r || 1) + 1, 0.7 * (1 - f.t / f.life));
     for (const s2 of W.shrines) if (!s2.used && W.explored[s2.y * W.w + s2.x]) hole(s2.x + 0.5, s2.y + 0.3, 1.8, 0.6);
     if (W.biome.id === 'volcano') for (const d of W.decor) if (d.type === 'lava') hole(d.x + 0.5, d.y + 0.5, 1.4, 0.6);

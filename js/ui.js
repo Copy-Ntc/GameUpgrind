@@ -19,7 +19,7 @@ const UI = {
 
   $(id) { return document.getElementById(id); },
   speeds() { return Game.stats && Game.stats.powers.has('heaven') ? [1, 2, 3, 5, 10] : [1, 2, 3, 5]; },
-  renderSpeeds() { this.$('speed').innerHTML = this.speeds().map(v => `<button data-speed="${v}"${v === 10 ? ' class="heaven" title="Made in Heaven: o tempo acelera"' : ''}>${v}x</button>`).join(''); },
+  renderSpeeds() { this.$('speed').innerHTML = this.speeds().map(v => `<button data-speed="${v}"${v === 10 ? ' class="heaven" title="Céu Acelerado: o tempo acelera"' : ''}>${v}x</button>`).join(''); },
   titleOpen() { const t = this.$('title-screen'); return !!t && !t.classList.contains('hidden'); },
 
   qtyBar() {

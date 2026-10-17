@@ -154,8 +154,15 @@ const Items = {
       out[k] = (out[k] || 0) + (flat ? item.main[k] * pm : item.main[k]);
     }
     for (const a of item.affixes) out[a.k] = (out[a.k] || 0) + (a.flat ? a.v * Math.pow(1.03, item.plus) : a.v);
-    const D = item.excl && EXCLUSIVES[item.excl];
-    if (D && D.perPlus) for (const k in D.perPlus) out[k] = (out[k] || 0) + D.perPlus[k] * item.plus;
+    const ex = this.exclExtra(item);
+    for (const k in ex) out[k] = (out[k] || 0) + ex[k];
+    return out;
+  },
+  exclExtra(item) {
+    const D = item.excl && EXCLUSIVES[item.excl], out = {};
+    if (!D) return out;
+    if (D.perPlus) for (const k in D.perPlus) out[k] = D.perPlus[k] * item.plus;
+    if (D.grow) { const g = D.grow(item); for (const k in g) out[k] = (out[k] || 0) + g[k]; }
     return out;
   },
 
@@ -189,17 +196,18 @@ const Items = {
     if (opts.tag) h += `<div class="eq-tag">${opts.tag}</div>`;
     h += `<div class="tt-name c${item.rarity}">${U.esc(item.name)}${item.plus ? ` <span style="color:#ffe39a">+${item.plus}</span>` : ''}</div>`;
     h += `<div class="tt-sub">${this.typeLine(item)} · Nível ${item.ilvl}</div>`;
-    const pm = 1 + 0.08 * item.plus;
+    const pm = Math.pow(1.08, item.plus);
     for (const k in item.main) {
       const info = STAT_INFO[k];
       const v = info.pct ? item.main[k] : item.main[k] * pm;
       if (info.pct) h += `<div class="tt-main" style="font-weight:500;font-size:12px">${this.statLine(k, v)}</div>`;
       else h += `<div class="tt-main"><span style="color:#fff">${U.fmt(v)}</span> ${info.name}</div>`;
     }
+    const extra = this.exclExtra(item);
     if (item.affixes.length) {
       h += '<div class="tt-sep"></div>';
       for (const a of item.affixes) {
-        const v = a.flat ? a.v * (1 + 0.03 * item.plus) : a.v;
+        const v = (a.flat ? a.v * Math.pow(1.03, item.plus) : a.v) + (extra[a.k] || 0);
         h += `<div class="tt-aff">${this.statLine(a.k, v)}</div>`;
       }
     }
@@ -211,6 +219,8 @@ const Items = {
     if (item.excl) {
       const D = EXCLUSIVES[item.excl];
       if (D.forgeText) h += `<div class="tt-pow"><b>⚒ Forja</b>${D.forgeText}</div>`;
+      const lv = D.live && Game.stats ? D.live(item) : '';
+      if (lv) h += `<div class="tt-pow"><b>◎ Agora</b>${lv}</div>`;
       h += `<div class="tt-lore">“${D.lore}”</div><div class="tt-by">Criada por <b>${U.esc(D.by)}</b> · fica com você entre jornadas</div>`;
     }
     if (opts.compare !== false && st) {

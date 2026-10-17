@@ -117,7 +117,9 @@ const Game = {
       for (const slot of EXCL_SLOTS) {
         const id = this.exclChoice(slot);
         if (!id || !EXCLUSIVES[id] || EXCLUSIVES[id].slot !== slot || !P.exclFound[id]) continue;
-        const vi = P.vault.findIndex(v => v.excl === id);
+        const score = v => (v.plus || 0) * 1e9 + (v.spin || 0);
+        let vi = -1;
+        P.vault.forEach((v, i) => { if (v && v.excl === id && (vi < 0 || score(v) > score(P.vault[vi]))) vi = i; });
         const it = vi >= 0 ? P.vault.splice(vi, 1)[0] : Items.makeExclusive(id, sz);
         Items.retune(it, sz); it.isNew = false;
         const cur = fresh.equip[slot];

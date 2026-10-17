@@ -104,7 +104,10 @@ const POWERS = {
   swift: { name: 'Passos do Vento', desc: '+20% de Vel. de Movimento e +10% de Vel. de Ataque.' },
   dagon: { name: 'Chama de Dagon', desc: 'Todo golpe incendeia o alvo (40% do Dano por segundo, 3s). Críticos explodem em chamas, causando 100% do Dano aos inimigos próximos.', excl: true },
   spike: { name: 'Terra Partida', desc: 'A cada 4 ataques, golpeia o chão: 220% do Dano em área, atordoa por 0,6s e deixa as rachaduras em chamas (50% do Dano por segundo, 3s).', excl: true },
-  heaven: { name: 'Made in Heaven', desc: 'Um aliado acompanha você para onde for, sem nunca ficar para trás, e ataca com dano que cresce com a sua Velocidade de Movimento. Com ela equipada, a velocidade 10x do jogo fica disponível.', excl: true },
+  heaven: { name: 'Céu Acelerado', desc: 'Um Centauro Celeste acompanha você para onde for, sem nunca ficar para trás, e ataca com dano que cresce com a sua Velocidade de Movimento (inclusive a parte acima do limite de velocidade). Com ela equipada, a velocidade 10x do jogo fica disponível.', excl: true },
+  predator: { name: 'Fome do Predador', desc: 'Cada abate acumula Fome (até 25, somem após 8s sem abater): cada acúmulo dá +2% de Ouro e de XP e +1% de Sorte. A cada 10s, um inimigo próximo é marcado como Presa: abatê-la dá o triplo de Ouro e XP e um item Raro ou melhor.', excl: true },
+  spin: { name: 'Rotação Infinita', desc: 'Cada abate faz a rotação girar mais. Cada nível de Rotação dá +2% de Dano e +0,5% de Vel. de Ataque, sem limite (cada nível pede mais abates que o anterior). A partir do nível 10, a rotação anula o giro do universo a cada 20s (0,2s a menos por nível acima do 10, até 10s): os inimigos por perto ficam paralisados por 2s (Chefes 1s) e recebem +25% de dano.', excl: true },
+  devour: { name: 'Singularidade', desc: 'A cada 6s dispara uma singularidade no maior grupo de inimigos: ela suga todos num raio de 2,5 por 1,2s e implode com 100% do Dano. Cada inimigo sugado deixa a próxima singularidade 6% mais forte e maior (até 10 acúmulos, somem em 12s).', excl: true },
   bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
 };
 
@@ -135,12 +138,48 @@ const EXCLUSIVES = {
     pal: { m: '#f4f4fa', w: '#f4f4fa', k: '#1b1424', g: '#e8b33a', c: '#5ae8ff', p: '#ff9ad8', n: '#7aff8a', r: '#ff7ae0' },
     main: { hp: 8, def: 2.5 }, affixes: { moveSpd: 30, atkSpd: 20, cdr: 10, dmgPct: 20 }, powers: ['heaven'],
     perPlus: { moveSpd: 4 }, minZone: 100, weight: 0.3, chance: 0.4,
-    forgeText: 'Cada + dá +4% de Vel. de Movimento e +6% de dano ao Made in Heaven.',
+    forgeText: 'Cada + dá +4% de Vel. de Movimento e +6% de dano ao Centauro Celeste.',
+    live: it => Game.state.equip.offhand === it ? `Dano do Centauro Celeste: <b>${Math.round(World.heavenMult(Game.stats, it) * 100)}%</b> do seu Dano (Vel. de Movimento total +${Math.round(Game.stats.raw.moveSpd)}%, contando a parte acima do limite).` : '',
     lore: 'O tempo acelera até o universo recomeçar.',
+  },
+  predator: {
+    name: 'Ganância Predadora', bname: 'Arco', g: 'm', slot: 'weapon', sprite: 'i_greed', by: 'Jhonzinzk',
+    pal: { k: '#1a2a1c', d: '#1f5a2a', m: '#3aa84a', l: '#8aff7a', g: '#e8b33a', w: '#d8ffd0', y: '#ffe27a', s: '#c8ccd8' },
+    bmult: 1.15, main: { atkSpd: 15 }, affixes: { crit: 10, critDmg: 60, atkSpd: 20, goldPct: 50, xpPct: 30, mf: 30 }, powers: ['predator'],
+    perPlus: { goldPct: 2, xpPct: 1 }, weight: 1,
+    forgeText: 'Cada + dá +2% de Ouro e +1% de XP, além do dano da arma.',
+    lore: 'Quanto mais caça, mais fome sente. E nunca volta de mãos vazias.',
+  },
+  spin: {
+    name: 'A Rotação Infinita', bname: 'Espiral', g: 'f', slot: 'weapon', sprite: 'i_spin', by: 'Eublz',
+    pal: { b: '#2a7aff', c: '#9ad8ff', w: '#ffffff', p: '#ff8ad8', q: '#b8448f' },
+    bmult: 1.1, main: { atkSpd: 10 }, affixes: { dmgPct: 20, crit: 8, critDmg: 40, atkSpd: 10 }, powers: ['spin'], minZone: 60, weight: 0.6,
+    grow: it => { const L = spinLevel(it.spin); return { dmgPct: SPIN_DMG * L, atkSpd: SPIN_ATKSPD * L }; },
+    live: it => { const k = it.spin || 0, L = spinLevel(k); return `Rotação nível <b>${L}</b> (${U.fmt(k)} abates): +${SPIN_DMG * L}% de Dano e +${U.fmtNum(SPIN_ATKSPD * L, 1)}% de Vel. de Ataque. Faltam ${U.fmt(spinNeed(L + 1) - k)} abates para o próximo nível.${L < SPIN_HALT_LVL ? ' A paralisia do universo libera no nível 10.' : ''}`; },
+    lore: 'Gira sem parar. Um dia, vai girar mais rápido que o próprio universo.',
+  },
+  devour: {
+    name: 'Canhão Devorador de Mundos', bname: 'Canhão', g: 'm', slot: 'offhand', sprite: 'i_devour', by: 'K1CK',
+    pal: { k: '#0a0612', d: '#2a1e3a', m: '#5a4a7a', l: '#9a8ac8', g: '#e8b33a', o: '#05030a', v: '#b874ff', n: '#5a2a9a', c: '#7ae8ff' },
+    main: { hp: 8, def: 2.5 }, affixes: { dmgPct: 25, bossDmg: 25, cdr: 10, critDmg: 30 }, powers: ['devour'], minZone: 80, weight: 0.6,
+    forgeText: 'Cada + dá +5% de dano às singularidades.',
+    live: it => Game.state.equip.offhand === it && Game.W ? `Próxima singularidade: <b>${Math.round(World.devourPow(it, Game.W.devStacks || 0) * 100)}%</b> do Dano, ${Game.W.devStacks || 0} acúmulos.` : '',
+    lore: 'Cada mundo devorado deixa a fome um pouco maior.',
   },
 };
 const HEAVEN_BASE = 0.35;
 const HEAVEN_PLUS = 0.06;
+const PRED_MAX = 25, PRED_T = 8, PRED_STEP = 0.02, PRED_PREY_CD = 10, PRED_PREY_MULT = 3;
+const SPIN_STEP = 10, SPIN_DMG = 2, SPIN_ATKSPD = 0.5, SPIN_HALT_LVL = 10, SPIN_HALT_CD = 20, SPIN_HALT_MIN = 10, SPIN_HALT_R = 7, SPIN_HALT_DMG = 0.25;
+const DEVOUR_CD = 6, DEVOUR_R = 2.5, DEVOUR_PULL = 1.2, DEVOUR_MULT = 1.0, DEVOUR_STACK = 0.06, DEVOUR_MAX = 10, DEVOUR_STACK_T = 12, DEVOUR_PLUS = 0.05;
+function spinNeed(L) { return SPIN_STEP * L * (L + 1); }
+function spinLevel(k) {
+  k = Math.max(0, k || 0);
+  let L = Math.max(0, Math.floor((Math.sqrt(1 + 4 * k / SPIN_STEP) - 1) / 2));
+  while (spinNeed(L + 1) <= k) L++;
+  while (L > 0 && spinNeed(L) > k) L--;
+  return L;
+}
 
 const LEGEND_NAMES = {
   weapon: ['Fúria do Dragão', 'Lamento Eterno', 'Aurora Sangrenta', 'Juramento do Rei', 'Presa do Leviatã', 'Sussurro da Morte', 'Chama Primordial', 'Quebra-Mundos', 'Canção do Crepúsculo', 'Ruína dos Titãs'],
@@ -188,7 +227,7 @@ const ENEMIES = {
   gnoll_hunter: { name: 'Gnoll Caçador', g: 'm', sprite: 'goblin', pal: { a: '#b89a5a', b: '#4a3020', e: '#ff3a3a', t: '#f0f0e0', h: '#6a4a2a', m: '#8a6a3a' }, hp: 0.9, atk: 1.1, spd: 1.0, move: 3.0, range: 4.2, proj: 'arrow' },
   harpy: { name: 'Harpia', g: 'f', sprite: 'harpy', pal: { h: '#8a5a3a', s: '#e0b890', e: '#ff3a3a', c: '#a87a4a', a: '#c8a070', y: '#ffd04a' }, hp: 0.8, atk: 1.15, spd: 1.3, move: 3.8, fly: true, dodge: 0.1 },
   basilisk: { name: 'Basilisco', g: 'm', sprite: 'snake', pal: { a: '#5a8a4a', b: '#3a5a2a', e: '#ffe040', t: '#ff3a5a' }, hp: 1.3, atk: 1.15, spd: 0.9, move: 2.6, armor: 0.15, poison: 0.25 },
-  sahuagin: { name: 'Sahuagin', g: 'm', sprite: 'frog', pal: { a: '#3a8a6a', b: '#c8e0b0', e: '#ff5a3a', r: '#1a4a3a', m: '#8a9aa0' }, hp: 1.1, atk: 1.15, spd: 1.1, move: 3.0 },
+  sahuagin: { name: 'Diabo-do-Mar', g: 'm', sprite: 'frog', pal: { a: '#3a8a6a', b: '#c8e0b0', e: '#ff5a3a', r: '#1a4a3a', m: '#8a9aa0' }, hp: 1.1, atk: 1.15, spd: 1.1, move: 3.0 },
   giant_crab: { name: 'Caranguejo Gigante', g: 'm', sprite: 'crab', pal: { a: '#d8503a', b: '#8a2a1a', e: '#1b1424', w: '#ffb08a' }, hp: 1.6, atk: 1.1, spd: 0.8, move: 2.4, armor: 0.3 },
   siren: { name: 'Sereia', g: 'f', sprite: 'cultist', pal: { h: '#2a8a9a', s: '#7ac8c8', e: '#5affff', t: '#ffffff', a: '#2a6a8a', w: '#c8e8f0', r: '#1a4a6a', b: '#0a2a3a', k: '#0a1a24' }, hp: 0.9, atk: 1.2, spd: 0.9, move: 2.6, range: 4.5, proj: 'ice' },
   angler: { name: 'Peixe-Lanterna', g: 'm', sprite: 'eye', pal: { a: '#1a3a4a', w: '#d8f0f0', i: '#ffe040', k: '#0a0a0a', b: '#0a2a3a' }, hp: 1.0, atk: 1.25, spd: 0.8, move: 2.2, range: 4.5, proj: 'beam', fly: true },
