@@ -108,6 +108,7 @@ const POWERS = {
   predator: { name: 'Fome do Predador', desc: 'Cada abate acumula Fome (até 25, somem após 8s sem abater): cada acúmulo dá +2% de Ouro e de XP e +1% de Sorte. A cada 10s, um inimigo próximo é marcado como Presa: abatê-la dá o triplo de Ouro e XP e um item Raro ou melhor.', excl: true },
   spin: { name: 'Rotação Infinita', desc: 'Cada abate faz a rotação girar mais. Cada nível de Rotação dá +2% de Dano e +0,5% de Vel. de Ataque, sem limite (cada nível pede mais abates que o anterior). A partir do nível 10, a rotação anula o giro do universo a cada 20s (0,2s a menos por nível acima do 10, até 10s): os inimigos por perto ficam paralisados por 2s (Chefes 1s) e recebem +25% de dano.', excl: true },
   devour: { name: 'Singularidade', desc: 'A cada 6s dispara uma singularidade no maior grupo de inimigos: ela suga todos num raio de 2,5 por 1,2s e implode com 100% do Dano. Cada inimigo sugado deixa a próxima singularidade 6% mais forte e maior (até 10 acúmulos, somem em 12s).', excl: true },
+  excalibur: { name: 'Bainha Sagrada', desc: 'Imune a dano físico (golpes, flechas, balas, canhões e shurikens) de inimigos comuns. Elites, Chefes e Senhores causam só metade do dano físico. Magias, venenos e queimaduras ainda ferem.', excl: true },
   bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
 };
 
@@ -166,9 +167,28 @@ const EXCLUSIVES = {
     live: it => Game.state.equip.offhand === it && Game.W ? `Próxima singularidade: <b>${Math.round(World.devourPow(it, Game.W.devStacks || 0) * 100)}%</b> do Dano, ${Game.W.devStacks || 0} acúmulos.` : '',
     lore: 'Cada mundo devorado deixa a fome um pouco maior.',
   },
+  excalibur: {
+    name: 'Excalibur', bname: 'Espada', g: 'f', slot: 'weapon', sprite: 'i_excalibur', by: 'Bora_Bill',
+    pal: { m: '#e8eef8', l: '#ffffff', d: '#9aa8c8', g: '#c8901a', y: '#ffe27a', j: '#3a8aff', h: '#5a2a6a', s: '#bff4ff' },
+    bmult: 1.0, main: { atkSpd: 10 }, affixes: { crit: 15, dodge: 12, block: 12, xpPct: 30 }, powers: ['excalibur'], minZone: 60, weight: 0.6,
+    lore: 'A espada das espadas. A lendária espada mágica do Rei Artur, no ciclo arturiano.',
+  },
 };
 const HEAVEN_BASE = 0.35;
 const HEAVEN_PLUS = 0.06;
+const PHYS_PROJ = new Set(['arrow', 'bigarrow', 'bullet', 'cannon', 'shuriken', 'thorn', 'coin']);
+const EXCAL_BOSS = 0.5;
+const CREATOR_CODES = {
+  'e22aa1a00dc97ce5badbd88041481f746621d63b9c83bc0b6d7a76decb4db6b6': { cls: 'supernovice' },
+  'b2ecf2c2df357607dd4643280cd815c15f41e5cc735d794b33408d5e9a458b6d': { excl: 'dagon' },
+  'bf090c5130f0f1f39954eaf341e0419a0cd27cc3109d83f53bca6344ba22e07d': { excl: 'spike' },
+  'd30b7ba043f33f66c9aeb54919c17b3ef9a93b50e2399d4199d1a34b6e6f2059': { excl: 'jesus' },
+  '02ceab069a7e0c3116f03d994f8837e866f81effcb2e7dd3aa1b95973e9071cb': { excl: 'heights' },
+  '6167ff8a6105d9eb086b0ac96356e8cc2768f27df92033756c10ad8b56f0b92a': { excl: 'predator' },
+  'e3d0731f686070780125952d2354a79b242fa7a95e63be5291b6e51f018889a3': { excl: 'spin' },
+  '492c83049273f960dbde2cf7aafff8be52f0711efeed1df7dbf57ab36aaece51': { excl: 'devour' },
+  'd7f77fa2b1898dba59d2e0f557c476d8493866307b6669d6eeb0a833fe495808': { excl: 'excalibur' },
+};
 const PRED_MAX = 25, PRED_T = 8, PRED_STEP = 0.02, PRED_PREY_CD = 10, PRED_PREY_MULT = 3;
 const SPIN_STEP = 10, SPIN_DMG = 2, SPIN_ATKSPD = 0.5, SPIN_HALT_LVL = 10, SPIN_HALT_CD = 20, SPIN_HALT_MIN = 10, SPIN_HALT_R = 7, SPIN_HALT_DMG = 0.25;
 const DEVOUR_CD = 6, DEVOUR_R = 2.5, DEVOUR_PULL = 1.2, DEVOUR_MULT = 1.0, DEVOUR_STACK = 0.06, DEVOUR_MAX = 10, DEVOUR_STACK_T = 12, DEVOUR_PLUS = 0.05;
@@ -407,10 +427,10 @@ const ACHIEVEMENTS = [
   { id: 'myth1k', name: 'Panteão', desc: 'Encontre 1.000 itens Míticos', stat: 'mythics', goal: 1000, reward: { mf: 12 } },
   { id: 'excl1', name: 'Toque do Arco-Íris', desc: 'Encontre uma arma exclusiva', val: st => achExclusives(st), goal: 1, reward: { mf: 5 } },
   { id: 'exclAll', name: 'Coleção Arco-Íris', desc: 'Encontre todas as armas exclusivas', val: st => achExclusives(st), get goal() { return Object.keys(EXCLUSIVES).length; }, reward: { dmgPct: 10 } },
-  { id: 'allCls', name: 'Todas as Classes', desc: 'Desbloqueie todas as classes', val: () => Game.sharedUnlocks().classes.length, get goal() { return CLASS_ORDER.length; }, reward: { xpPct: 10 } },
+  { id: 'allCls', name: 'Todas as Classes', desc: 'Desbloqueie todas as classes', val: () => Game.sharedUnlocks().classes.filter(c => !CLASSES[c].gift).length, get goal() { return stdClasses().length; }, reward: { xpPct: 10 } },
   { id: 'allSp', name: 'Todas as Espécies', desc: 'Desbloqueie todas as espécies', val: () => Game.sharedUnlocks().species.length, get goal() { return SPECIES_ORDER.length; }, reward: { hpPct: 10 } },
   { id: 'master8', name: 'Mestre de Armas', desc: 'Domine 8 classes (zona 50 numa jornada iniciada com cada uma)', val: st => CLASS_ORDER.filter(c => Stats.mastered(st, c)).length, goal: 8, reward: { dmgPct: 8 } },
-  { id: 'masterAll', name: 'Grão-Mestre', desc: 'Domine todas as classes', val: st => CLASS_ORDER.filter(c => Stats.mastered(st, c)).length, get goal() { return CLASS_ORDER.length; }, reward: { dmgPct: 15 } },
+  { id: 'masterAll', name: 'Grão-Mestre', desc: 'Domine todas as classes', val: st => stdClasses().filter(c => Stats.mastered(st, c)).length, get goal() { return stdClasses().length; }, reward: { dmgPct: 15 } },
   { id: 'relic8', name: 'Arsenal Ancestral', desc: 'Encontre 8 Armas Ancestrais', val: st => Object.keys(st.relics || {}).length, goal: 8, reward: { defPct: 8 } },
   { id: 'relicMyth', name: 'Lendas Despertas', desc: 'Desperte 5 Armas Ancestrais até Mítica ou mais', val: st => Object.values(st.relics || {}).filter(r => r.r >= 5).length, goal: 5, reward: { dmgPct: 12 } },
   { id: 'fusion5', name: 'Alquimista de Guerra', desc: 'Aprenda 5 fusões de armas', val: st => Object.keys(st.fusions || {}).length, goal: 5, reward: { xpPct: 8 } },
@@ -429,6 +449,8 @@ function achExclusiveIds(st) {
   for (const it of [...(st.vault || []), ...Object.values(st.equip || {}), ...(st.inv || [])]) if (it && it.excl) ids.add(it.excl);
   return ids;
 }
+function stdClasses() { return CLASS_ORDER.filter(c => !CLASSES[c].gift); }
+function achAll(st) { return ACHIEVEMENTS.every(a => st.ach && st.ach[a.id]); }
 function exclMissing(st) { const own = achExclusiveIds(st); return Object.keys(EXCLUSIVES).filter(id => !own.has(id)); }
 function achExclusives(st) { return achExclusiveIds(st).size; }
 

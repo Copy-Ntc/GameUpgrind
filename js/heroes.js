@@ -8,6 +8,7 @@ const HERO_RARITY = [
   { name: 'Lendária', color: '#ff9a2e', mult: 1.7, spMult: 1.22 },
   { name: 'Mítica', color: '#ff4d6d', mult: 1.85, spMult: 1.26 },
   { name: 'Celestial', color: '#7af0ff', mult: 2.0, spMult: 1.3 },
+  { name: 'Exclusiva', color: '#ff7ae0', mult: 2.25, spMult: 1.35 },
 ];
 
 STAT_INFO.dr = { name: 'Redução de Dano', pct: true };
@@ -15,6 +16,8 @@ STAT_INFO.regenPct = { name: 'Regeneração (% Vida/s)', pct: true };
 
 const HERO_MYTHIC = 5;
 const HERO_CELESTIAL = 6;
+const HERO_EXCL = 7;
+const CREATOR_ASC = 50;
 const P = v => `${Math.round(v * 100)}%`;
 
 const WEAPON_BASES = {
@@ -256,6 +259,7 @@ function unlockText(u) {
   if (!u || u.t === 'default') return 'Disponível desde o início';
   let t = '';
   if (u.t === 'stat') t = STAT_GOALS[u.stat](u.goal);
+  else if (u.t === 'creator') t = 'Presente do criador: complete todas as conquistas';
   else if (u.t === 'class') t = CLASS_GOALS[u.stat](CLASSES[u.cls].name, u.goal);
   else if (u.t === 'encounter') {
     const where = u.biomes ? u.biomes.map(b => BIOMES.find(x => x.id === b).name).join(' ou ') : 'qualquer masmorra';
@@ -606,12 +610,12 @@ const CLASSES = {
     skills: ['sr_scythe', 'sr_souls', 'sr_curse', 'sr_reap'], passives: ['sr_pact', 'sr_master', 'sr_power', 'sr_fatal'],
   },
   supernovice: {
-    name: 'Super Aprendiz', title: 'O Eterno Iniciante', color: '#ff9ad8', rarity: 6, unlock: { t: 'stat', stat: 'ascensions', goal: 40, asc: 30 }, armor: 'leather',
-    desc: 'Nunca escolheu um caminho e por isso aprendeu todos. Começa fraco e cresce mais que qualquer outro.',
+    name: 'Super Aprendiz', title: 'O Eterno Iniciante', color: '#ff9ad8', rarity: 7, unlock: { t: 'creator', asc: CREATOR_ASC }, armor: 'leather', gift: true,
+    desc: 'Presente do criador do jogo. Nunca escolheu um caminho e por isso aprendeu todos: carrega um pouco do poder de cada classe.',
     sprite: 'h_supernovice',
-    base: { hp: 120, atk: 10, def: 4, atkSpd: 1.1, crit: 8, critDmg: 160, dodge: 5, block: 3, lifesteal: 1, range: 1.5 },
-    ranged: false, bars: { Vida: 3, Dano: 3, Defesa: 3, Velocidade: 3, Alcance: 1 },
-    innate: { name: 'Potencial Infinito', desc: '+2,2% de Dano, +1,2% de Vida, +0,8% de Armadura e +0,5% de Ouro e de XP por nível. Habilidades têm 15% de chance de recarregar na hora.', per: { dmgPct: 2.2, hpPct: 1.2, defPct: 0.8, goldPct: 0.5, xpPct: 0.5 }, flags: ['encore'] },
+    base: { hp: 175, atk: 15, def: 6.5, atkSpd: 1.35, crit: 14, critDmg: 190, dodge: 10, block: 6, lifesteal: 3, range: 1.5 },
+    ranged: false, bars: { Vida: 5, Dano: 5, Defesa: 4, Velocidade: 5, Alcance: 2 },
+    innate: { name: 'Potencial Infinito', desc: '+2,4% de Dano, +1,3% de Vida, +0,9% de Armadura, +0,25% de Vel. de Ataque, +0,08% de Chance Crítica, +0,5% de Dano Crítico, +0,05% de Esquiva e +0,5% de Ouro e de XP por nível. Aprendeu com todos: habilidades têm 15% de chance de recarregar na hora, golpes podem liberar explosões arcanas, uma aura sagrada fere quem chega perto e estrelas caem sobre o alvo.', per: { dmgPct: 2.4, hpPct: 1.3, defPct: 0.9, atkSpd: 0.25, crit: 0.08, critDmg: 0.5, dodge: 0.05, goldPct: 0.5, xpPct: 0.5 }, flags: ['encore', 'surge', 'holyAura', 'starfall'] },
     skills: ['sn_bash', 'sn_fire', 'sn_heal', 'sn_angel'], passives: ['sn_luck', 'sn_talent', 'sn_persist', 'sn_learn'],
   },
   kagerou: {
@@ -1242,21 +1246,21 @@ const SKILLS = {
   sr_power: pas('Poder do Além', 15, 'sk_book', '#b874ff', 'dmgPct', 7),
   sr_fatal: pas('Corte Fatal', 20, 'sk_star', '#ff5aa0', 'critDmg', 14),
 
-  sn_bash: { name: 'Golpe Fulminante', type: 'strike', unlock: 1, cd: 5, max: 10, icon: 'sk_sword', color: '#ff9ad8',
-    mult: r => 2.6 + 0.26 * (r - 1), stun: 0.3, stunDur: 1,
-    desc(r) { return `Um golpe aprendido com os guerreiros: <b>${P(this.mult(r))}</b> de dano e chance de atordoar.`; } },
+  sn_bash: { name: 'Golpe Fulminante', type: 'aoe', unlock: 1, cd: 5, max: 10, icon: 'sk_sword', color: '#ff9ad8',
+    radius: 2, mult: r => 2.5 + 0.25 * (r - 1), stun: 0.3, stunDur: 1,
+    desc(r) { return `Um golpe aprendido com os guerreiros que atinge todos ao redor: <b>${P(this.mult(r))}</b> de dano e chance de atordoar.`; } },
   sn_fire: { name: 'Bola de Fogo de Aprendiz', type: 'proj', unlock: 5, cd: 6, max: 10, icon: 'sk_fire', color: '#ff8a2a',
-    proj: 'fire', splash: 1.4, mult: r => 2.4 + 0.24 * (r - 1), burn: 0.3,
+    proj: 'fire', splash: 2, mult: r => 3.2 + 0.32 * (r - 1), burn: 0.3,
     desc(r) { return `Uma bola de fogo aprendida com os magos: <b>${P(this.mult(r))}</b> de dano em área.`; } },
   sn_heal: { name: 'Cura de Aprendiz', type: 'heal', unlock: 12, cd: 16, max: 10, icon: 'sk_heart', color: '#7aff9a',
     heal: r => 0.3 + 0.03 * (r - 1), below: 0.5,
     desc(r) { return `Uma cura aprendida com os sacerdotes: recupera <b>${P(this.heal(r))}</b> da Vida quando ferido.`; } },
   sn_angel: { name: 'Guardião Angelical', type: 'buff', unlock: 25, cd: 24, max: 10, icon: 'sk_wing', color: '#fff2a0', ult: true,
-    dur: 8, buff: r => ({ dmg: 0.5 + 0.05 * (r - 1), def: 0.5, atkSpd: 0.3 }),
-    desc(r) { return `Um anjo protege o aprendiz por 8s: <b>+${P(this.buff(r).dmg)}</b> de dano, +50% de armadura e +30% de Vel. de Ataque.`; } },
+    dur: 10, buff: r => ({ dmg: 0.8 + 0.06 * (r - 1), def: 0.6, atkSpd: 0.4 }),
+    desc(r) { return `Um anjo protege o aprendiz por 10s: <b>+${P(this.buff(r).dmg)}</b> de dano, +60% de armadura e +40% de Vel. de Ataque.`; } },
   sn_luck: pas('Sorte de Iniciante', 3, 'sk_clover', '#4cff7a', 'mf', 4),
-  sn_talent: pas('Talento Nato', 8, 'sk_sword', '#ff7a4a', 'dmgPct', 7),
-  sn_persist: pas('Persistência', 15, 'sk_heart', '#ff5a62', 'hpPct', 8),
+  sn_talent: pas('Talento Nato', 8, 'sk_sword', '#ff7a4a', 'dmgPct', 9),
+  sn_persist: pas('Persistência', 15, 'sk_heart', '#ff5a62', 'hpPct', 10),
   sn_learn: pas('Aprendiz Eterno', 20, 'sk_book', '#b874ff', 'xpPct', 10),
 
   sp_command: { name: 'Grito de Comando', type: 'buff', racial: true, cd: 20, icon: 'sk_shout', color: '#ff9a3a',

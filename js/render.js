@@ -7,6 +7,7 @@ const EXCL_AURAS = {
   spike: { n: 3, r: 0.66, spd: 1.2, kind: 'rock', c: ['#8a6a4a', '#5a4030'] },
   predator: { n: 4, r: 0.62, spd: 1.6, kind: 'coin', c: ['#ffd04a', '#3aa84a'] },
   spin: { n: 10, r: 0.6, spd: 3, kind: 'spin', c: ['#ff8ad8', '#b8448f'] },
+  excalibur: { n: 4, r: 0.64, spd: 1.8, kind: 'star', c: ['#fff6c0', '#7ae8ff'] },
 };
 const Render = {
   canvas: null, ctx: null, mini: null, mctx: null,
@@ -521,6 +522,15 @@ const Render = {
         ctx.globalAlpha = 0.95;
         ctx.fillStyle = A.c[i % 2];
         ctx.fillRect(R(x - u * 0.75), R(y + Math.sin(a * 3) * u * 3 - u * 0.75), Math.ceil(u * 1.5), Math.ceil(u * 1.5));
+        break;
+      }
+      case 'star': {
+        const tw = 0.7 + 0.3 * Math.sin(t * 9 + i * 1.7), c = Math.ceil(u);
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = tw;
+        ctx.fillStyle = A.c[i % 2 ? 1 : 0];
+        ctx.fillRect(R(x - u * 1.5), R(y - u * 0.5), u * 3, c); ctx.fillRect(R(x - u * 0.5), R(y - u * 1.5), c, u * 3);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(R(x - u * 0.5), R(y - u * 0.5), c, c);
+        ctx.globalCompositeOperation = 'source-over';
         break;
       }
       case 'void': {

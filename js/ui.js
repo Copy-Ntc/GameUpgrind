@@ -51,7 +51,7 @@ const UI = {
     let h = '<canvas class="bg" id="ts-bg"></canvas><div class="ts-wrap">';
     h += `<div class="ts-logo"><img class="ts-icon" src="img/icon-192.png" alt=""><h1>OverLevelGame</h1></div>`;
     h += `<div class="ts-tag">Escolha sua classe e espécie e deixe seu herói explorar masmorras infinitas sozinho: abrir baús, resgatar aliados, encontrar armas lendárias e ficar cada vez mais forte, até quando você não está olhando.</div>`;
-    h += `<div class="ts-community"><a class="btn small discord" href="${DISCORD_URL}" target="_blank" rel="noopener noreferrer">💬 Discord da OverLevel</a><span>Novidades, dúvidas e o placar com a galera.</span></div>`;
+    h += `<div class="ts-community"><a class="btn small discord" href="${DISCORD_URL}" target="_blank" rel="noopener noreferrer">💬 Discord da OverLevel</a><span>Novidades, dúvidas e o placar com a galera.</span><button class="btn small" id="ts-code" title="Recompensa para quem criou uma arma ou classe do jogo">🎁 Código de criador</button></div>`;
     if (Online.enabled) {
       const name = Online.profile ? U.esc(Online.profile.name) : '';
       h += `<div class="ts-account">${!Online.ready ? '<span>Conectando ao servidor…</span>'
@@ -132,6 +132,7 @@ const UI = {
     if (this.$('ts-login')) this.$('ts-login').onclick = () => { Sfx.init(); this.loginModal('in'); };
     if (this.$('ts-board')) this.$('ts-board').onclick = () => { Sfx.init(); this.boardModal(); };
     if (this.$('ts-pass')) this.$('ts-pass').onclick = () => { Sfx.init(); this.changePasswordModal(); };
+    if (this.$('ts-code')) this.$('ts-code').onclick = () => { Sfx.init(); this.codeModal(); };
     el.querySelectorAll('[data-excl]').forEach(sel => sel.onchange = () => { Game.setExclChoice(sel.dataset.excl, sel.value || null); Sfx.play('click'); });
     if (this.$('ts-logout')) this.$('ts-logout').onclick = () => this.confirm('Sair da conta', 'Seu perfil e seus heróis continuam guardados na nuvem e voltam quando você entrar de novo. As cópias deste navegador serão removidas.', 'Sair da conta', async () => { await Online.signOut(); this.showTitle(); });
     const dice = this.$('ts-dice');
@@ -852,6 +853,10 @@ const UI = {
       <div class="hall-cur"><img src="${Sprites.classUrl(st.cls, st.species, 3)}" alt=""><div><div class="hc-n" style="color:${C.color}">${C.name} ${S.name}</div>
       <div class="hint" style="margin:2px 0 0">Troque de classe ou espécie quando quiser. Mas recordes de classe e espécie (domínio, metas e Armas Ancestrais) só contam para a classe e a espécie com que a jornada <b>começou</b>.</div></div></div></div>`;
     const prog = u => {
+      if (u.t === 'creator') {
+        const done = ACHIEVEMENTS.filter(a => st.ach[a.id]).length, asc = st.stats.ascensions || 0;
+        return `<div class="meter"><div style="width:${Math.min(100, done / ACHIEVEMENTS.length * 100)}%"></div></div><div class="hc-p">${done}/${ACHIEVEMENTS.length} conquistas · ${Math.min(asc, u.asc)}/${u.asc} ascensões</div>`;
+      }
       if (u.t !== 'stat') return '';
       const v = st.stats[u.stat] || 0;
       return `<div class="meter"><div style="width:${Math.min(100, v / u.goal * 100)}%"></div></div><div class="hc-p">${U.fmt(Math.min(v, u.goal))}/${U.fmt(u.goal)}</div>`;
@@ -1077,6 +1082,21 @@ const UI = {
     m.addEventListener('keydown', e => { if (e.key === 'Enter') submit(m); });
     Online.mountCaptcha(m.querySelector('#lg-captcha'));
     setTimeout(() => { const f = m.querySelector(up ? '#lg-name' : '#lg-email'); if (f) f.focus(); }, 30);
+  },
+
+  codeModal() {
+    const body = `<div class="hint" style="margin:0 0 8px">Quem criou uma arma exclusiva ou uma classe do jogo recebe um código. Digite aqui para liberar a recompensa no seu perfil.</div>
+      <label class="lg-f"><span>Código</span><input id="cc-code" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="OLG-XXXX-XXXX-XXXX"></label>
+      <div class="lg-msg" id="cc-msg"></div>`;
+    const m = this.modal('Código de criador', body, [{ label: 'Fechar' }, { label: 'Resgatar', cls: 'gold', close: false, fn: async (bg) => {
+      const msg = bg.querySelector('#cc-msg'), btn = bg.querySelector('.modal-f .gold');
+      btn.disabled = true; msg.style.color = 'var(--muted)'; msg.textContent = 'Conferindo…';
+      const r = await Game.redeemCode(bg.querySelector('#cc-code').value);
+      btn.disabled = false;
+      msg.style.color = r.ok ? 'var(--green)' : 'var(--red)'; msg.textContent = r.msg;
+      if (r.ok) { Sfx.play('legendary'); this.showTitle(); }
+    } }]);
+    setTimeout(() => { const f = m.querySelector('#cc-code'); if (f) f.focus(); }, 30);
   },
 
   changePasswordModal() {

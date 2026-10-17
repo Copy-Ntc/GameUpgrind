@@ -729,6 +729,13 @@ const World = {
     const S = Game.stats, hero = W.hero, bm = this.buffMods(hero);
     if (hero.dead) return;
     hero.lastCombat = W.t;
+    if (o.phys && S.powers.has('excalibur')) {
+      if (src && (src.boss || src.elite)) raw *= EXCAL_BOSS;
+      else {
+        if (W.t - (hero.immT || -9) > 0.6) { hero.immT = W.t; this.text(W, hero.rx + 0.5, hero.ry - 0.2, 'Imune', '#ffe27a', 11); }
+        return;
+      }
+    }
     if (!o.dot && !o.unavoidable && Math.random() < (S.dodge + bm.dodge) / 100) {
       this.text(W, hero.rx + 0.5, hero.ry - 0.1, 'Esquiva', '#b8c0d0', 11);
       Sfx.play('dodge', 120);
@@ -1205,12 +1212,12 @@ const World = {
         return;
       }
       if (m.move <= 0) return;
-      const path = this.bfs(W, m.x, m.y, (x, y) => U.dist(x, y, tgt.x, tgt.y) <= m.range, { self: m.id, avoid: true, max: 600 });
+      const path = this.bfs(W, m.x, m.y, (x, y, j) => U.dist(x, y, tgt.x, tgt.y) <= m.range && (W.occ[j] === 0 || W.occ[j] === m.id), { self: m.id, avoid: true, max: 600 });
       this.stepPath(W, m, path);
       return;
     }
     if (m.move > 0 && this.dist(m, hero) > 2.5 && !hero.dead) {
-      const path = this.bfs(W, m.x, m.y, (x, y) => U.dist(x, y, hero.x, hero.y) <= 1.9, { self: m.id, avoid: true, max: 900 });
+      const path = this.bfs(W, m.x, m.y, (x, y, j) => U.dist(x, y, hero.x, hero.y) <= 1.9 && (W.occ[j] === 0 || W.occ[j] === m.id), { self: m.id, avoid: true, max: 900 });
       this.stepPath(W, m, path);
     }
   },
@@ -1341,6 +1348,7 @@ const World = {
     if (S.powers.has('heaven') && Math.random() < dt * 8) this.part(W, x + r(-0.8, 0.8), y + r(-0.6, 0.3), r(-0.6, 0.6), r(-1, -0.3), P(['#ffffff', '#ff9ad8'], 0.5), 0.5, 1.5, 0);
     if (S.powers.has('predator') && Math.random() < dt * 6) { const leaf = Math.random() < 0.55; this.part(W, x + r(-0.7, 0.7), y + r(-0.9, -0.4), r(-0.4, 0.4), leaf ? r(0.2, 0.6) : r(-1, -0.4), leaf ? P(['#3aa84a', '#8aff7a'], 0.5) : '#ffd04a', 0.9, 1.6, 0); }
     if (S.powers.has('spin') && Math.random() < dt * 8) { const a = W.t * 6; this.part(W, x + Math.cos(a) * 0.7, y + Math.sin(a) * 0.3, -Math.sin(a) * 1.2, Math.cos(a) * 0.5 - 0.4, P(['#ff8ad8', '#5ac8ff'], 0.6), 0.5, 1.5, 0); }
+    if (S.powers.has('excalibur') && Math.random() < dt * 7) { const blue = Math.random() < 0.3; this.part(W, x + r(-0.7, 0.7), y + r(-0.6, 0.3), r(-0.2, 0.2), blue ? r(0.3, 0.8) : r(-1.3, -0.5), blue ? '#7ae8ff' : P(['#fff6c0', '#ffe27a'], 0.5), 0.8, 1.5, 0); }
     if (S.powers.has('devour') && Math.random() < dt * 10) { const a = Math.random() * Math.PI * 2; this.part(W, x + Math.cos(a) * 1.6, y + Math.sin(a) * 0.9, -Math.cos(a) * 2.2, -Math.sin(a) * 1.3, P(['#b874ff', '#7ae8ff'], 0.6), 0.6, 1.5, 0); }
   },
   updateHeaven(W, hero) {
@@ -1435,18 +1443,19 @@ const World = {
     e.atkT = 1 / e.atkSpd * (e.effects.slow > 0 ? 1.5 : 1);
     e.face = tgt.x > e.x ? 1 : tgt.x < e.x ? -1 : e.face;
     if (e.ranged) {
-      this.shoot(W, e, tgt, e.proj || 'arrow', (t) => this.enemyHit(W, e, t, 1), { speed: 8, enemy: true });
+      const kind = e.proj || 'arrow';
+      this.shoot(W, e, tgt, kind, (t) => this.enemyHit(W, e, t, 1, PHYS_PROJ.has(kind)), { speed: 8, enemy: true });
     } else {
       e.lunge = { dx: tgt.x - e.x, dy: tgt.y - e.y, t: 0.15 };
-      this.enemyHit(W, e, tgt, 1);
+      this.enemyHit(W, e, tgt, 1, true);
     }
   },
 
-  enemyHit(W, e, t, mult) {
+  enemyHit(W, e, t, mult, phys) {
     if (!t || t.dead) return;
     const raw = e.atk * mult * (e.effects.weak > 0 ? 0.7 : 1);
     if (t.kind === 'hero') {
-      this.hurtHero(W, raw, e);
+      this.hurtHero(W, raw, e, { phys: !!phys });
       if (e.poison && !t.dead && Math.random() < 0.5) t.dots.push({ dps: raw * e.poison, t: 3, color: '#7aff5a' });
     } else if (t.kind === 'minion') {
       if (t.heaven) return;
@@ -1471,7 +1480,7 @@ const World = {
         this.fx(W, 'telegraph', cx + 0.5, cy + 0.5, { r: R, color: '#ff3a3a', life: 1.0 });
         b.casting = { t: 1.0, fn: () => {
           if (b.dead) return;
-          if (!hero.dead && U.dist(hero.rx, hero.ry, cx, cy) <= R) this.hurtHero(W, b.atk * 2.2, b, { unavoidable: true });
+          if (!hero.dead && U.dist(hero.rx, hero.ry, cx, cy) <= R) this.hurtHero(W, b.atk * 2.2, b, { unavoidable: true, phys: true });
           for (const m of W.ents) if (m.kind === 'minion' && !m.dead && !m.heaven && U.dist(m.rx, m.ry, cx, cy) <= R) { m.hp -= b.atk * 2; if (m.hp <= 0) this.killMinion(W, m); }
           this.fx(W, 'ring', cx + 0.5, cy + 0.5, { r: R + 0.3, color: '#ff7a4a', life: 0.45 });
           this.burst(W, cx + 0.5, cy + 0.8, '#a08a7a', 20, 4);
@@ -1482,7 +1491,8 @@ const World = {
       }
       if (a.id === 'volley' && d <= 7) {
         a.t = 6;
-        for (let i = 0; i < 5; i++) this.shoot(W, b, hero, b.lordDef ? b.lordDef.proj : 'shadow', (t) => this.enemyHit(W, b, t, 0.45), { speed: 7, delay: i * 0.14, enemy: true });
+        const vk = b.lordDef ? b.lordDef.proj : 'shadow';
+        for (let i = 0; i < 5; i++) this.shoot(W, b, hero, vk, (t) => this.enemyHit(W, b, t, 0.45, PHYS_PROJ.has(vk)), { speed: 7, delay: i * 0.14, enemy: true });
         return;
       }
       if (a.id === 'summon') {

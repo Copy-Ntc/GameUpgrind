@@ -136,6 +136,31 @@ const Game = {
     this.save();
   },
 
+  async redeemCode(raw) {
+    const code = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 8 || code.length > 40) return { ok: false, msg: 'Código inválido.' };
+    if (typeof crypto === 'undefined' || !crypto.subtle) return { ok: false, msg: 'Seu navegador não conseguiu conferir o código.' };
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('olg-criador:' + code));
+    const hex = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    const rw = Object.prototype.hasOwnProperty.call(CREATOR_CODES, hex) ? CREATOR_CODES[hex] : null;
+    const P = this.profile;
+    if (!rw || !P) return { ok: false, msg: 'Código inválido.' };
+    if (rw.excl && EXCLUSIVES[rw.excl]) {
+      const D = EXCLUSIVES[rw.excl];
+      if (P.exclFound[rw.excl]) return { ok: false, msg: `${D.name} já está no seu catálogo de exclusivas.` };
+      P.exclFound[rw.excl] = true;
+      this.saveProfile();
+      return { ok: true, msg: `${D.name} entrou no seu catálogo de exclusivas! Escolha ela ao criar um herói.` };
+    }
+    if (rw.cls && CLASSES[rw.cls]) {
+      const L = P.unlocks.classes;
+      if (L.includes(rw.cls)) return { ok: false, msg: `${CLASSES[rw.cls].name} já está desbloqueado.` };
+      L.push(rw.cls);
+      this.saveProfile();
+      return { ok: true, msg: `${CLASSES[rw.cls].name} desbloqueado! Ele já aparece na escolha de classe.` };
+    }
+    return { ok: false, msg: 'Código inválido.' };
+  },
   syncExclFound() {
     const P = this.profile;
     if (!P) return;
@@ -596,8 +621,9 @@ const Game = {
   checkUnlocks() {
     const st = this.state;
     const test = (kind, id, u) => {
-      if ((u.t !== 'stat' && u.t !== 'class') || this.isUnlocked(kind, id)) return;
+      if ((u.t !== 'stat' && u.t !== 'class' && u.t !== 'creator') || this.isUnlocked(kind, id)) return;
       if ((st.stats.ascensions || 0) < (u.asc || 0)) return;
+      if (u.t === 'creator') { if (achAll(st)) this.unlock(kind, id, unlockText(u)); return; }
       const v = u.t === 'class' ? ((st.classStats[u.cls] || {})[u.stat] || 0) : (st.stats[u.stat] || 0);
       if (v >= u.goal) this.unlock(kind, id, unlockText(u));
     };
