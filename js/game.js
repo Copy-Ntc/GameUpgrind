@@ -113,6 +113,10 @@ const Game = {
     }
     fresh.startZone = sz;
     {
+      const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
+      if (pref && pref !== cls && nw && !nw.excl && !nw.fusion && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
+    }
+    {
       for (const v of P.vault) if (v && v.excl && EXCLUSIVES[v.excl]) P.exclFound[v.excl] = true;
       for (const slot of EXCL_SLOTS) {
         const id = this.exclChoice(slot);
@@ -128,8 +132,6 @@ const Game = {
       }
       this.recalc();
     }
-    const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
-    if (pref && pref !== cls && nw && !nw.fusion && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
     this.recalc();
     fresh.potions = this.stats.potionMax;
     if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
@@ -210,7 +212,9 @@ const Game = {
     if (s.species2 && !SPECIES[s.species2]) s.species2 = null;
     if (s.v < 4) { s.runCls = s.cls; s.runSp = s.species; s.v = 4; }
     if (!s.classStats[s.cls]) s.classStats[s.cls] = { best: s.maxZone || 1, kills: 0, bosses: 0 };
+    if (s.arenaSaved) this.arenaRestore(s, false);
     const all = [...EQUIP_SLOTS.map(k => s.equip[k]), ...s.inv].filter(Boolean);
+    for (const it of all) if (it.excl && it.fusion) Items.unfuse(it);
     for (const it of all) if (it.slot === 'weapon' && !it.cls && !it.excl) it.cls = s.cls;
     for (const it of all) if (it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
     for (const it of all) if (it.excl && EXCLUSIVES[it.excl]) s.exclFound[it.excl] = true;
@@ -249,6 +253,7 @@ const Game = {
     for (const k in d.settings) if (p.settings[k] === undefined) p.settings[k] = d.settings[k];
     if (!Array.isArray(p.vault)) p.vault = [];
     for (const it of p.vault) if (it && it.excl && it.rarity !== EXCL_RARITY) it.rarity = EXCL_RARITY;
+    for (const it of p.vault) if (it && it.excl && it.fusion) Items.unfuse(it);
     if (!p.exclFound || typeof p.exclFound !== 'object') p.exclFound = {};
     for (const it of p.vault) if (it && it.excl && EXCLUSIVES[it.excl]) p.exclFound[it.excl] = true;
     p.unlocks = this.mergeUnlocks(p.unlocks);
@@ -357,6 +362,7 @@ const Game = {
   },
   exitToMenu() {
     if (!this.state) return;
+    if (this.W && this.W.arena) this.arenaRestore();
     this.state.parked = true;
     this.save();
     Online.scoreDirty = true;
@@ -501,7 +507,7 @@ const Game = {
 
   housekeeping(dt) {
     const st = this.state;
-    if (this.rateT >= 10) {
+    if (this.rateT >= 10 && !this.inArena()) {
       const g = this.rateAcc.gold / this.rateT, x = this.rateAcc.xp / this.rateT;
       st.rates.gold = st.rates.gold ? st.rates.gold * 0.8 + g * 0.2 : g;
       st.rates.xp = st.rates.xp ? st.rates.xp * 0.8 + x * 0.2 : x;
@@ -511,7 +517,7 @@ const Game = {
     if (this.saveT > 15) { this.saveT = 0; this.save(); }
     Online.tick(dt);
     this.achT += dt;
-    if (this.achT > 1.5) { this.achT = 0; this.checkAchievements(); this.checkUnlocks(); this.flushAutoSold(); }
+    if (this.achT > 1.5) { this.achT = 0; if (!this.inArena()) { this.checkAchievements(); this.checkUnlocks(); } this.flushAutoSold(); }
   },
 
   classStat(key, v) {
@@ -527,6 +533,7 @@ const Game = {
 
   enterZone(z, first) {
     const st = this.state;
+    if (this.W && this.W.arena) this.arenaRestore();
     z = Math.max(1, z);
     st.zone = z;
     if (z > st.maxZone) st.maxZone = z;
@@ -557,6 +564,64 @@ const Game = {
     }
     Music.zone(b.id);
     UI.dirty('top', 'zone');
+  },
+
+  arenaMax() { return Math.max(1, this.state.maxZone) + ARENA_PLUS; },
+  inArena() { return !!(this.W && this.W.arena); },
+  enterArena(z) {
+    const st = this.state;
+    if (!st || this.inArena()) return;
+    z = U.clamp(Math.round(+z) || st.zone, 1, this.arenaMax());
+    this.transition = null;
+    this.recalc();
+    this.W = World.createArena(z);
+    this.W.arena.t0 = this.W.t;
+    Render.mapCanvas = null;
+    Render.cam.init = false;
+    UI.banner('ARENA DE TREINO', 'Sem saque, ouro, XP ou conquistas. Teste à vontade!', 'purple', 2.4);
+    this.log(`Você entrou na <b>Arena de Treino</b> (monstros da zona ${z}). Nada aqui dá recompensa, e cair não custa nada.`, '');
+    Music.zone(this.W.biome.id);
+    UI.dirty('top', 'zone', 'arena');
+  },
+  exitArena() {
+    if (!this.inArena()) return;
+    this.enterZone(this.state.zone, true);
+    this.log('Você saiu da Arena de Treino e voltou para a jornada.', '');
+    UI.dirty('arena', 'equip');
+  },
+  arenaLevel(d) {
+    const W = this.W;
+    if (!this.inArena()) return;
+    W.z = U.clamp(W.z + d, 1, this.arenaMax());
+    UI.dirty('top', 'zone', 'arena');
+  },
+  arenaEquip(slot, id) {
+    const st = this.state;
+    if (!this.inArena() || !EXCL_SLOTS.includes(slot)) return;
+    if (id && (!EXCLUSIVES[id] || EXCLUSIVES[id].slot !== slot || !this.profile.exclFound[id])) return;
+    const saved = st.arenaSaved || (st.arenaSaved = {});
+    const cur = st.equip[slot];
+    if (!(slot in saved)) saved[slot] = cur && !cur.arenaTemp ? cur : null;
+    else if (cur && !cur.arenaTemp && cur !== saved[slot]) st.inv.push(cur);
+    if (!id) { st.equip[slot] = saved[slot]; delete saved[slot]; }
+    else { const it = Items.makeExclusive(id, st.maxZone); it.arenaTemp = true; it.isNew = false; st.equip[slot] = it; }
+    st.inv = st.inv.filter(i => !i.arenaTemp);
+    this.recalc();
+    UI.dirty('equip', 'arena');
+  },
+  arenaRestore(st = this.state, doRecalc = true) {
+    if (!st) return;
+    const saved = st.arenaSaved || {};
+    const here = it => [...EQUIP_SLOTS.map(k => st.equip[k]), ...st.inv].some(x => x && x.uid === it.uid);
+    for (const slot of Object.keys(saved)) {
+      const back = saved[slot], cur = st.equip[slot];
+      if (cur && cur.arenaTemp) st.equip[slot] = null;
+      if (back && !here(back)) { if (!st.equip[slot]) st.equip[slot] = back; else st.inv.push(back); }
+    }
+    for (const k of EQUIP_SLOTS) if (st.equip[k] && st.equip[k].arenaTemp) st.equip[k] = null;
+    st.inv = st.inv.filter(i => !i.arenaTemp);
+    delete st.arenaSaved;
+    if (doRecalc) this.recalc();
   },
 
   completeZone() {
@@ -1012,7 +1077,7 @@ const Game = {
     const old = st.equip[item.slot];
     st.equip[item.slot] = item;
     item.isNew = false;
-    if (old && !fromDrop) st.inv.push(old);
+    if (old && !fromDrop && !old.arenaTemp) st.inv.push(old);
     this.recalc();
     if (!fromDrop) Sfx.play('click');
     UI.dirty('equip', 'forge');
@@ -1023,6 +1088,7 @@ const Game = {
     const st = this.state;
     const it = st.equip[slot];
     if (!it) return;
+    if (it.arenaTemp) { st.equip[slot] = null; this.recalc(); return; }
     if (st.inv.length >= Stats.invSize(st)) { UI.notice('Mochila cheia!'); return; }
     st.equip[slot] = null;
     st.inv.push(it);
@@ -1032,7 +1098,7 @@ const Game = {
   sell(item) {
     const st = this.state;
     const i = st.inv.indexOf(item);
-    if (i < 0 || item.locked) return;
+    if (i < 0 || item.locked || item.arenaTemp) return;
     st.inv.splice(i, 1);
     const p = Items.sellPrice(item);
     st.gold += p; st.stats.goldEarned += p;
@@ -1041,7 +1107,7 @@ const Game = {
     UI.dirty('equip', 'top', 'gold');
   },
 
-  toggleLock(item) { item.locked = !item.locked; UI.dirty('equip', 'forge'); },
+  toggleLock(item) { if (item.arenaTemp) return; item.locked = !item.locked; UI.dirty('equip', 'forge'); },
 
   sortInv() {
     this.state.inv.sort((a, b) => b.rarity - a.rarity || SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) || b.ilvl - a.ilvl);
@@ -1050,6 +1116,7 @@ const Game = {
 
   forge(item) {
     const st = this.state;
+    if (item.arenaTemp) return null;
     const cost = Items.forgeCost(item);
     if (st.gold < cost) return null;
     st.gold -= cost;
@@ -1136,6 +1203,7 @@ const Game = {
   endRun(gain, countAsc) {
     const st = this.state, n = this.slot;
     if (!st) return null;
+    if (this.inArena()) this.arenaRestore();
     const info = { cls: st.cls, species: st.species, name: st.name, hardcore: st.hardcore, slot: n };
     for (const it of [...EQUIP_SLOTS.map(k => st.equip[k]), ...st.inv]) if (it && it.excl) { it.isNew = false; st.vault.push(it); }
     const w = st.equip.weapon;
@@ -1256,7 +1324,7 @@ const Game = {
     UI.offlineModal(sec, eff, g, r);
   },
   backgroundCatchUp(sec) {
-    if (!this.state || !this.W) return;
+    if (!this.state || !this.W || this.W.arena) return;
     sec = Math.min(sec, 12 * 3600);
     const g = this.offlineGains(sec, 0.75);
     const r = this.applyGains(g);

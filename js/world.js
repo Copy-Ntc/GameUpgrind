@@ -7,7 +7,56 @@ const World = {
   nextId: 1,
 
   create(z) {
-    const M = MapGen.generate(z, Game.pickEncounter ? Game.pickEncounter(z) : null);
+    return this.build(MapGen.generate(z, Game.pickEncounter ? Game.pickEncounter(z) : null));
+  },
+  createArena(z) {
+    const biome = MapGen.biomeOf(z), w = 27, h = 19, T = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) T[y * w + x] = 1;
+    for (const [x, y] of [[7, 5], [19, 5], [7, 13], [19, 13]]) T[y * w + x] = 0;
+    const decor = [], torches = [];
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) if (T[y * w + x] && Math.random() < 0.05 && Math.abs(x - 13) + Math.abs(y - 9) > 2) decor.push({ x, y, type: U.pick(biome.decor), ox: U.randi(2, 6), oy: U.randi(2, 6) });
+    for (let x = 2; x < w - 2; x += 4) torches.push({ x, y: 0, ph: Math.random() * 10 });
+    const M = { z, biome, isLord: false, w, h, tiles: T, rooms: [{ x: 1, y: 1, w: w - 2, h: h - 2, cx: 13, cy: 9 }], start: { x: 13, y: 9 }, bossRoom: null, portal: { x: 13, y: 9, active: false }, spawns: [], chests: [], shrines: [], decor, torches, recruit: null };
+    const W = this.build(M, { arena: { wave: 0, waveT: 2, kills: 0, falls: 0, hits: [], total: 0, t0: 0, paused: false } });
+    W.explored.fill(1);
+    this.updateVision(W);
+    return W;
+  },
+  updateArena(W, dt) {
+    const A = W.arena, h = W.hero;
+    while (A.hits.length && A.hits[0][0] < W.t - 10) A.hits.shift();
+    if (A.paused) return;
+    let alive = 0;
+    for (const e of W.ents) if (e.kind === 'enemy' && !e.dead) alive++;
+    A.waveT -= dt;
+    if (!alive && A.waveT > 1.2) A.waveT = 1.2;
+    if (A.waveT > 0 || alive > 30) return;
+    A.wave++; A.waveT = 18;
+    const n = Math.min(14, 4 + A.wave);
+    for (let i = 0; i < n; i++) this.arenaSpawn(W, { elite: i === 0 && A.wave % 5 === 0 });
+    this.text(W, h.rx + 0.5, h.ry - 1.2, `Wave ${A.wave}`, '#ffd04a', 14, 1.4, -1, true);
+    Sfx.play('summon');
+  },
+  arenaSpawn(W, o = {}) {
+    const h = W.hero;
+    for (let t = 0; t < 80; t++) {
+      const x = U.randi(1, W.w - 2), y = U.randi(1, W.h - 2);
+      if (!this.free(W, x, y) || U.dist(x, y, h.x, h.y) < 6) continue;
+      const lord = !!o.lord;
+      const e = this.spawnEnemy(W, { x, y, type: lord ? W.biome.lord : U.pick(W.biome.enemies), elite: !!o.elite, boss: !!o.boss || lord, lord });
+      W.total++;
+      this.alert(W, e);
+      this.fx(W, 'ring', x + 0.5, y + 0.5, { r: 1, color: o.boss || lord ? '#ff5a5a' : '#ffd04a', life: 0.5 });
+      return e;
+    }
+    return null;
+  },
+  arenaClear(W) {
+    for (const e of W.ents) if (e.kind === 'enemy' && !e.dead) { this.releaseOcc(W, e); e.dead = true; e.deathT = 0; }
+    W.boss = null; W.prey = null;
+    Music.boss(false);
+  },
+  build(M, extra = {}) {
     const n = M.w * M.h;
     const W = Object.assign(M, {
       explored: new Uint8Array(n), vis: new Uint8Array(n), occ: new Int32Array(n), flow: new Int32Array(n).fill(-1),
@@ -16,7 +65,7 @@ const World = {
       mapDirty: true, fogDirty: true, flowKey: -1, blacklist: new Set(), stuckT: 0,
       chestsOpened: 0, zoneGold: 0, zoneXp: 0, zoneItems: 0, completed: false, bossAnnounced: false, relentless: false,
       harvest: 0, frenzy: 0, raven: false, hands: false,
-    });
+    }, extra);
     this.W = W;
     for (const c of W.chests) W.occ[this.idx(c.x, c.y)] = -1;
     for (const s of W.shrines) W.occ[this.idx(s.x, s.y)] = -1;
@@ -169,6 +218,7 @@ const World = {
       W.vis[i] = 1;
       if (!W.explored[i]) W.explored[i] = 1;
     }
+    if (W.arena) W.vis.fill(1);
     W.fogDirty = true;
     for (const c of W.chests) {
       if (!c.seen && !c.opened && W.vis[c.y * W.w + c.x]) {
@@ -255,7 +305,7 @@ const World = {
 
   onHeroStep(W, hero) {
     this.updateVision(W);
-    if (W.portal.active && hero.wantPortal && hero.x === W.portal.x && hero.y === W.portal.y && !W.completed) {
+    if (W.portal.active && hero.wantPortal && hero.x === W.portal.x && hero.y === W.portal.y && !W.completed && !W.arena) {
       W.completed = true;
       Game.completeZone();
     }
@@ -278,6 +328,7 @@ const World = {
       this.updateMove(W, hero, dt, S.moveSpd * (1 + bm.move) * slow);
     }
     this.updateFlow(W);
+    if (W.arena) this.updateArena(W, dt);
 
     for (const e of W.ents) {
       if (e.kind === 'hero') continue;
@@ -394,7 +445,7 @@ const World = {
       const t = hero.target;
       if (hero.starT <= 0 && t && !t.dead && this.dist(hero, t) <= 7) { hero.starT = 10; this.meteor(W, t.rx, t.ry, 1.6, 4); }
     }
-    if (hero.hp < hero.maxHp * 0.35 && Game.state.potions > 0 && hero.potionCd <= 0 && !hero.dead) this.drinkPotion(W, hero);
+    if (hero.hp < hero.maxHp * 0.35 && Game.state.potions > 0 && hero.potionCd <= 0 && !hero.dead && !W.arena) this.drinkPotion(W, hero);
   },
 
   entTimers(W, e, dt) {
@@ -559,7 +610,7 @@ const World = {
     if (hero.target) { hero.ignore.set(hero.target.id, W.t + 20); hero.target = null; }
     hero.trail = [];
     W.loops = (W.loops || 0) + 1;
-    if (W.loops >= 3 && !(W.boss && !W.boss.dead)) W.portal.active = true;
+    if (W.loops >= 3 && !W.arena && !(W.boss && !W.boss.dead)) W.portal.active = true;
     return true;
   },
 
@@ -570,7 +621,7 @@ const World = {
       const opts = N8.map(([dx, dy]) => [hero.x + dx, hero.y + dy]).filter(([x, y]) => this.free(W, x, y));
       if (opts.length) { const [x, y] = U.pick(opts); this.startMove(W, hero, x, y); }
     }
-    if (W.stuckT > 25 && !W.completed) {
+    if (W.stuckT > 25 && !W.completed && !W.arena) {
       if (W.boss && !W.boss.dead) return;
       W.portal.active = true;
     }
@@ -683,7 +734,8 @@ const World = {
     t.hp -= dmg;
     t.flash = 0.12;
     const st = Game.state;
-    if (dmg > st.stats.highestHit) st.stats.highestHit = dmg;
+    if (W.arena) { if (t.kind === 'enemy') { W.arena.hits.push([W.t, dmg]); W.arena.total += dmg; } }
+    else if (dmg > st.stats.highestHit) st.stats.highestHit = dmg;
     if (st.settings.dmgNumbers) {
       if (o.crit) this.text(W, t.rx + 0.5, t.ry - 0.1, U.fmt(dmg) + '!', '#ffcf3a', 15, 0.9, -1.6, true);
       else this.text(W, t.rx + 0.5 + U.rand(-0.2, 0.2), t.ry + 0.1, U.fmt(dmg), o.color || (o.dot ? '#9aff7a' : '#ffffff'), o.dot ? 10 : 12, 0.7);
@@ -815,6 +867,13 @@ const World = {
       this.burst(W, hero.rx + 0.5, hero.ry + 0.5, '#ffb02a', 30, 5);
       Game.log('<b style="color:#ff9a2e">Chama da Fênix!</b> Você renasce das cinzas.', 'good');
       Sfx.play('legendary');
+      return;
+    }
+    if (W.arena) {
+      W.arena.falls++;
+      hero.hp = hero.maxHp; hero.dots = [];
+      this.text(W, hero.rx + 0.5, hero.ry - 0.8, 'Caiu! Levantando…', '#ff7a7a', 13, 1.3, -1, true);
+      this.burst(W, hero.rx + 0.5, hero.ry + 0.5, '#ff7a7a', 16, 3);
       return;
     }
     if (st.potions > 0) {
@@ -1520,6 +1579,17 @@ const World = {
     const st = Game.state, S = Game.stats;
     e.dead = true; e.deathT = 0.45; e.hp = 0;
     this.releaseOcc(W, e);
+    if (W.arena) {
+      W.arena.kills++;
+      if (S.flags.has('soulHarvest')) { this.healHero(W, W.hero.maxHp * 0.03); W.harvest = Math.min(40, W.harvest + 1); }
+      if (S.flags.has('bloodFrenzy')) W.frenzy = Math.min(30, W.frenzy + 1);
+      if (S.powers.has('vampire')) this.healHero(W, W.hero.maxHp * 0.04);
+      if (W.prey === e) W.prey = null;
+      if (e.boss) { Music.boss(false); W.bossAnnounced = false; }
+      this.burst(W, e.rx + 0.5, e.ry + 0.6, e.pal.a || '#ffffff', e.boss ? 40 : 12, e.boss ? 6 : 3);
+      Sfx.play('die', 70);
+      return;
+    }
     W.killed++;
     st.stats.kills++;
     Game.classStat('kills', 1);

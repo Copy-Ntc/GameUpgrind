@@ -10,7 +10,7 @@ const ICONS = {
 };
 
 const DISCORD_URL = 'https://discord.gg/xjde9TyeYN';
-const TABS = [['equip', 'Herói'], ['talents', 'Talentos'], ['hall', 'Salão'], ['train', 'Treino'], ['forge', 'Forja'], ['asc', 'Ascensão'], ['ach', 'Conquistas']];
+const TABS = [['equip', 'Herói'], ['talents', 'Talentos'], ['hall', 'Salão'], ['arena', 'Arena'], ['train', 'Treino'], ['forge', 'Forja'], ['asc', 'Ascensão'], ['ach', 'Conquistas']];
 
 const UI = {
   tab: 'equip', dirt: new Set(), tickT: 0, hudT: 0, logs: [], logFilter: 'all',
@@ -314,7 +314,8 @@ const UI = {
     this.tickT = 0.25;
     if (this.dirt.has('top') || this.dirt.has('zone')) { this.updateTop(); this.dirt.delete('top'); this.dirt.delete('zone'); }
     if (this.dirt.has('gold')) { this.dirt.delete('gold'); this.refreshGold(); }
-    const map = { equip: 'equip', talents: 'talents', train: 'train', forge: 'forge', asc: 'asc', ach: 'ach', hall: 'hall' };
+    if (this.tab === 'arena' && Game.inArena()) { const el = this.$('arena-stats'); if (el) { const ah = this.arenaStatsHtml(); if (this._ah !== ah) { el.innerHTML = ah; this._ah = ah; } } }
+    const map = { equip: 'equip', talents: 'talents', train: 'train', forge: 'forge', asc: 'asc', ach: 'ach', hall: 'hall', arena: 'arena' };
     const key = map[this.tab];
     if (this.dirt.has(key)) {
       const now = performance.now();
@@ -344,9 +345,10 @@ const UI = {
     set('gold', U.fmt(st.gold));
     set('souls', U.fmt(st.souls));
     set('power', U.fmt(Game.power));
-    set('zone-num', `Zona ${st.zone}`);
-    set('zone-biome', MapGen.biomeOf(st.zone).name);
-    this.$('zone-prev').disabled = st.zone <= 1;
+    const AW = Game.inArena() ? Game.W : null;
+    set('zone-num', AW ? 'Arena' : `Zona ${st.zone}`);
+    set('zone-biome', AW ? `Treino · monstros da zona ${AW.z}` : MapGen.biomeOf(st.zone).name);
+    this.$('zone-prev').disabled = st.zone <= 1 || !!AW;
     const mb = this.$('btn-mode');
     mb.className = 'mode-btn ' + (st.mode === 'advance' ? 'advance' : 'farm');
     mb.textContent = st.mode === 'advance' ? '▲ Avançar' : '⟳ Farmar';
@@ -365,12 +367,18 @@ const UI = {
     const h = W.hero;
     const exp = Math.round(World.exploredPct(W) * 100);
     const opened = W.chests.filter(c => c.opened).length;
+    if (W.arena) {
+      const A = W.arena;
+      const zh = `<div class="zt">Arena de Treino</div><div class="zb">Monstros da zona ${W.z} · ${W.biome.name}</div><div class="zr"><span>Wave <b>${A.wave}</b></span><span>DPS <b>${U.fmt(this.arenaDps())}</b></span><span>Abates <b>${A.kills}</b></span></div><span class="ztag arena">TREINO</span>`;
+      if (this._zh !== zh) { this.$('hud-zone').innerHTML = zh; this._zh = zh; }
+    } else {
     let tag = '';
     if (st.mode === 'farm') tag = '<span class="ztag farm">FARMANDO</span>';
     else if (st.retreatLeft > 0) tag = `<span class="ztag retreat">RECUANDO · ${st.retreatLeft}</span>`;
     else tag = '<span class="ztag adv">AVANÇANDO</span>';
     const zh = `<div class="zt">Zona ${W.z}${W.isLord ? ' · Covil' : ''}</div><div class="zb">${W.biome.name}</div><div class="zr"><span>Inimigos <b>${W.killed}/${W.total}</b></span><span>Baús <b>${opened}/${W.chests.length}</b></span><span><b>${exp}%</b></span></div>${tag}`;
     if (this._zh !== zh) { this.$('hud-zone').innerHTML = zh; this._zh = zh; }
+    }
     this.$('hp-fill').style.width = (h.hp / h.maxHp * 100).toFixed(1) + '%';
     this.$('shield-fill').style.width = Math.min(100, h.shield / h.maxHp * 100).toFixed(1) + '%';
     const ht = h.dead ? 'Derrotado' : `${U.fmt(Math.min(Math.ceil(h.hp), Math.ceil(h.maxHp)))} / ${U.fmt(Math.ceil(h.maxHp))}${h.shield > 0 ? ` (+${U.fmt(h.shield)})` : ''}`;
@@ -488,7 +496,7 @@ const UI = {
     if (S.dr) rows.push(['Redução de Dano', U.fmtPct(S.dr, 0)]);
     h += `<div class="sec"><div class="sec-h"><h3>Atributos</h3></div><div class="stat-list">${rows.map(([a, b]) => `<div class="r"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
     if (S.powers.size) h += `<div class="card" style="margin-top:10px">${[...S.powers].map(p => `<div style="margin-bottom:4px"><b style="color:var(--orange);font-family:var(--pixel)">✦ ${POWERS[p].name}</b> <span style="color:var(--muted);font-size:11px">${POWERS[p].desc}</span></div>`).join('')}</div>`;
-    h += '</div>';
+    h += '</div>' + this.combosHtml(st);
     const cap = Stats.invSize(st);
     const sel = this.selecting;
     h += `<div class="sec"><div class="sec-h"><h3>Mochila</h3><span class="sub">${st.inv.length}/${cap}</span></div>`;
@@ -729,6 +737,7 @@ const UI = {
       case 'forgeSel': this.forgeSel = a.dataset.slot; Sfx.play('click'); this.renderTab(false); break;
       case 'forge': {
         const item = Game.state.equip[this.forgeSel];
+        if (item && item.arenaTemp) { this.notice('Cópias de teste da Arena não podem ser forjadas.', 'var(--red)'); break; }
         if (item) { const ok = Game.forge(item); this.renderTab(false); this.notice(ok ? `Sucesso! Agora +${item.plus}` : 'A forja falhou…', ok ? 'var(--green)' : 'var(--red)'); }
         break;
       }
@@ -742,6 +751,14 @@ const UI = {
         this.confirm('Trocar de classe', `Tornar-se <b style="color:${CLASSES[id].color}">${CLASSES[id].name}</b>? Seus talentos serão redistribuídos e suas armas reforjadas para a nova classe (raridade, nível e aprimoramento são mantidos).`, 'Trocar', () => { Game.switchClass(id); this.renderTab(false); });
         break;
       case 'useSpecies': Game.switchSpecies(id); this.renderTab(false); break;
+      case 'arenaIn': { const z = this.$('arena-z'); Game.enterArena(z ? z.value : Game.state.zone); this.renderTab(false); break; }
+      case 'arenaOut': Game.exitArena(); this.renderTab(false); break;
+      case 'arenaLvl': Game.arenaLevel(+id); this.renderTab(false); break;
+      case 'arenaPause': if (Game.inArena()) { Game.W.arena.paused = !Game.W.arena.paused; this.renderTab(false); } break;
+      case 'arenaWave': if (Game.inArena()) Game.W.arena.waveT = 0; break;
+      case 'arenaClear': if (Game.inArena()) World.arenaClear(Game.W); break;
+      case 'arenaBoss': if (Game.inArena()) World.arenaSpawn(Game.W, id === 'lord' ? { lord: true } : { boss: true }); break;
+      case 'arenaReset': if (Game.inArena()) { const A = Game.W.arena; A.hits = []; A.total = 0; A.kills = 0; A.falls = 0; A.t0 = Game.W.t; } break;
       case 'maestria': Game.maestriaUp(id, 1); this.renderTab(false); break;
       case 'maestria10': Game.maestriaUp(id, 10); this.renderTab(false); break;
       case 'awaken': Game.awakenRelic(id); this.renderTab(false); break;
@@ -754,6 +771,7 @@ const UI = {
   },
   onPanelChange(e) {
     const t = e.target, k = t.dataset.set;
+    if (t.dataset.arena) { Game.arenaEquip(t.dataset.arena, t.value || null); this.renderTab(false); return; }
     if (!k) return;
     const st = Game.state;
     if (t.type === 'checkbox') st.settings[k] = t.checked; else st.settings[k] = +t.value;
@@ -844,6 +862,61 @@ const UI = {
     }
     this.closeMenu();
     this.renderTab(false);
+  },
+
+  combosHtml(st) {
+    const cb = Stats.combos(st.equip), on = new Set(cb.active.map(a => a.C.id));
+    const desc = o => Object.entries(o).map(([k, v]) => Items.statLine(k, v)).join(', ');
+    let h = `<div class="sec"><div class="sec-h"><h3>Combos</h3><span class="sub">${cb.active.length} ativos</span></div><div class="combo-list">`;
+    for (const C of COMBOS) {
+      const n = cb.cnt[C.id] || 0, cur = [...C.tiers].reverse().find(T => n >= T.n), nx = C.tiers.find(T => n < T.n);
+      const keys = C.keys.map(k => STAT_INFO[k].name).join(' ou ');
+      h += `<div class="cb-row${cur ? ' on' : ''}"><div class="cb-h"><span>${C.icon} <b>${C.name}</b></span><span class="cb-n">${n}/${nx ? nx.n : C.tiers[C.tiers.length - 1].n} itens</span></div>`;
+      h += `<div class="cb-d">${cur ? `<span class="cb-act">Ativo: ${desc(cur.stats)}</span>` : ''}${nx ? `<span>Com ${nx.n} itens com ${keys}: ${desc(nx.stats)}</span>` : '<span class="cb-act">Nível máximo!</span>'}</span></div></div>`;
+    }
+    const show = PAIR_COMBOS.filter(P => P.items.some(id => cb.ex.has(id)) || on.has(P.id));
+    for (const P of show) {
+      const ok = on.has(P.id);
+      h += `<div class="cb-row pair${ok ? ' on' : ''}"><div class="cb-h"><span>${P.icon} <b>${P.name}</b></span><span class="cb-n">${ok ? 'ativo' : 'dupla'}</span></div><div class="cb-d"><span>${P.items.map(id => EXCLUSIVES[id].name).join(' + ')}: ${desc(P.stats)}</span></div></div>`;
+    }
+    h += '</div><div class="hint">Itens equipados com o mesmo tipo de atributo extra se somam: 3, 5 e 7 peças liberam bônus cada vez maiores. Algumas duplas de armas exclusivas também combinam entre si.</div></div>';
+    return h;
+  },
+
+  arenaDps() {
+    const W = Game.W;
+    if (!W || !W.arena) return 0;
+    const A = W.arena, span = Math.max(1, Math.min(10, W.t - A.t0));
+    return A.hits.reduce((a, x) => a + x[1], 0) / span;
+  },
+  arenaStatsHtml() {
+    const W = Game.W, A = W.arena;
+    const alive = W.ents.filter(e => e.kind === 'enemy' && !e.dead).length;
+    const cells = [['Wave', A.wave], ['DPS (10s)', U.fmt(this.arenaDps())], ['Dano total', U.fmt(A.total)], ['Abates', A.kills], ['Quedas', A.falls], ['Tempo', U.fmtTime(W.t - A.t0)], ['Inimigos', alive], ['Poder', U.fmt(Game.power)]];
+    return cells.map(([a, b]) => `<div class="r"><span>${a}</span><span>${b}</span></div>`).join('');
+  },
+  tab_arena() {
+    const st = Game.state, W = Game.W, A = W && W.arena;
+    let h = '<div class="sec"><div class="sec-h"><h3>Arena de Treino</h3></div>';
+    if (!A) {
+      h += `<div class="card"><p style="margin:0 0 6px">Um mapa aberto onde os monstros chegam em waves, sem parar. Use para testar armas, classes e espécies: troque de classe e espécie no Salão, de equipamento na aba Herói, e experimente qualquer arma exclusiva do seu catálogo.</p>
+        <div class="hint">Na Arena não há saque, ouro, XP nem conquistas. Poções não são gastas e, se cair, você levanta na hora. Ao sair, a jornada continua de onde parou.</div>
+        <div class="arena-go"><label>Monstros da zona <input type="number" id="arena-z" min="1" max="${Game.arenaMax()}" value="${st.zone}"></label><button class="btn gold" data-act="arenaIn">Entrar na Arena</button></div></div></div>`;
+      return h;
+    }
+    h += `<div class="stat-list arena-stats" id="arena-stats">${this.arenaStatsHtml()}</div>`;
+    h += `<div class="arena-ctl"><div class="ac-l">Nível dos monstros: <b>zona ${W.z}</b></div><div class="ac-b">${[-10, -1, 1, 10].map(d => `<button class="btn small" data-act="arenaLvl" data-id="${d}">${d > 0 ? '+' : ''}${d}</button>`).join('')}</div></div>`;
+    h += `<div class="arena-ctl"><div class="ac-l">Waves</div><div class="ac-b"><button class="btn small" data-act="arenaPause">${A.paused ? 'Retomar waves' : 'Pausar waves'}</button><button class="btn small" data-act="arenaWave">Próxima wave</button><button class="btn small" data-act="arenaClear">Limpar inimigos</button></div></div>`;
+    h += `<div class="arena-ctl"><div class="ac-l">Alvos fortes</div><div class="ac-b"><button class="btn small" data-act="arenaBoss" data-id="boss">Chamar Chefe</button><button class="btn small" data-act="arenaBoss" data-id="lord">Chamar Senhor</button><button class="btn small" data-act="arenaReset">Zerar medidor</button></div></div>`;
+    const found = Object.keys(Game.profile.exclFound || {}).filter(id => EXCLUSIVES[id]);
+    h += '<div class="arena-ctl"><div class="ac-l">Testar exclusivas do catálogo</div><div class="ac-b">';
+    for (const slot of EXCL_SLOTS) {
+      const cur = st.equip[slot], ids = found.filter(id => EXCLUSIVES[id].slot === slot);
+      h += `<select class="sel" data-arena="${slot}"><option value="">${slot === 'weapon' ? 'Arma principal' : 'Arma secundária'}: a sua</option>${ids.map(id => `<option value="${id}"${cur && cur.arenaTemp && cur.excl === id ? ' selected' : ''}>${EXCLUSIVES[id].name}</option>`).join('')}</select>`;
+    }
+    h += `</div>${found.length ? '' : '<div class="hint">Encontre exclusivas para testá-las aqui.</div>'}</div>`;
+    h += '<div class="arena-ctl"><button class="btn danger" data-act="arenaOut">Sair da Arena</button></div></div>';
+    return h;
   },
 
   tab_hall() {

@@ -11,9 +11,26 @@ const Stats = {
   needXpFor(st, L = st.level) { return Math.floor(this.needXp(L) * (st.cls2 ? MULTI_XP : 1) * (st.species2 ? MULTI_SP_XP : 1)); },
   growth(L) { return Math.pow(1.04, L - 1); },
 
+  combos(eq) {
+    const cnt = {}, active = [];
+    for (const slot of EQUIP_SLOTS) {
+      const it = eq && eq[slot];
+      if (!it) continue;
+      for (const C of COMBOS) if (C.keys.some(k => it.affixes.some(a => a.k === k))) cnt[C.id] = (cnt[C.id] || 0) + 1;
+    }
+    for (const C of COMBOS) {
+      const n = cnt[C.id] || 0;
+      let tier = null;
+      for (const T of C.tiers) if (n >= T.n) tier = T;
+      if (tier) active.push({ C, n, tier, stats: tier.stats });
+    }
+    const ex = new Set(EXCL_SLOTS.map(sl => eq && eq[sl] && eq[sl].excl).filter(Boolean));
+    for (const P of PAIR_COMBOS) if (P.items.every(id => ex.has(id))) active.push({ C: P, n: 2, tier: null, stats: P.stats, pair: true });
+    return { cnt, active, ex };
+  },
   fusionCls2(st, eq = st.equip) {
     const w = eq && eq.weapon;
-    if (!w || !w.fusion || w.fusion === st.cls || !CLASSES[w.fusion]) return null;
+    if (!w || w.excl || !w.fusion || w.fusion === st.cls || !CLASSES[w.fusion]) return null;
     if (!this.multiclassOpen(st) || !this.mastered(st, st.cls) || !this.mastered(st, w.fusion)) return null;
     return w.fusion;
   },
@@ -93,6 +110,7 @@ const Stats = {
       for (const k in is) s[k] = (s[k] || 0) + is[k];
       for (const p of it.powers) powers.add(p);
     }
+    for (const a of this.combos(eq).active) for (const k in a.stats) s[k] = (s[k] || 0) + a.stats[k];
     const rel = this.relicInfo(st);
     if (rel) {
       for (const k in rel.stats) s[k] = (s[k] || 0) + rel.stats[k];

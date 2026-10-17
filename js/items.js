@@ -211,11 +211,16 @@ const Items = {
         h += `<div class="tt-aff">${this.statLine(a.k, v)}</div>`;
       }
     }
+    const cbs = COMBOS.filter(C => C.keys.some(k => item.affixes.some(a => a.k === k)));
+    if (cbs.length) h += `<div class="tt-combo">Combos: ${cbs.map(C => C.icon + ' ' + C.name).join(' · ')}</div>`;
+    const pairs = item.excl ? PAIR_COMBOS.filter(P => P.items.includes(item.excl)) : [];
+    if (pairs.length) h += `<div class="tt-combo">Combina com: ${pairs.map(P => `${EXCLUSIVES[P.items.find(i => i !== item.excl)].name} (${P.icon} ${P.name})`).join(' · ')}</div>`;
     for (const p of item.powers) {
       const P = POWERS[p];
       h += `<div class="tt-pow"><b>✦ ${P.name}</b>${P.desc}</div>`;
     }
     if (item.fusion) h += `<div class="tt-pow"><b>⚔ Fusão com ${CLASSES[item.fusion].name}</b>Equipada, torna você multiclasse ${CLASSES[item.cls] ? CLASSES[item.cls].name : ''} / ${CLASSES[item.fusion].name} (se as duas classes estiverem dominadas).</div>`;
+    if (item.arenaTemp) h += '<div class="tt-pow"><b>⚔ Arena</b>Cópia de teste: some ao sair da Arena e não pode ser vendida nem forjada.</div>';
     if (item.excl) {
       const D = EXCLUSIVES[item.excl];
       if (D.forgeText) h += `<div class="tt-pow"><b>⚒ Forja</b>${D.forgeText}</div>`;

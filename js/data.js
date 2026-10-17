@@ -189,6 +189,29 @@ const CREATOR_CODES = {
   '492c83049273f960dbde2cf7aafff8be52f0711efeed1df7dbf57ab36aaece51': { excl: 'devour' },
   'd7f77fa2b1898dba59d2e0f557c476d8493866307b6669d6eeb0a833fe495808': { excl: 'excalibur' },
 };
+const COMBOS = [
+  { id: 'gold', name: 'Meta Ouro', icon: '💰', keys: ['goldPct'], tiers: [{ n: 3, stats: { goldPct: 20 } }, { n: 5, stats: { goldPct: 50, mf: 10 } }, { n: 7, stats: { goldPct: 100, mf: 25 } }] },
+  { id: 'dmg', name: 'Meta Dano', icon: '⚔️', keys: ['dmgPct'], tiers: [{ n: 3, stats: { dmgPct: 10 } }, { n: 5, stats: { dmgPct: 25, critDmg: 20 } }, { n: 7, stats: { dmgPct: 50, critDmg: 40 } }] },
+  { id: 'crit', name: 'Meta Crítico', icon: '🎯', keys: ['crit', 'critDmg'], tiers: [{ n: 3, stats: { crit: 3 } }, { n: 5, stats: { crit: 6, critDmg: 25 } }, { n: 7, stats: { crit: 10, critDmg: 50 } }] },
+  { id: 'speed', name: 'Meta Velocidade', icon: '💨', keys: ['atkSpd', 'moveSpd'], tiers: [{ n: 3, stats: { atkSpd: 5 } }, { n: 5, stats: { atkSpd: 12, moveSpd: 10 } }, { n: 7, stats: { atkSpd: 22, moveSpd: 20, cdr: 5 } }] },
+  { id: 'tank', name: 'Meta Muralha', icon: '🛡️', keys: ['hpPct', 'def', 'block'], tiers: [{ n: 3, stats: { hpPct: 8 } }, { n: 5, stats: { hpPct: 18, defPct: 15 } }, { n: 7, stats: { hpPct: 30, defPct: 30, dr: 5 } }] },
+  { id: 'vamp', name: 'Meta Vampiro', icon: '🩸', keys: ['lifesteal', 'regen'], tiers: [{ n: 3, stats: { lifesteal: 1 } }, { n: 5, stats: { lifesteal: 2.5, regenPct: 0.5 } }, { n: 7, stats: { lifesteal: 5, regenPct: 1 } }] },
+  { id: 'xp', name: 'Meta Sabedoria', icon: '📘', keys: ['xpPct'], tiers: [{ n: 3, stats: { xpPct: 15 } }, { n: 5, stats: { xpPct: 35 } }, { n: 7, stats: { xpPct: 70 } }] },
+  { id: 'luck', name: 'Meta Sorte', icon: '🍀', keys: ['mf'], tiers: [{ n: 3, stats: { mf: 12 } }, { n: 5, stats: { mf: 30 } }, { n: 7, stats: { mf: 60 } }] },
+  { id: 'boss', name: 'Meta Caça-Chefes', icon: '👑', keys: ['bossDmg'], tiers: [{ n: 3, stats: { bossDmg: 15 } }, { n: 5, stats: { bossDmg: 35 } }, { n: 7, stats: { bossDmg: 70 } }] },
+];
+const PAIR_COMBOS = [
+  { id: 'holyfire', name: 'Fogo Sagrado', icon: '🔥', items: ['dagon', 'jesus'], stats: { dmgPct: 25, crit: 6 } },
+  { id: 'eclipse', name: 'Chama Devoradora', icon: '🌑', items: ['dagon', 'devour'], stats: { dmgPct: 20, critDmg: 30 } },
+  { id: 'collapse', name: 'Colapso Gravitacional', icon: '🕳️', items: ['spike', 'devour'], stats: { dmgPct: 15, bossDmg: 35 } },
+  { id: 'quake', name: 'Terremoto Sagrado', icon: '⛰️', items: ['spike', 'jesus'], stats: { hpPct: 20, dmgPct: 12 } },
+  { id: 'goldrush', name: 'Corrida do Ouro', icon: '🏹', items: ['predator', 'heights'], stats: { goldPct: 40, moveSpd: 15 } },
+  { id: 'hunger', name: 'Fome Sem Fim', icon: '🍖', items: ['predator', 'devour'], stats: { goldPct: 25, xpPct: 25, dmgPct: 10 } },
+  { id: 'infinite', name: 'Aceleração Infinita', icon: '🌀', items: ['spin', 'heights'], stats: { atkSpd: 20, cdr: 8 } },
+  { id: 'grail', name: 'Santo Graal', icon: '🏆', items: ['excalibur', 'jesus'], stats: { hpPct: 30, regenPct: 1 } },
+  { id: 'avalon', name: 'Rei Eterno', icon: '👑', items: ['excalibur', 'heights'], stats: { dodge: 6, moveSpd: 10, xpPct: 20 } },
+];
+const ARENA_PLUS = 100;
 const PRED_MAX = 25, PRED_T = 8, PRED_STEP = 0.02, PRED_PREY_CD = 10, PRED_PREY_MULT = 3;
 const SPIN_STEP = 10, SPIN_DMG = 2, SPIN_ATKSPD = 0.5, SPIN_HALT_LVL = 10, SPIN_HALT_CD = 20, SPIN_HALT_MIN = 10, SPIN_HALT_R = 7, SPIN_HALT_DMG = 0.25;
 const DEVOUR_CD = 6, DEVOUR_R = 2.5, DEVOUR_PULL = 1.2, DEVOUR_MULT = 1.0, DEVOUR_STACK = 0.06, DEVOUR_MAX = 10, DEVOUR_STACK_T = 12, DEVOUR_PLUS = 0.05;

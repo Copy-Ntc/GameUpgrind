@@ -869,7 +869,7 @@ const Render = {
     const TS = this.TS, s = 0.25;
     g.globalCompositeOperation = 'source-over';
     g.clearRect(0, 0, lc.width, lc.height);
-    g.fillStyle = `rgba(0,0,0,${W.biome.dark})`;
+    g.fillStyle = `rgba(0,0,0,${W.arena ? Math.min(0.25, W.biome.dark) : W.biome.dark})`;
     g.fillRect(0, 0, lc.width, lc.height);
     g.globalCompositeOperation = 'destination-out';
     const hole = (x, y, r, a = 1) => {
