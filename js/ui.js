@@ -18,6 +18,8 @@ const UI = {
   selecting: false, picked: new Set(),
 
   $(id) { return document.getElementById(id); },
+  speeds() { return Game.stats && Game.stats.powers.has('heaven') ? [1, 2, 3, 5, 10] : [1, 2, 3, 5]; },
+  renderSpeeds() { this.$('speed').innerHTML = this.speeds().map(v => `<button data-speed="${v}"${v === 10 ? ' class="heaven" title="Made in Heaven: o tempo acelera"' : ''}>${v}x</button>`).join(''); },
   titleOpen() { const t = this.$('title-screen'); return !!t && !t.classList.contains('hidden'); },
 
   qtyBar() {
@@ -67,7 +69,7 @@ const UI = {
         const cl = CLASSES[sv.cls] ? sv.cls : 'fighter', spId = SPECIES[sv.species] ? sv.species : 'human';
         const c = CLASSES[cl], sp = SPECIES[spId];
         h += `<div class="ts-slot full"><div class="sl-n">Slot ${n}${sv.pendingEnd ? ' · <span style="color:#ff8a9a">Fim de jogo</span>' : ''}</div><img src="${Sprites.classUrl(cl, spId, 3)}" alt="">
-          <div class="info"><b>${U.esc(sv.name)}${sv.hardcore ? ` <span class="sl-h">${'❤'.repeat(Math.max(0, sv.hearts))}</span>` : ''}</b>
+          <div class="info"><b>${U.esc(sv.name)}</b>
           <span>${c.name}${sv.cls2 && CLASSES[sv.cls2] ? ' / ' + CLASSES[sv.cls2].name : ''} · ${sp.name}${sv.species2 && SPECIES[sv.species2] ? ' / ' + SPECIES[sv.species2].name : ''}</span>
           <span>Nível ${sv.level} · Zona ${sv.zone} · Melhor desta jornada: ${sv.maxZone || sv.zone}</span>
           <span class="sl-t">${sv.lastSave ? 'Salvo em ' + new Date(sv.lastSave).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}${sv.owner && Online.loggedIn && sv.owner === Online.user.id ? ' · ☁' : ''}</span></div>
@@ -91,7 +93,6 @@ const UI = {
     }
     h += '</div></div><div class="ts-right"><div class="ts-detail" id="ts-detail"></div>';
     h += `<div class="ts-start"><input id="ts-name" maxlength="16" value="${U.esc(U.pick(HERO_NAMES))}" placeholder="Nome do herói"><button class="btn" id="ts-dice" title="Nome aleatório">Sortear</button></div>`;
-    h += `<label class="ts-hc"><input type="checkbox" id="ts-relax"><div><b>Modo Relaxado (sem corações)</b><span>Por padrão a jornada tem <b style="color:#ff8a9a;font:inherit;display:inline">3 corações</b>: cada derrota custa um e, sem nenhum, é Fim de Jogo. No Modo Relaxado o herói nunca perde a jornada, mas recebe só ${Math.round(RELAXED_SOULS * 100)}% das Almas.</span></div></label>`;
     if ((P.soulUpg.head || 0) > 0) h += `<label class="ts-hc ts-zero"><input type="checkbox" id="ts-zero"><div><b>Começar da zona 1</b><span>Ignora o Atalho Astral e começa a jornada do início.</span></div></label>`;
     const found = Object.keys(P.exclFound || {}).filter(id => EXCLUSIVES[id]);
     if (found.length) {
@@ -140,7 +141,7 @@ const UI = {
       const un2 = this.titleUnlocks();
       if (!un2.classes.includes(this.selCls) || !un2.species.includes(this.selSp)) { this.notice('Essa combinação ainda está bloqueada.', 'var(--red)'); return; }
       if (!this.selSlot) { this.notice('Os 3 slots estão ocupados. Apague um para começar outro herói.', 'var(--red)'); return; }
-      const hc = !(this.$('ts-relax') && this.$('ts-relax').checked);
+      const hc = false;
       const zero = !!(this.$('ts-zero') && this.$('ts-zero').checked);
       const name = (this.$('ts-name').value || '').trim() || U.pick(HERO_NAMES);
       this.hideTitle();
@@ -230,7 +231,7 @@ const UI = {
     this.$('btn-board').innerHTML = ICONS.trophy;
     this.$('btn-board').classList.toggle('hidden', !Online.enabled);
     this.$('tabs').innerHTML = TABS.map(([id, nm]) => `<button data-tab="${id}" class="${id === this.tab ? 'on' : ''}">${nm}</button>`).join('');
-    this.$('speed').innerHTML = [1, 2, 3, 5].map(s => `<button data-speed="${s}">${s}x</button>`).join('');
+    this.renderSpeeds();
     const pc = this.$('portrait').getContext('2d');
     pc.clearRect(0, 0, 40, 40); pc.imageSmoothingEnabled = false;
     const spr = Sprites.get(CLASSES[st.cls].sprite, Sprites.heroPal(st.cls, st.species));
@@ -257,7 +258,6 @@ const UI = {
       Game.speed = +b.dataset.speed; Game.state.settings.speed = Game.speed; this.dirty('top');
     });
     this.$('zone-prev').onclick = () => Game.setZone(Game.state.zone - 1);
-    this.$('zone-next').onclick = () => Game.setZone(Game.state.zone + 1);
     this.$('btn-mode').onclick = () => Game.toggleMode();
     this.$('btn-pause').onclick = () => this.setPause(!Game.paused);
     this.$('pause-veil').onclick = () => this.setPause(false);
@@ -293,7 +293,8 @@ const UI = {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || !Game.running) return;
       if (e.key === 'p' || e.key === 'P') this.setPause(!Game.paused);
       const sp = { 1: 1, 2: 2, 3: 3, 4: 5 }[e.key];
-      if (sp) { Game.speed = sp; Game.state.settings.speed = sp; this.dirty('top'); }
+      const sp2 = e.key === '5' && this.speeds().includes(10) ? 10 : sp;
+      if (sp2) { Game.speed = sp2; Game.state.settings.speed = sp2; this.dirty('top'); }
       if (e.key === 'Escape') { this.closeMenu(); this.closeModal(); }
     });
   },
@@ -345,10 +346,12 @@ const UI = {
     set('zone-num', `Zona ${st.zone}`);
     set('zone-biome', MapGen.biomeOf(st.zone).name);
     this.$('zone-prev').disabled = st.zone <= 1;
-    this.$('zone-next').disabled = st.zone >= st.maxZone;
     const mb = this.$('btn-mode');
     mb.className = 'mode-btn ' + (st.mode === 'advance' ? 'advance' : 'farm');
     mb.textContent = st.mode === 'advance' ? '▲ Avançar' : '⟳ Farmar';
+    const spk = this.speeds().join();
+    if (this._spk !== spk) { this._spk = spk; this.renderSpeeds(); }
+    if (Game.speed > 5 && !this.speeds().includes(Game.speed)) { Game.speed = 5; Game.state.settings.speed = 5; }
     this.$('speed').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.speed === Game.speed));
     this.$('btn-pause').innerHTML = Game.paused ? ICONS.play : ICONS.pause;
     this.$('btn-sound').innerHTML = st.settings.sound ? ICONS.sound : ICONS.mute;
@@ -374,12 +377,11 @@ const UI = {
     const stt = h.dead ? `Revivendo em ${Math.ceil(h.deathT)}s…` : h.status;
     if (this.$('hero-status').textContent !== stt) this.$('hero-status').textContent = stt;
     const pm = Game.stats.potionMax;
-    const pk = st.potions + '/' + pm + '/' + (st.hardcore ? st.hearts : '-');
+    const pk = st.potions + '/' + pm;
     if (this._pk !== pk) {
       this._pk = pk;
       const url = Sprites.potionUrl();
       let ph = '';
-      if (st.hardcore) ph += `<span class="hearts" title="Corações restantes nesta jornada">${[0, 1, 2].map(i => `<i class="${i < st.hearts ? 'on' : ''}">❤</i>`).join('')}</span>`;
       ph += Array.from({ length: pm }, (_, i) => `<img src="${url}" class="${i < st.potions ? '' : 'empty'}" alt="">`).join('');
       this.$('potions').innerHTML = ph;
     }

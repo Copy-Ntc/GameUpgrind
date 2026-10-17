@@ -93,6 +93,7 @@ const Game = {
 
   newGame(cls, species, name, hardcore, opts = {}) {
     name = U.cleanName(name) || 'Herói';
+    hardcore = false;
     if (!this.profile) this.profile = this.defaultProfile();
     const P = this.profile;
     const fresh = this.attach(this.defaultState(cls, species, name, hardcore));
@@ -111,18 +112,10 @@ const Game = {
       if (sz <= 1 || Stats.power(this.stats, sz) >= HEADSTART_POW * (fresh.hardcore ? 1.4 : 1) * enemyPowScale(sz)) break;
     }
     fresh.startZone = sz;
-    const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
-    if (pref && pref !== cls && nw && !nw.excl && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
-    if (!P.exclPick) {
-      for (const it of P.vault.splice(0)) {
-        Items.retune(it, sz);
-        const cur = fresh.equip[it.slot];
-        if (!cur || Stats.compareItem(it, fresh) > 0) { fresh.equip[it.slot] = it; if (cur) fresh.inv.push(cur); this.recalc(); }
-        else fresh.inv.push(it);
-      }
-    } else {
+    {
+      for (const v of P.vault) if (v && v.excl && EXCLUSIVES[v.excl]) P.exclFound[v.excl] = true;
       for (const slot of EXCL_SLOTS) {
-        const id = P.exclPick[slot];
+        const id = this.exclChoice(slot);
         if (!id || !EXCLUSIVES[id] || EXCLUSIVES[id].slot !== slot || !P.exclFound[id]) continue;
         const vi = P.vault.findIndex(v => v.excl === id);
         const it = vi >= 0 ? P.vault.splice(vi, 1)[0] : Items.makeExclusive(id, sz);
@@ -133,6 +126,8 @@ const Game = {
       }
       this.recalc();
     }
+    const pref = P.fusionPref[cls], nw = fresh.equip.weapon;
+    if (pref && pref !== cls && nw && !nw.fusion && P.fusions[this.fusionKey(cls, pref)]) { Items.fuse(nw, pref); this.recalc(); }
     this.recalc();
     fresh.potions = this.stats.potionMax;
     if (sz < cap) this.log(`O Atalho Astral levou você à zona <b>${sz}</b>, o mais longe que seu herói aguenta agora (limite ${cap}). Fortaleça-se no Altar para começar mais adiante.`, '');
@@ -175,6 +170,7 @@ const Game = {
     if (!CLASSES[s.cls]) s.cls = 'fighter';
     const d = this.defaultState(s.cls, s.species, s.name || 'Herói', false);
     for (const k in d) if (s[k] === undefined) s[k] = d[k];
+    if (!s.pendingEnd) s.hardcore = false;
     for (const k in d.stats) if (s.stats[k] === undefined) s.stats[k] = d.stats[k];
     for (const k in d.settings) if (s.settings[k] === undefined) s.settings[k] = d.settings[k];
     for (const k of EQUIP_SLOTS) if (s.equip[k] === undefined) s.equip[k] = null;
@@ -412,6 +408,7 @@ const Game = {
     this.paused = false;
     this.transition = null;
     this.speed = this.state.settings.speed || 1;
+    if (this.speed > 5 && !(this.stats && this.stats.powers.has('heaven'))) this.speed = 5;
     Sfx.enabled = this.state.settings.sound;
     Sfx.setVolume(this.state.settings.volume);
     Music.configure(this.state.settings);

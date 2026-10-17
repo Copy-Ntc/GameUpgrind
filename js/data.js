@@ -104,6 +104,7 @@ const POWERS = {
   swift: { name: 'Passos do Vento', desc: '+20% de Vel. de Movimento e +10% de Vel. de Ataque.' },
   dagon: { name: 'Chama de Dagon', desc: 'Todo golpe incendeia o alvo (40% do Dano por segundo, 3s). Críticos explodem em chamas, causando 100% do Dano aos inimigos próximos.', excl: true },
   spike: { name: 'Terra Partida', desc: 'A cada 4 ataques, golpeia o chão: 220% do Dano em área, atordoa por 0,6s e deixa as rachaduras em chamas (50% do Dano por segundo, 3s).', excl: true },
+  heaven: { name: 'Made in Heaven', desc: 'Um aliado acompanha você para onde for, sem nunca ficar para trás, e ataca com dano que cresce com a sua Velocidade de Movimento. Com ela equipada, a velocidade 10x do jogo fica disponível.', excl: true },
   bluefire: { name: 'Fogo Azul Sagrado', desc: 'Chamas azuis giram ao seu redor e queimam quem se aproxima: 45% do Dano a cada 0,6s num raio de 2,5.', excl: true },
 };
 
@@ -129,7 +130,17 @@ const EXCLUSIVES = {
     main: { hp: 14, def: 3.5 }, affixes: { hpPct: 25, dr: 10, regenPct: 0.5, dmgPct: 20 }, powers: ['bluefire'],
     lore: 'Arma secundária: queima com fogo azul quem ousa chegar perto.',
   },
+  heights: {
+    name: 'Reaching the Heights', bname: 'Relógio', g: 'm', slot: 'offhand', sprite: 'i_heights', by: 'Emercedez',
+    pal: { m: '#f4f4fa', w: '#f4f4fa', k: '#1b1424', g: '#e8b33a', c: '#5ae8ff', p: '#ff9ad8', n: '#7aff8a', r: '#ff7ae0' },
+    main: { hp: 8, def: 2.5 }, affixes: { moveSpd: 30, atkSpd: 20, cdr: 10, dmgPct: 20 }, powers: ['heaven'],
+    perPlus: { moveSpd: 4 }, minZone: 100, weight: 0.3, chance: 0.4,
+    forgeText: 'Cada + dá +4% de Vel. de Movimento e +6% de dano ao Made in Heaven.',
+    lore: 'O tempo acelera até o universo recomeçar.',
+  },
 };
+const HEAVEN_BASE = 0.35;
+const HEAVEN_PLUS = 0.06;
 
 const LEGEND_NAMES = {
   weapon: ['Fúria do Dragão', 'Lamento Eterno', 'Aurora Sangrenta', 'Juramento do Rei', 'Presa do Leviatã', 'Sussurro da Morte', 'Chama Primordial', 'Quebra-Mundos', 'Canção do Crepúsculo', 'Ruína dos Titãs'],

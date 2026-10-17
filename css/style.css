@@ -493,6 +493,7 @@ input[type=range] { accent-color: var(--gold); }
 .relic-card .btn { margin-top: 6px; }
 
 .ts-community { max-width: 1040px; margin: -4px auto 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; font-size: 12px; color: #b8acc8; }
+.speed button.heaven { color: #ff9ad8; text-shadow: 0 0 6px rgba(255,154,216,.6); }
 .btn.discord { background: #5865f2; border-color: #7a85ff; color: #fff; text-decoration: none; }
 .btn.discord:hover { background: #6b77ff; }
 .ts-excl { background: #1c1426; border: 1px solid #5a3a7a; border-radius: 10px; padding: 10px 12px; margin-top: 10px; }

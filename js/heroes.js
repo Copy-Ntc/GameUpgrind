@@ -1581,6 +1581,7 @@ Object.assign(ENEMIES, {
   minion_wolf: { name: 'Lobo Espiritual', g: 'm', sprite: 'wolf', pal: { a: '#9ad0b0', b: '#5a9a7a', w: '#e8fff0', e: '#5affc8' }, hp: 1, atk: 1, spd: 1.3, move: 4.2 },
   minion_imp: { name: 'Diabrete Servo', g: 'm', sprite: 'goblin', pal: { a: '#e05a3a', b: '#2a1a1a', e: '#ffe040', t: '#ffffff', h: '#5a1a2a', m: '#ff8a2a' }, hp: 1, atk: 1, spd: 1.4, move: 4.0 },
   minion_turret: { name: 'Torreta', g: 'f', sprite: 'turret', pal: { m: '#c8a040', l: '#ffe8a0', d: '#5a4a2a', k: '#4a4a5a', o: '#5ae8ff' }, hp: 1, atk: 1, spd: 1.2, move: 0, range: 4.5, proj: 'bullet' },
+  minion_heaven: { name: 'Made in Heaven', g: 'm', sprite: 'heaven', pal: { w: '#f0f0f8', k: '#1b1424', n: '#7aff8a', p: '#ff9ad8', g: '#e8b33a', c: '#5ae8ff', y: '#e8c84a' }, hp: 1, atk: 1, spd: 1.6, move: 6 },
   minion_homun: { name: 'Homúnculo', g: 'm', sprite: 'slime', pal: { a: '#7aff8a', b: '#2a9a4a', w: '#e8ffe0', e: '#0a2a1a' }, hp: 1, atk: 1, spd: 1.2, move: 3.6 },
   minion_spirit: { name: 'Espírito Guardião', g: 'm', sprite: 'ghost', pal: { a: '#d8c8ff', b: '#9a7ae8', k: '#2a1a4a' }, hp: 1, atk: 1, spd: 1.1, move: 3.4, range: 3.5, proj: 'spirit' },
   minion_drake: { name: 'Dragonete', g: 'm', sprite: 'dragon', pal: { a: '#e85a2a', b: '#3a1a1a', e: '#ffe040', w: '#a83a1a', c: '#ffb04a', t: '#ff8a2a' }, hp: 1, atk: 1, spd: 1.1, move: 3.6, range: 3.5, proj: 'fire' },

@@ -154,6 +154,8 @@ const Items = {
       out[k] = (out[k] || 0) + (flat ? item.main[k] * pm : item.main[k]);
     }
     for (const a of item.affixes) out[a.k] = (out[a.k] || 0) + (a.flat ? a.v * Math.pow(1.03, item.plus) : a.v);
+    const D = item.excl && EXCLUSIVES[item.excl];
+    if (D && D.perPlus) for (const k in D.perPlus) out[k] = (out[k] || 0) + D.perPlus[k] * item.plus;
     return out;
   },
 
@@ -208,6 +210,7 @@ const Items = {
     if (item.fusion) h += `<div class="tt-pow"><b>⚔ Fusão com ${CLASSES[item.fusion].name}</b>Equipada, torna você multiclasse ${CLASSES[item.cls] ? CLASSES[item.cls].name : ''} / ${CLASSES[item.fusion].name} (se as duas classes estiverem dominadas).</div>`;
     if (item.excl) {
       const D = EXCLUSIVES[item.excl];
+      if (D.forgeText) h += `<div class="tt-pow"><b>⚒ Forja</b>${D.forgeText}</div>`;
       h += `<div class="tt-lore">“${D.lore}”</div><div class="tt-by">Criada por <b>${U.esc(D.by)}</b> · fica com você entre jornadas</div>`;
     }
     if (opts.compare !== false && st) {

@@ -4,7 +4,6 @@ const MULTI_SYNERGY = 15;
 const MULTI_SP_XP = 1.25;
 const MULTI_SP_SYNERGY = 10;
 const MULTI_SP_SHARE = 0.5;
-const RELAXED_SOULS = 0.6;
 const INNATE_CAP = 300;
 
 const Stats = {
@@ -119,6 +118,7 @@ const Stats = {
     if (powers.has('greed')) s.mf += 25;
     if (powers.has('swift')) { s.moveSpd += 20; s.atkSpd += 10; }
     if (powers.has('midas')) s.goldPct += 40;
+    if (powers.has('heaven')) s.moveSpd += 10;
 
     const rm = HERO_RARITY[rar].mult * HERO_RARITY[spRar].spMult;
     const out = {
@@ -191,7 +191,7 @@ const Stats = {
     const sp = Game.stats ? Game.stats.soulPct : 0;
     const z = st.maxZone;
     const raw = Math.pow(z - 9, 1.5) * Math.pow(SCALE.soul, z - 15) * (1 + sp / 100) + st.level * 0.2;
-    return Math.floor(raw * (st.hardcore ? 1 : RELAXED_SOULS));
+    return Math.floor(raw);
   },
   invSize(st) { return 30 + (st.soulUpg.bag || 0) * 6; },
 

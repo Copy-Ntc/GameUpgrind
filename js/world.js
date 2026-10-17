@@ -381,6 +381,8 @@ const World = {
         if (near.length) this.fx(W, 'ring', hero.rx + 0.5, hero.ry + 0.5, { r: 2.5, color: '#5ac8ff', life: 0.4 });
       }
     }
+    if (S.powers.has('heaven') && !hero.dead) this.updateHeaven(W, hero);
+    else if (W.heaven && !W.heaven.dead) { this.killMinion(W, W.heaven); W.heaven = null; }
     if (S.flags.has('starfall')) {
       hero.starT = (hero.starT === undefined ? 4 : hero.starT) - dt;
       const t = hero.target;
@@ -442,6 +444,7 @@ const World = {
       return;
     }
 
+    if (this.breakLoop(W, hero, dt)) return;
     let tgt = this.pickTarget(W, hero);
     if (tgt && !tgt.aggro && hero.hp < hero.maxHp * 0.5) tgt = null;
     if (!tgt) {
@@ -479,9 +482,10 @@ const World = {
     hero.target = null;
 
     const goals = new Map();
-    for (const c of W.chests) if (!c.opened && W.explored[c.y * W.w + c.x]) goals.set(c, 'chest');
-    for (const s of W.shrines) if (!s.used && W.explored[s.y * W.w + s.x]) goals.set(s, 'shrine');
-    if (W.recruit && !W.recruit.freed && W.explored[W.recruit.y * W.w + W.recruit.x]) goals.set(W.recruit, 'recruit');
+    const skip = o => o.skipUntil && o.skipUntil > W.t;
+    for (const c of W.chests) if (!c.opened && !skip(c) && W.explored[c.y * W.w + c.x]) goals.set(c, 'chest');
+    for (const s of W.shrines) if (!s.used && !skip(s) && W.explored[s.y * W.w + s.x]) goals.set(s, 'shrine');
+    if (W.recruit && !W.recruit.freed && !skip(W.recruit) && W.explored[W.recruit.y * W.w + W.recruit.x]) goals.set(W.recruit, 'recruit');
     if (goals.size) {
       for (const [obj, kind] of goals) {
         if (Math.max(Math.abs(obj.x - hero.x), Math.abs(obj.y - hero.y)) <= 1) {
@@ -533,6 +537,24 @@ const World = {
       if (path && path.length === 0) { this.onHeroStep(W, hero); return; }
       if (!this.stepPath(W, hero, path)) this.stuck(W, hero, dt);
     }
+  },
+
+  breakLoop(W, hero, dt) {
+    if (hero.resting || W.t - hero.lastCombat < 2) { hero.trail = []; hero.trailT = 0; return false; }
+    hero.trailT = (hero.trailT || 0) + dt;
+    if (hero.trailT < 0.5) return false;
+    hero.trailT = 0;
+    const tr = hero.trail || (hero.trail = []);
+    tr.push(hero.y * W.w + hero.x);
+    if (tr.length > 16) tr.shift();
+    if (tr.length < 16 || new Set(tr).size > 4) return false;
+    for (const i of tr) W.blacklist.add(i);
+    for (const o of [...W.chests, ...W.shrines, W.recruit]) if (o && U.dist(o.x, o.y, hero.x, hero.y) <= 6) o.skipUntil = W.t + 30;
+    if (hero.target) { hero.ignore.set(hero.target.id, W.t + 20); hero.target = null; }
+    hero.trail = [];
+    W.loops = (W.loops || 0) + 1;
+    if (W.loops >= 3 && !(W.boss && !W.boss.dead)) W.portal.active = true;
+    return true;
   },
 
   stuck(W, hero, dt, goalIdx) {
@@ -778,6 +800,12 @@ const World = {
       this.burst(W, hero.rx + 0.5, hero.ry + 0.5, '#ffb02a', 30, 5);
       Game.log('<b style="color:#ff9a2e">Chama da Fênix!</b> Você renasce das cinzas.', 'good');
       Sfx.play('legendary');
+      return;
+    }
+    if (st.potions > 0) {
+      hero.hp = 1;
+      this.drinkPotion(W, hero);
+      this.text(W, hero.rx + 0.5, hero.ry - 0.8, 'Aguentou firme!', '#ff9ab0', 13, 1.3, -1, true);
       return;
     }
     hero.dead = true; hero.hp = 0; hero.deathT = 3.2; hero.moving = false; hero.opening = null; hero.resting = false;
@@ -1179,6 +1207,33 @@ const World = {
     }
   },
 
+  heavenMult(S) {
+    const it = Game.state.equip.offhand, plus = it && it.excl === 'heights' ? it.plus : 0;
+    return HEAVEN_BASE * (1 + HEAVEN_PLUS * plus) * (S.moveSpd / 3.2);
+  },
+  updateHeaven(W, hero) {
+    const S = Game.stats;
+    let m = W.heaven;
+    if (!m || m.dead) {
+      m = this.spawnMinion(W, hero, 1, this.heavenMult(S), 1e9, false, 'heaven');
+      if (!m) return;
+      m.heaven = true; W.heaven = m;
+      this.fx(W, 'ring', m.rx + 0.5, m.ry + 0.5, { r: 1.4, color: '#7aff8a', life: 0.6 });
+    }
+    m.atk = S.atk * this.heavenMult(S);
+    m.move = Math.max(6, S.moveSpd * 1.3);
+    m.life = m.maxLife; m.hp = m.maxHp;
+    if (this.dist(m, hero) > 2.6 && !m.moving) {
+      const p = this.freeNear(W, hero.x, hero.y);
+      if (p) {
+        this.releaseOcc(W, m);
+        m.x = m.nx = m.rx = p[0]; m.y = m.ny = m.ry = p[1];
+        W.occ[m.y * W.w + m.x] = m.id;
+        this.part(W, m.rx + 0.5, m.ry + 0.5, 0, -1.5, '#ff9ad8', 0.5, 2, 0);
+      }
+    }
+  },
+
   killMinion(W, m) {
     if (m.dead) return;
     m.dead = true; m.deathT = 0.4;
@@ -1207,7 +1262,7 @@ const World = {
     if (hero.dead) { e.aggro = false; return; }
     let tgt = hero, d = this.dist(e, hero);
     for (const m of W.ents) {
-      if (m.kind !== 'minion' || m.dead) continue;
+      if (m.kind !== 'minion' || m.dead || m.heaven) continue;
       const dm = this.dist(e, m);
       if (dm < d - 0.5) { d = dm; tgt = m; }
     }
@@ -1262,6 +1317,7 @@ const World = {
       this.hurtHero(W, raw, e);
       if (e.poison && !t.dead && Math.random() < 0.5) t.dots.push({ dps: raw * e.poison, t: 3, color: '#7aff5a' });
     } else if (t.kind === 'minion') {
+      if (t.heaven) return;
       t.hp -= raw * U.rand(0.9, 1.1) * 0.75;
       t.flash = 0.1;
       if (t.hp <= 0) this.killMinion(W, t);
@@ -1284,7 +1340,7 @@ const World = {
         b.casting = { t: 1.0, fn: () => {
           if (b.dead) return;
           if (!hero.dead && U.dist(hero.rx, hero.ry, cx, cy) <= R) this.hurtHero(W, b.atk * 2.2, b, { unavoidable: true });
-          for (const m of W.ents) if (m.kind === 'minion' && !m.dead && U.dist(m.rx, m.ry, cx, cy) <= R) { m.hp -= b.atk * 2; if (m.hp <= 0) this.killMinion(W, m); }
+          for (const m of W.ents) if (m.kind === 'minion' && !m.dead && !m.heaven && U.dist(m.rx, m.ry, cx, cy) <= R) { m.hp -= b.atk * 2; if (m.hp <= 0) this.killMinion(W, m); }
           this.fx(W, 'ring', cx + 0.5, cy + 0.5, { r: R + 0.3, color: '#ff7a4a', life: 0.45 });
           this.burst(W, cx + 0.5, cy + 0.8, '#a08a7a', 20, 4);
           if (Game.state.settings.shake) W.shake = 0.8;
@@ -1403,9 +1459,10 @@ const World = {
     const st = Game.state, S = Game.stats, z = W.z, T = CHEST_TIERS[4];
     const got = Game.gainGold(15 * zoneScale(z) * T.gold * U.rand(0.9, 1.1));
     Game.gainShards(2, c.x, c.y);
-    const missing = exclMissing(st);
-    if (missing.length && Math.random() < EXCL_CHANCE) {
-      Game.dropItem(Items.makeExclusive(U.pick(missing), st.maxZone), c.x, c.y);
+    const missing = exclMissing(st).filter(id => !EXCLUSIVES[id].minZone || z >= EXCLUSIVES[id].minZone);
+    const pick = missing.length && Math.random() < EXCL_CHANCE ? U.weighted(missing.map(id => ({ id, w: EXCLUSIVES[id].weight || 1 }))).id : null;
+    if (pick && Math.random() < (EXCLUSIVES[pick].chance || 1)) {
+      Game.dropItem(Items.makeExclusive(pick, st.maxZone), c.x, c.y);
     } else {
       const r = z >= RARITIES[6].minZone ? 6 : 5;
       Game.dropItem(Items.generate(z + 1, { cls: st.cls, rarity: r, mf: S.mf }), c.x, c.y);
